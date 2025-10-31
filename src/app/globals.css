@@ -1,0 +1,24 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root{
+  --bg: #f8fafc;
+}
+
+html, body, #__next {
+  height: 100%;
+  background: var(--bg);
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+}
+
+/* Demo helpers */
+.card { @apply bg-white rounded-2xl shadow-lg p-6 }
+.muted { @apply text-sm text-gray-500 }
+.hero-gradient { background: linear-gradient(90deg, rgba(14,165,233,0.08), rgba(5,150,105,0.04)); }
+.badge { @apply inline-block px-2 py-1 rounded-full text-xs bg-green-50 text-green-700 }
+
+.container { max-width: 72rem; margin-left: auto; margin-right: auto; padding-left: 1rem; padding-right: 1rem }
+

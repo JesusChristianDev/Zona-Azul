@@ -1,0 +1,1196 @@
+
+================================================================================
+HEALTHYBOX PWA - DOCUMENTACIÓN COMPLETA
+================================================================================
+Guía Técnica: Cómo Funciona y Por Qué Cada Componente
+================================================================================
+
+ÍNDICE:
+1. ¿Qué es HealthyBox?
+2. Arquitectura General
+3. Tech Stack y Justificación
+4. Base de Datos Explicada
+5. Estructura del Proyecto
+6. Componentes Clave por Rol
+7. Flujos de Usuario
+8. Integraciones de Terceros
+9. Seguridad y Permisos
+10. PWA: Por Qué y Cómo
+11. Escalabilidad y Rendimiento
+12. FAQ Técnico
+
+================================================================================
+1. ¿QUÉ ES HEALTHYBOX?
+================================================================================
+
+HealthyBox es una Progressive Web App (PWA) de suscripción que ofrece comidas
+saludables personalizadas. Es una startup que conecta clientes con 
+nutricionistas, cocina y logística para entregar comidas adaptadas a sus
+objetivos de salud.
+
+MODELO DE NEGOCIO:
+- Suscripción recurrente (diaria, semanal, mensual, anual)
+- Planes: Solo almuerzo, solo cena, o ambos
+- Personalización nutricional por nutricionista
+- Pickup inicial, delivery después
+- Precio objetivo: €4 costo/plato, 30-40% margen
+
+USUARIOS:
+1. Clientes: reciben comidas personalizadas
+2. Admin: gestiona todo el negocio
+3. Nutricionista: crea menús y planes personalizados
+4. Cocina: prepara las comidas
+5. Logística: entrega las comidas
+6. Soporte: ayuda a clientes con problemas
+
+VALOR ÚNICO:
+- Cambios de menú viernes-domingo (flexibilidad)
+- Seguimiento de progreso (peso, fotos, medidas)
+- IA en soporte para respuestas rápidas
+- PWA: funciona offline y se instala como app
+
+================================================================================
+2. ARQUITECTURA GENERAL
+================================================================================
+
+HealthyBox sigue una arquitectura moderna de 3 capas:
+
+┌─────────────────────────────────────────────────────────────┐
+│                         FRONTEND                             │
+│  Next.js 14 + React + TypeScript + Tailwind CSS             │
+│  - Progressive Web App (PWA)                                │
+│  - 6 paneles separados por rol                              │
+│  - Responsive design (mobile-first)                         │
+│  - Offline-first con service workers                        │
+└─────────────────────────────────────────────────────────────┘
+                            ↕
+┌─────────────────────────────────────────────────────────────┐
+│                      API LAYER (Backend)                     │
+│  Next.js API Routes                                         │
+│  - REST APIs para cada entidad                              │
+│  - Server Actions para mutaciones                           │
+│  - Middleware de autenticación                              │
+│  - Validación con Zod                                       │
+└─────────────────────────────────────────────────────────────┘
+                            ↕
+┌─────────────────────────────────────────────────────────────┐
+│                   DATABASE & SERVICES                        │
+│  Supabase (PostgreSQL + Auth + Storage)                    │
+│  - 27 tablas relacionales                                   │
+│  - Row Level Security (RLS)                                 │
+│  - Real-time subscriptions                                  │
+│  - Storage para imágenes                                    │
+└─────────────────────────────────────────────────────────────┘
+                            ↕
+┌─────────────────────────────────────────────────────────────┐
+│                  EXTERNAL INTEGRATIONS                       │
+│  - Stripe/PayPal/Bizum (pagos)                             │
+│  - Resend (email)                                           │
+│  - Twilio (SMS)                                             │
+│  - OpenAI (IA)                                              │
+│  - Firebase (push notifications)                            │
+└─────────────────────────────────────────────────────────────┘
+
+POR QUÉ ESTA ARQUITECTURA:
+
+1. Next.js 14 con App Router
+   ✓ React Server Components (mejor rendimiento)
+   ✓ API Routes integradas (no necesitas backend separado)
+   ✓ File-based routing (fácil de escalar)
+   ✓ Built-in optimizaciones (Image, Font, Script)
+   ✓ Vercel hosting optimizado
+
+2. Supabase
+   ✓ PostgreSQL managed (no tienes que mantener servidor)
+   ✓ Auth integrado (no tienes que construir auth desde 0)
+   ✓ RLS nativo (seguridad por defecto)
+   ✓ Real-time (útil para notificaciones)
+   ✓ Free tier generoso (perfecto para startup)
+
+3. Vercel
+   ✓ Deploy automático desde Git
+   ✓ CDN global (rápido en todo el mundo)
+   ✓ Edge functions (APIs ultra rápidas)
+   ✓ Analytics integrado
+   ✓ Zero-config (no tienes que configurar infraestructura)
+
+================================================================================
+3. TECH STACK Y JUSTIFICACIÓN
+================================================================================
+
+FRONTEND:
+┌────────────────┬─────────────────────────────────────────────────┐
+│ Tecnología     │ Por Qué                                         │
+├────────────────┼─────────────────────────────────────────────────┤
+│ Next.js 14     │ - Framework React más popular                   │
+│                │ - SSR + SSG + ISR (mejor SEO y rendimiento)     │
+│                │ - API Routes (backend + frontend en 1 proyecto) │
+│                │ - Image optimization automático                 │
+│                │ - Perfecto para PWA                             │
+├────────────────┼─────────────────────────────────────────────────┤
+│ React 18       │ - Librería UI más popular (fácil encontrar devs)│
+│                │ - Ecosistema enorme (librerías, tutoriales)     │
+│                │ - Concurrent rendering (mejor UX)               │
+│                │ - Server Components (menos JavaScript al cliente)│
+├────────────────┼─────────────────────────────────────────────────┤
+│ TypeScript     │ - Type safety (menos bugs)                      │
+│                │ - Autocomplete en IDE (desarrollo más rápido)   │
+│                │ - Refactoring seguro                            │
+│                │ - Documentación inline                          │
+├────────────────┼─────────────────────────────────────────────────┤
+│ Tailwind CSS   │ - Utility-first (desarrollo muy rápido)         │
+│                │ - No hay CSS custom (menos mantenimiento)       │
+│                │ - Responsive built-in                           │
+│                │ - Dark mode fácil                               │
+│                │ - Bundle pequeño (solo CSS usado)               │
+├────────────────┼─────────────────────────────────────────────────┤
+│ Zod            │ - Validación runtime de TypeScript              │
+│                │ - Schema-based validation                       │
+│                │ - Compatible con React Hook Form               │
+├────────────────┼─────────────────────────────────────────────────┤
+│ React Hook Form│ - Formularios performantes                      │
+│                │ - Menos re-renders                              │
+│                │ - Validación integrada                          │
+├────────────────┼─────────────────────────────────────────────────┤
+│ Recharts       │ - Gráficos responsivos                          │
+│                │ - Built on React (fácil de usar)                │
+│                │ - Customizable                                  │
+└────────────────┴─────────────────────────────────────────────────┘
+
+BACKEND & DATABASE:
+┌────────────────┬─────────────────────────────────────────────────┐
+│ Tecnología     │ Por Qué                                         │
+├────────────────┼─────────────────────────────────────────────────┤
+│ Supabase       │ - PostgreSQL managed (gratis hasta 500MB)       │
+│                │ - Auth incluido (email, OAuth, magic links)     │
+│                │ - Row Level Security nativo                     │
+│                │ - Storage para imágenes                         │
+│                │ - Real-time subscriptions                       │
+│                │ - REST APIs auto-generadas                      │
+│                │ - No necesitas backend separado                 │
+├────────────────┼─────────────────────────────────────────────────┤
+│ PostgreSQL     │ - DB relacional más robusta                     │
+│                │ - ACID compliant (transacciones seguras)        │
+│                │ - JSON support (flexible)                       │
+│                │ - Full-text search                              │
+│                │ - Excelente para analytics                      │
+└────────────────┴─────────────────────────────────────────────────┘
+
+INTEGRACIONES:
+┌────────────────┬─────────────────────────────────────────────────┐
+│ Servicio       │ Por Qué                                         │
+├────────────────┼─────────────────────────────────────────────────┤
+│ Stripe         │ - Líder en pagos online                         │
+│                │ - Suscripciones nativas                         │
+│                │ - Webhooks confiables                           │
+│                │ - Dashboard excelente                           │
+│                │ - PCI compliant (no manejas tarjetas)           │
+├────────────────┼─────────────────────────────────────────────────┤
+│ PayPal         │ - Muy popular en España                         │
+│                │ - Alternativa a tarjetas                        │
+├────────────────┼─────────────────────────────────────────────────┤
+│ Resend         │ - Email transaccional moderno                   │
+│                │ - API simple                                    │
+│                │ - Templates con React                           │
+│                │ - Free tier: 3,000 emails/mes                   │
+├────────────────┼─────────────────────────────────────────────────┤
+│ Twilio         │ - SMS líder mundial                             │
+│                │ - API confiable                                 │
+│                │ - Disponible en España                          │
+├────────────────┼─────────────────────────────────────────────────┤
+│ OpenAI         │ - GPT-4 para IA                                 │
+│                │ - Respuestas de soporte automáticas             │
+│                │ - Fine-tuning posible                           │
+├────────────────┼─────────────────────────────────────────────────┤
+│ Firebase       │ - Push notifications                            │
+│ (FCM)          │ - Funciona en iOS y Android                     │
+│                │ - Free tier generoso                            │
+└────────────────┴─────────────────────────────────────────────────┘
+
+HOSTING & DEPLOYMENT:
+┌────────────────┬─────────────────────────────────────────────────┐
+│ Servicio       │ Por Qué                                         │
+├────────────────┼─────────────────────────────────────────────────┤
+│ Vercel         │ - Hecho por creadores de Next.js               │
+│                │ - Deploy en cada push a Git                    │
+│                │ - Preview deployments automáticos               │
+│                │ - CDN global (rápido en todo el mundo)          │
+│                │ - Free tier: 100GB bandwidth                    │
+│                │ - Edge Functions (APIs ultra rápidas)           │
+│                │ - Zero downtime deploys                         │
+├────────────────┼─────────────────────────────────────────────────┤
+│ GitHub         │ - Version control                               │
+│                │ - CI/CD con Actions                             │
+│                │ - Code review                                   │
+│                │ - Issue tracking                                │
+└────────────────┴─────────────────────────────────────────────────┘
+
+================================================================================
+4. BASE DE DATOS EXPLICADA (27 TABLAS)
+================================================================================
+
+CATEGORÍA: USUARIOS Y ROLES
+────────────────────────────────────────────────────────────────
+1. users
+   - Todos los usuarios del sistema (6 roles)
+   - Un usuario = una cuenta de login
+   - POR QUÉ: Sistema multi-tenant (varios tipos de usuarios)
+
+2. customers
+   - Extiende 'users' con datos específicos de clientes
+   - Peso, altura, objetivo, alergias, etc.
+   - POR QUÉ: Separar datos sensibles del cliente de users generales
+
+3. customer_tracking
+   - Historial de peso, medidas, fotos de progreso
+   - POR QUÉ: Clientes pueden ver su evolución en el tiempo
+
+4. team_members
+   - Info adicional de empleados (turnos, disponibilidad)
+   - POR QUÉ: Gestionar horarios de cocina/logística
+
+CATEGORÍA: SUSCRIPCIONES Y PAGOS
+────────────────────────────────────────────────────────────────
+5. subscriptions
+   - Suscripción activa de cada cliente
+   - Plan (almuerzo/cena/ambos), ciclo, precio
+   - POR QUÉ: Core del negocio, ingresos recurrentes
+
+6. subscription_events
+   - Historial de cambios (pausado, cancelado, reactivado)
+   - POR QUÉ: Auditar por qué se van clientes (churn analysis)
+
+7. payments
+   - Cada pago individual
+   - POR QUÉ: Historial financiero, facturas, reconciliación
+
+CATEGORÍA: RECETAS Y MENÚS
+────────────────────────────────────────────────────────────────
+8. recipes
+   - Recetas base creadas por nutricionista
+   - Nombre, macros, foto, alérgenos
+   - POR QUÉ: Biblioteca de platos reutilizables
+
+9. recipe_ingredients
+   - Ingredientes de cada receta con cantidades
+   - POR QUÉ: Saber qué comprar para cada plato
+
+10. recipe_statistics
+    - Popularidad, ratings promedio, veces servida
+    - POR QUÉ: Optimizar menú basado en preferencias reales
+
+11. meal_plans
+    - Plan nutricional personalizado de cada cliente
+    - Calorías, macros objetivo
+    - POR QUÉ: Nutricionista personaliza según objetivo
+
+12. weekly_menus
+    - Menú de la semana (lunes-viernes)
+    - Con fechas de cambios (viernes-domingo)
+    - POR QUÉ: Publicar menú semanalmente, ventana de cambios
+
+13. weekly_menu_items
+    - Platos específicos del menú (día + comida)
+    - POR QUÉ: Relacionar recetas con días específicos
+
+CATEGORÍA: COMIDAS Y CAMBIOS
+────────────────────────────────────────────────────────────────
+14. customer_meals
+    - Comidas asignadas a cada cliente
+    - Estado: scheduled → prepared → delivered
+    - POR QUÉ: Tracking de cada comida individual
+
+15. meal_changes
+    - Registro de cambios de comidas (viernes-domingo)
+    - Original vs. nuevo plato
+    - POR QUÉ: Auditar qué clientes cambian y por qué
+
+CATEGORÍA: PRODUCCIÓN Y ENTREGAS
+────────────────────────────────────────────────────────────────
+16. orders
+    - Órdenes de producción diarias (almuerzo o cena)
+    - POR QUÉ: Cocina sabe qué preparar cada día
+
+17. order_items
+    - Items individuales de cada orden
+    - POR QUÉ: Detalle de qué cliente recibe qué plato
+
+18. deliveries
+    - Entregas individuales (pickup o delivery)
+    - Estado, foto, firma
+    - POR QUÉ: Tracking de entregas, proof para cliente
+
+19. inventory
+    - Stock de ingredientes
+    - Alertas de stock mínimo
+    - POR QUÉ: No quedarse sin ingredientes
+
+CATEGORÍA: NUTRICIONISTA
+────────────────────────────────────────────────────────────────
+20. nutritionist_sessions
+    - Sesiones de consulta con clientes
+    - Notas, recomendaciones, próxima sesión
+    - POR QUÉ: Documentar interacciones, continuidad de cuidado
+
+CATEGORÍA: SOPORTE
+────────────────────────────────────────────────────────────────
+21. support_tickets
+    - Tickets de ayuda
+    - Categoría, prioridad, asignado a quién
+    - POR QUÉ: Gestionar consultas de clientes
+
+22. support_messages
+    - Mensajes del ticket (chat)
+    - IA o humano
+    - POR QUÉ: Historial de conversación
+
+CATEGORÍA: FEEDBACK
+────────────────────────────────────────────────────────────────
+23. customer_feedback
+    - Rating de cada comida (1-5)
+    - Comentario opcional
+    - POR QUÉ: Saber qué platos gustan, optimizar menú
+
+CATEGORÍA: NOTIFICACIONES
+────────────────────────────────────────────────────────────────
+24. notifications
+    - Notificaciones enviadas (push, email, SMS)
+    - POR QUÉ: Tracking de qué notificaciones se enviaron
+
+CATEGORÍA: SISTEMA
+────────────────────────────────────────────────────────────────
+25. audit_logs
+    - Quién hizo qué y cuándo
+    - POR QUÉ: Seguridad, compliance, debugging
+
+26. system_settings
+    - Configuración global de la app
+    - POR QUÉ: Cambiar comportamiento sin deploy
+
+27. analytics_cache
+    - Caché de métricas calculadas
+    - POR QUÉ: Dashboard rápido sin calcular cada vez
+
+RELACIONES CLAVE:
+users (1) → customers (1) → subscriptions (1) → customer_meals (many)
+recipes (1) → recipe_ingredients (many)
+recipes (1) → weekly_menu_items (many) → customer_meals (many)
+customer_meals (1) → meal_changes (many)
+customer_meals (1) → deliveries (1)
+
+================================================================================
+5. ESTRUCTURA DEL PROYECTO
+================================================================================
+
+/healthybox
+│
+├── /src/app                    # RUTAS (Next.js App Router)
+│   ├── /(auth)                 # Login, registro, forgot password
+│   ├── /(customer)             # Panel del cliente
+│   ├── /(admin)                # Panel del admin
+│   ├── /(nutritionist)         # Panel del nutricionista
+│   ├── /(kitchen)              # Panel de cocina
+│   ├── /(logistics)            # Panel de logística
+│   ├── /(support)              # Panel de soporte
+│   └── /api                    # API Routes (backend)
+│
+├── /src/components             # COMPONENTES REUTILIZABLES
+│   ├── /ui                     # Botones, Cards, Inputs básicos
+│   ├── /layout                 # Navbar, Sidebar, Footer
+│   ├── /forms                  # Formularios específicos
+│   ├── /customer               # Componentes del cliente
+│   ├── /admin                  # Componentes del admin
+│   ├── /nutritionist           # Componentes del nutricionista
+│   ├── /kitchen                # Componentes de cocina
+│   ├── /logistics              # Componentes de logística
+│   └── /support                # Componentes de soporte
+│
+├── /src/lib                    # UTILIDADES
+│   ├── /supabase               # Cliente Supabase
+│   ├── /auth                   # Autenticación y permisos
+│   ├── /payments               # Stripe, PayPal, Bizum
+│   ├── /notifications          # Push, email, SMS
+│   ├── /ai                     # OpenAI chatbot
+│   └── /utils                  # Funciones helper
+│
+├── /src/hooks                  # CUSTOM HOOKS
+│   ├── useAuth.ts              # Hook de autenticación
+│   ├── useCustomer.ts          # Hook de cliente
+│   └── useMeals.ts             # Hook de comidas
+│
+├── /src/types                  # TYPESCRIPT TYPES
+│   └── database.types.ts       # Tipos auto-generados de Supabase
+│
+├── /public                     # ARCHIVOS ESTÁTICOS
+│   ├── /icons                  # Iconos PWA
+│   ├── /images                 # Imágenes
+│   └── manifest.json           # PWA manifest
+│
+└── /tests                      # TESTS
+    ├── /unit                   # Tests unitarios
+    ├── /integration            # Tests de integración
+    └── /e2e                    # Tests end-to-end
+
+POR QUÉ ESTA ESTRUCTURA:
+
+1. Grupos de rutas (auth), (customer), etc.
+   - Organización clara por rol
+   - Fácil aplicar layouts específicos
+   - Middleware de autenticación por grupo
+
+2. Componentes organizados por dominio
+   - Fácil encontrar componentes
+   - Reutilización clara
+   - Menos acoplamiento
+
+3. lib/ centralizado
+   - Lógica de negocio separada de UI
+   - Fácil de testear
+   - Fácil de reutilizar
+
+4. Types separados
+   - Type safety en todo el proyecto
+   - Auto-completado en IDE
+   - Menos bugs
+
+================================================================================
+6. COMPONENTES CLAVE POR ROL
+================================================================================
+
+CLIENTE:
+┌─────────────────────┬────────────────────────────────────────┐
+│ Componente          │ Qué Hace                               │
+├─────────────────────┼────────────────────────────────────────┤
+│ MealCard            │ Muestra una comida (foto, macros)     │
+│ WeeklyMenuGrid      │ Grid de menú semanal lun-vie          │
+│ ProgressChart       │ Gráfico de evolución de peso          │
+│ TrackingForm        │ Formulario para agregar peso/medidas  │
+│ SubscriptionCard    │ Card con info de suscripción activa   │
+└─────────────────────┴────────────────────────────────────────┘
+
+ADMIN:
+┌─────────────────────┬────────────────────────────────────────┐
+│ Componente          │ Qué Hace                               │
+├─────────────────────┼────────────────────────────────────────┤
+│ DashboardStats      │ KPIs (clientes, ingresos, margen)     │
+│ UserTable           │ Tabla de usuarios con filtros         │
+│ RevenueChart        │ Gráfico de ingresos                   │
+│ ChurnAnalysis       │ Análisis de cancelaciones             │
+└─────────────────────┴────────────────────────────────────────┘
+
+NUTRICIONISTA:
+┌─────────────────────┬────────────────────────────────────────┐
+│ Componente          │ Qué Hace                               │
+├─────────────────────┼────────────────────────────────────────┤
+│ ClientCard          │ Card de cliente con datos clave       │
+│ MealPlanBuilder     │ Constructor de plan nutricional       │
+│ NutrientCalculator  │ Calculadora de macros                 │
+│ SessionNotes        │ Notas de sesión con cliente           │
+└─────────────────────┴────────────────────────────────────────┘
+
+COCINA:
+┌─────────────────────┬────────────────────────────────────────┐
+│ Componente          │ Qué Hace                               │
+├─────────────────────┼────────────────────────────────────────┤
+│ OrderList           │ Lista de órdenes del día              │
+│ RecipeCard          │ Receta con ingredientes y pasos       │
+│ InventoryTable      │ Tabla de inventario con alertas       │
+│ ProductionSchedule  │ Calendario de producción              │
+└─────────────────────┴────────────────────────────────────────┘
+
+LOGÍSTICA:
+┌─────────────────────┬────────────────────────────────────────┐
+│ Componente          │ Qué Hace                               │
+├─────────────────────┼────────────────────────────────────────┤
+│ DeliveryMap         │ Mapa con ubicaciones de entregas      │
+│ RouteOptimizer      │ Sugiere ruta óptima                   │
+│ DeliveryCard        │ Card de entrega con detalles          │
+│ ProofUpload         │ Subir foto/firma de entrega           │
+└─────────────────────┴────────────────────────────────────────┘
+
+SOPORTE:
+┌─────────────────────┬────────────────────────────────────────┐
+│ Componente          │ Qué Hace                               │
+├─────────────────────┼────────────────────────────────────────┤
+│ TicketList          │ Lista de tickets con filtros          │
+│ ChatWidget          │ Chat del ticket                       │
+│ AIResponseSuggestion│ IA sugiere respuesta                  │
+│ KnowledgeBaseSearch │ Buscar en FAQ                         │
+└─────────────────────┴────────────────────────────────────────┘
+
+POR QUÉ COMPONENTES SEPARADOS POR ROL:
+- Cada rol tiene necesidades diferentes
+- Evita componentes genéricos complejos
+- Fácil de mantener
+- Fácil de testear
+
+================================================================================
+7. FLUJOS DE USUARIO
+================================================================================
+
+FLUJO 1: CLIENTE SE REGISTRA Y SUSCRIBE
+────────────────────────────────────────────────────────────────
+1. Cliente va a /register
+2. Completa formulario (email, password, nombre)
+3. Sistema crea user en Supabase Auth
+4. Redirige a /onboarding
+5. Completa datos nutricionales (peso, altura, objetivo, alergias)
+6. Sistema crea customer
+7. Redirige a /subscription
+8. Selecciona plan (almuerzo/cena/ambos)
+9. Selecciona ciclo (diario/semanal/mensual/anual)
+10. Redirige a Stripe Checkout
+11. Cliente paga
+12. Webhook de Stripe confirma pago
+13. Sistema crea subscription y payment
+14. Cliente ve dashboard con menú de la semana
+
+FLUJO 2: CLIENTE CAMBIA COMIDA (VIERNES-DOMINGO)
+────────────────────────────────────────────────────────────────
+1. Es viernes 00:00 → sistema publica weekly_menu
+2. Sistema envía notificación push "Nuevo menú disponible"
+3. Cliente abre app
+4. Ve menú de la próxima semana
+5. No le gusta el plato del miércoles
+6. Hace click en "Cambiar"
+7. Ve opciones de reemplazo (mismo perfil nutricional)
+8. Selecciona nuevo plato
+9. Sistema guarda en meal_changes
+10. Sistema actualiza customer_meals
+11. Cliente ve confirmación "Cambiado correctamente"
+12. Es domingo 23:59 → ventana de cambios se cierra
+13. Lunes: cocina ve órdenes con cambios aplicados
+
+FLUJO 3: NUTRICIONISTA CREA MENÚ SEMANAL
+────────────────────────────────────────────────────────────────
+1. Nutricionista va a /nutritionist/weekly-menus/create
+2. Selecciona semana (ej: 4-8 Nov)
+3. Para cada día (lun-vie) y comida (almuerzo/cena):
+   - Selecciona receta del catálogo
+   - Marca si es reemplazable
+4. Configura ventana de cambios (viernes 00:00 - domingo 23:59)
+5. Preview del menú
+6. Click en "Publicar"
+7. Sistema crea weekly_menu y weekly_menu_items
+8. Sistema auto-asigna customer_meals a cada cliente activo
+9. Viernes 00:00 → sistema envía notificación a todos los clientes
+
+FLUJO 4: COCINA PREPARA ÓRDENES
+────────────────────────────────────────────────────────────────
+1. Chef hace login en /kitchen
+2. Ve órdenes del día (ej: Almuerzo 5 Nov)
+3. Ve lista de platos:
+   - Pollo con brócoli: 23 unidades
+   - Salmón con quinoa: 15 unidades
+   - Ensalada César: 8 unidades
+4. Para cada plato:
+   - Ve ingredientes necesarios
+   - Ve alertas de alergias críticas (ej: Cliente #42 alérgico a nueces)
+5. Marca plato como "Preparado"
+6. Sistema actualiza order_items.status
+7. Cuando todo listo → marca orden como "Completa"
+8. Logística ve que orden está lista para entregar
+
+FLUJO 5: LOGÍSTICA ENTREGA COMIDAS
+────────────────────────────────────────────────────────────────
+1. Delivery person hace login en /logistics
+2. Ve entregas del día en mapa
+3. Sistema sugiere ruta óptima
+4. Para cada entrega:
+   - Ve dirección, horario, qué platos
+   - Navega a ubicación
+   - Marca "En tránsito"
+5. Llega a destino
+6. Toma foto del pedido
+7. Cliente firma en tablet/móvil
+8. Marca como "Entregado"
+9. Sistema envía notificación a cliente: "Tu comida fue entregada"
+
+FLUJO 6: SOPORTE CON IA
+────────────────────────────────────────────────────────────────
+1. Cliente abre chat de soporte
+2. Escribe: "No puedo cambiar mi comida del miércoles"
+3. IA lee mensaje
+4. IA consulta:
+   - ¿Es viernes-domingo? No → explica ventana de cambios
+   - ¿Tiene suscripción activa? Sí
+5. IA responde automáticamente:
+   "Los cambios solo se pueden hacer viernes-domingo. El próximo 
+   viernes podrás cambiar las comidas de la siguiente semana."
+6. Cliente responde: "Ok, gracias"
+7. IA marca ticket como resuelto
+8. Si cliente hubiera dicho "No me sirve", IA escala a humano
+
+FLUJO 7: ADMIN VE ANALYTICS
+────────────────────────────────────────────────────────────────
+1. Admin hace login en /admin
+2. Ve dashboard con KPIs:
+   - Clientes activos: 142
+   - Ingresos hoy: €2,847
+   - Margen promedio: 38%
+   - Churn rate: 5.2%
+   - LTV: €458
+3. Ve gráfico de ingresos (últimos 30 días)
+4. Ve platos más populares esta semana
+5. Ve alertas:
+   - 3 clientes con pagos fallidos
+   - Stock bajo de pollo
+   - 2 entregas retrasadas
+6. Puede:
+   - Exportar reporte CSV
+   - Ver detalle de cada métrica
+   - Crear usuarios nuevos
+   - Cambiar configuración
+
+================================================================================
+8. INTEGRACIONES DE TERCEROS
+================================================================================
+
+STRIPE (PAGOS)
+────────────────────────────────────────────────────────────────
+QUÉ HACE:
+- Procesa pagos con tarjeta
+- Gestiona suscripciones recurrentes
+- Genera facturas automáticas
+
+CÓMO FUNCIONA:
+1. Cliente selecciona plan
+2. Frontend crea Checkout Session con API de Stripe
+3. Cliente redirigido a Stripe Checkout (página segura de Stripe)
+4. Cliente paga
+5. Stripe envía webhook a /api/payments/webhook
+6. Backend verifica webhook (firma)
+7. Backend guarda payment en BD
+8. Cliente redirigido de vuelta con success=true
+
+POR QUÉ STRIPE:
+✓ No manejas datos de tarjetas (PCI compliant)
+✓ Suscripciones automáticas
+✓ Dashboard con reportes
+✓ Webhooks confiables
+
+RESEND (EMAIL)
+────────────────────────────────────────────────────────────────
+QUÉ HACE:
+- Envía emails transaccionales
+
+EJEMPLOS:
+- Bienvenida al registrarse
+- Confirmación de suscripción
+- Menú semanal (viernes)
+- Factura después de pago
+- Recordatorio de entrega
+
+CÓMO FUNCIONA:
+1. Backend llama API de Resend
+2. Pasa template + datos
+3. Resend envía email
+4. Backend guarda en notifications
+
+POR QUÉ RESEND:
+✓ Templates con React (fácil de diseñar)
+✓ API simple
+✓ Free tier: 3,000 emails/mes
+
+TWILIO (SMS)
+────────────────────────────────────────────────────────────────
+QUÉ HACE:
+- Envía SMS
+
+EJEMPLOS:
+- "Tu comida llegará en 15 minutos"
+- "Pago fallido, actualiza tu tarjeta"
+
+CÓMO FUNCIONA:
+1. Backend llama API de Twilio
+2. Pasa número + mensaje
+3. Twilio envía SMS
+4. Backend guarda en notifications
+
+POR QUÉ TWILIO:
+✓ Líder mundial en SMS
+✓ Confiable
+✓ ~€0.08 por SMS en España
+
+FIREBASE CLOUD MESSAGING (PUSH)
+────────────────────────────────────────────────────────────────
+QUÉ HACE:
+- Envía notificaciones push
+
+EJEMPLOS:
+- "Nuevo menú disponible"
+- "Recordatorio: cambia tus comidas antes del domingo"
+- "Tu entrega está en camino"
+
+CÓMO FUNCIONA:
+1. Cliente abre app → solicita permiso de notificaciones
+2. FCM da token único
+3. Backend guarda token en users.fcm_token
+4. Cuando hay evento:
+   - Backend llama FCM API con token
+   - FCM envía push a dispositivo
+5. Cliente ve notificación aunque app esté cerrada
+
+POR QUÉ FCM:
+✓ Funciona en iOS y Android
+✓ Funciona en PWA
+✓ Free tier generoso
+✓ Confiable
+
+OPENAI (IA)
+────────────────────────────────────────────────────────────────
+QUÉ HACE:
+- Responde tickets de soporte automáticamente
+
+CÓMO FUNCIONA:
+1. Cliente abre ticket: "¿Puedo pausar mi suscripción?"
+2. Backend envía a OpenAI:
+   Prompt: "Eres un asistente de HealthyBox. 
+           Responde esta pregunta: [pregunta del cliente]
+           Contexto: [datos del cliente, suscripción, etc.]"
+3. OpenAI responde: "Sí, puedes pausar desde tu panel..."
+4. Backend:
+   - Si confidence > 80% → responde automáticamente
+   - Si confidence < 80% → escala a humano con sugerencia
+5. Humano revisa y aprueba o edita
+
+POR QUÉ OPENAI:
+✓ GPT-4 es muy bueno en customer support
+✓ Reduce carga de equipo de soporte
+✓ Respuestas instantáneas 24/7
+✓ Aprende con fine-tuning
+
+================================================================================
+9. SEGURIDAD Y PERMISOS
+================================================================================
+
+ROW LEVEL SECURITY (RLS)
+────────────────────────────────────────────────────────────────
+QUÉ ES:
+- Seguridad a nivel de fila en PostgreSQL
+- Cada query SQL verifica permisos automáticamente
+- Usuario solo ve datos que le pertenecen
+
+EJEMPLO:
+Cliente #42 hace SELECT * FROM customer_meals
+
+Supabase ejecuta internamente:
+SELECT * FROM customer_meals 
+WHERE customer_id = 42 AND auth.uid() = [user_id del cliente #42]
+
+Si cliente intenta ver comidas de otro cliente → 0 resultados
+
+POLÍTICAS POR ROL:
+
+┌────────────────┬─────────────────────────────────────────────┐
+│ Rol            │ Puede ver/editar                            │
+├────────────────┼─────────────────────────────────────────────┤
+│ CUSTOMER       │ - Sus propios datos (customer, meals)       │
+│                │ - Su suscripción                            │
+│                │ - Sus pagos                                 │
+│                │ - Menús publicados                          │
+│                │ - Sus entregas                              │
+├────────────────┼─────────────────────────────────────────────┤
+│ NUTRITIONIST   │ - Sus clientes asignados                    │
+│                │ - Todas las recetas                         │
+│                │ - Menús que creó                            │
+│                │ - Sesiones con sus clientes                 │
+├────────────────┼─────────────────────────────────────────────┤
+│ KITCHEN        │ - Órdenes del día                           │
+│                │ - Recetas                                   │
+│                │ - Inventario                                │
+├────────────────┼─────────────────────────────────────────────┤
+│ LOGISTICS      │ - Entregas asignadas a él                   │
+│                │ - Dirección y teléfono del cliente          │
+├────────────────┼─────────────────────────────────────────────┤
+│ SUPPORT        │ - Tickets asignados o sin asignar           │
+│                │ - Datos del cliente solo si hay ticket      │
+├────────────────┼─────────────────────────────────────────────┤
+│ ADMIN          │ - TODO                                      │
+└────────────────┴─────────────────────────────────────────────┘
+
+EJEMPLO DE POLICY EN SUPABASE:
+
+-- Policy: Clientes solo ven sus propias comidas
+CREATE POLICY "customers_own_meals"
+ON customer_meals
+FOR SELECT
+USING (
+  auth.uid() = (
+    SELECT user_id FROM customers 
+    WHERE id = customer_meals.customer_id
+  )
+);
+
+-- Policy: Nutricionistas ven solo sus clientes
+CREATE POLICY "nutritionists_own_clients"
+ON customers
+FOR ALL
+USING (
+  nutritionist_id = auth.uid()
+);
+
+AUTENTICACIÓN
+────────────────────────────────────────────────────────────────
+1. Usuario hace login
+2. Supabase Auth crea JWT (JSON Web Token)
+3. JWT incluye:
+   - user_id
+   - role
+   - exp (expiración)
+4. Cada request incluye JWT en header
+5. Supabase verifica JWT antes de ejecutar query
+6. Si JWT inválido o expirado → 401 Unauthorized
+
+VALIDACIÓN DE INPUTS
+────────────────────────────────────────────────────────────────
+TODOS los inputs se validan con Zod:
+
+// Ejemplo: validar registro de cliente
+const registerSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+  firstName: z.string().min(2).max(50),
+  lastName: z.string().min(2).max(50),
+  phone: z.string().regex(/^\+?[1-9]\d{1,14}$/)
+});
+
+// En API route:
+const result = registerSchema.safeParse(body);
+if (!result.success) {
+  return NextResponse.json(
+    { error: result.error },
+    { status: 400 }
+  );
+}
+
+POR QUÉ VALIDAR:
+✓ Evita SQL injection
+✓ Evita XSS
+✓ Evita datos corruptos
+✓ Mejor UX (errores claros)
+
+RATE LIMITING
+────────────────────────────────────────────────────────────────
+Limitar requests por IP:
+- Login: 5 intentos/15 minutos
+- API: 100 requests/minuto
+- Registro: 3 intentos/hora
+
+POR QUÉ:
+✓ Evita brute force attacks
+✓ Evita abuse
+✓ Protege infraestructura
+
+HTTPS
+────────────────────────────────────────────────────────────────
+✓ TODO el tráfico es HTTPS
+✓ Vercel da certificado SSL gratis
+✓ Redirect automático HTTP → HTTPS
+
+SECRETS
+────────────────────────────────────────────────────────────────
+✓ API keys en .env.local (nunca en Git)
+✓ Supabase service role key solo en servidor
+✓ Stripe secret key solo en servidor
+✓ Variables de entorno en Vercel
+
+================================================================================
+10. PWA: POR QUÉ Y CÓMO
+================================================================================
+
+¿QUÉ ES UNA PWA?
+────────────────────────────────────────────────────────────────
+Progressive Web App = app web que se comporta como app nativa
+
+CARACTERÍSTICAS:
+✓ Se instala en home screen (sin App Store)
+✓ Funciona offline
+✓ Push notifications
+✓ Rápida (carga instantánea)
+✓ Responsive (funciona en cualquier pantalla)
+
+POR QUÉ PWA PARA HEALTHYBOX:
+────────────────────────────────────────────────────────────────
+1. NO NECESITAS APP STORE
+   - Sin aprobación de Apple/Google (lanzas cuando quieras)
+   - Sin pagar €99/año a Apple
+   - Sin esperar 1-2 semanas de review
+
+2. UNA SOLA CODEBASE
+   - Escribes una vez
+   - Funciona en iOS, Android, Desktop
+   - Menos costos de desarrollo
+
+3. UPDATES INSTANTÁNEOS
+   - Deploy nuevo código → usuarios lo ven inmediatamente
+   - No esperas que descarguen update
+   - No hay versiones viejas
+
+4. SEO
+   - Google indexa tu PWA
+   - Clientes te encuentran buscando "comida saludable Calpe"
+   - App nativa no aparece en Google
+
+5. MENOR FRICCIÓN
+   - Usuario abre link → ve app inmediatamente
+   - No tiene que:
+     * Ir a App Store
+     * Descargar 50MB
+     * Esperar instalación
+     * Crear cuenta antes de ver nada
+
+CÓMO FUNCIONA:
+────────────────────────────────────────────────────────────────
+1. MANIFEST.JSON
+{
+  "name": "HealthyBox",
+  "short_name": "HealthyBox",
+  "icons": [
+    { "src": "/icons/icon-192x192.png", "sizes": "192x192" },
+    { "src": "/icons/icon-512x512.png", "sizes": "512x512" }
+  ],
+  "start_url": "/",
+  "display": "standalone",  // ← Se ve como app nativa
+  "background_color": "#ffffff",
+  "theme_color": "#10b981"
+}
+
+2. SERVICE WORKER
+- JavaScript que corre en background
+- Intercepta network requests
+- Cachea assets (HTML, CSS, JS, imágenes)
+- Si offline → sirve desde caché
+
+// service-worker.js (simplificado)
+self.addEventListener('fetch', (event) => {
+  event.respondWith(
+    caches.match(event.request)
+      .then(response => {
+        // Si está en caché, devuélvelo
+        if (response) return response;
+
+        // Si no, fetch de internet
+        return fetch(event.request)
+          .then(response => {
+            // Guarda en caché para próxima vez
+            return caches.open('v1').then(cache => {
+              cache.put(event.request, response.clone());
+              return response;
+            });
+          });
+      })
+  );
+});
+
+3. INSTALACIÓN
+Usuario visita healthybox.com en móvil
+→ Browser muestra banner: "Instalar HealthyBox"
+→ Usuario hace click
+→ App se agrega a home screen
+→ Parece app nativa
+
+OFFLINE-FIRST STRATEGY:
+────────────────────────────────────────────────────────────────
+1. Usuario abre app sin internet
+2. Service worker sirve HTML/CSS/JS desde caché
+3. App funciona (puede ver menú, navegar)
+4. Cuando intenta hacer acción que necesita internet:
+   - Muestra mensaje "Sin conexión"
+   - Guarda acción en queue
+5. Cuando vuelve internet:
+   - Sincroniza acciones pendientes
+
+ESTO ES CRÍTICO PARA LOGÍSTICA:
+- Delivery person en zona sin señal
+- Puede ver entregas
+- Marca como entregado
+- Se sincroniza cuando vuelve señal
+
+================================================================================
+11. ESCALABILIDAD Y RENDIMIENTO
+================================================================================
+
+NEXT.JS OPTIMIZACIONES
+────────────────────────────────────────────────────────────────
+1. IMAGE OPTIMIZATION
+   - Lazy loading automático
+   - Resize automático (sirve tamaño correcto por dispositivo)
+   - WebP automático
+   - Blur placeholder
+
+   <Image 
+     src="/meal.jpg"
+     width={300}
+     height={200}
+     alt="Pollo con brócoli"
+     placeholder="blur"  // ← Muestra blur mientras carga
+   />
+
+2. CODE SPLITTING
+   - Next.js divide JS en chunks pequeños
+   - Solo carga código necesario para cada página
+   - Bundle más pequeño = carga más rápida
+
+3. SERVER COMPONENTS
+   - Render en servidor (no envía JS al cliente)
+   - Solo HTML
+   - Páginas más rápidas
+
+4. STATIC GENERATION (ISR)
+   - Páginas estáticas pre-generadas
+   - Se regeneran cada X tiempo
+   - Ultra rápidas (servidas desde CDN)
+
+   export const revalidate = 3600; // Re-genera cada hora
+
+5. EDGE FUNCTIONS
+   - API routes corren en "edge" (cerca del usuario)
+   - Latencia < 50ms
+   - Más rápido que servidor centralizado
+
+SUPABASE OPTIMIZACIONES
+────────────────────────────────────────────────────────────────
+1. ÍNDICES
+   - Creamos 22 índices en tablas críticas
+   - Queries 100x más rápidas
+
+   CREATE INDEX idx_customer_meals_customer_id 
+   ON customer_meals(customer_id);
+
+   -- Sin índice: 2000ms
+   -- Con índice: 20ms
+
+2. CONEXIÓN POOLING
+   - Supabase reutiliza conexiones a PostgreSQL
+   - No crear conexión nueva cada vez
+   - Más rápido, menos carga
+
+3. REAL-TIME
+   - Cambios en BD se propagan inmediatamente
+   - No necesitas polling
+   - Menos load en servidor
+
+CACHÉ
+────────────────────────────────────────────────────────────────
+1. REACT QUERY (cliente)
+   - Cachea datos en memoria
+   - No re-fetch si ya tienes los datos
+   - Invalidación automática
+
+2. ANALYTICS_CACHE (servidor)
+   - Métricas calculadas guardadas en BD
+   - Dashboard no recalcula cada vez
+   - Se actualiza cada hora
+
+3. CDN (Vercel)
+   - Assets estáticos (CSS, JS, imágenes) servidos desde CDN
+   - Usuario en Madrid → server en Madrid
+   - Usuario en Barcelona → server en Barcelona
+   - Latencia mínima
+
+LAZY LOADING
+────────────────────────────────────────────────────────────────
+Solo carga componentes cuando son necesarios:
+
+const HeavyChart = lazy(() => import('./HeavyChart'));
+
+// Se carga solo cuando usuario va a esa página
+<Suspense fallback={<Spinner />}>
+  <HeavyChart data={data} />
+</Suspense>
+
+CUÁNDO ESCALAR:
+────────────────────────────────────────────────────────────────
+┌─────────────────┬──────────────┬─────────────────────────────┐
+│ Métrica         │ Límite       │ Acción                      │
+├─────────────────┼──────────────┼─────────────────────────────┤
+│ Supabase DB     │ 500MB        │ → Upgrade a Pro (€25/mes)   │
+│ Vercel bandwidth│ 100GB/mes    │ → Upgrade a Pro (€20/mes)   │
+│ API requests    │ 1M/mes       │ → Optimize queries + cache  │
+│ Clientes        │ 500+         │ → Considerar microservices  │
+└─────────────────┴──────────────┴─────────────────────────────┘
+
+================================================================================
+12. FAQ TÉCNICO
+================================================================================
+
+P: ¿Por qué Next.js y no solo React?
+R: Next.js da SSR, SSG, API routes, optimizaciones built-in, y routing 
+   file-based. React solo es la UI library. Tendrías que agregar todo 
+   lo demás manualmente.
+
+P: ¿Por qué Supabase y no Firebase?
+R: PostgreSQL (relacional) es mejor para este caso que Firestore (NoSQL).
+   Necesitas joins complejos, transacciones ACID, y RLS nativo.
+
+P: ¿Por qué no app nativa?
+R: PWA es más barato, más rápido de desarrollar, una sola codebase, y 
+   updates instantáneos. Cuando tengas 10,000 clientes, considera nativa.
+
+P: ¿Puedo usar otra base de datos?
+R: Sí, pero tendrías que:
+   - Configurar servidor (más caro)
+   - Implementar auth manualmente
+   - Implementar RLS manualmente
+   - Más trabajo de DevOps
+
+P: ¿Cómo manejar 1000+ clientes simultáneos?
+R: 
+   1. Supabase escala automáticamente (hasta cierto punto)
+   2. Vercel serverless escala infinito
+   3. Si llegas a ese punto, considera:
+      - Read replicas de PostgreSQL
+      - Redis para caché
+      - Message queue para jobs pesados
+
+P: ¿Cómo hacer backups?
+R: Supabase hace backups automáticos diarios. Puedes descargar dump de BD
+   manualmente también. Configura backup externo en S3 si quieres.
+
+P: ¿Qué pasa si Supabase se cae?
+R: 
+   - Uptime de Supabase: 99.9%
+   - Si se cae: 
+     * PWA sigue funcionando offline
+     * Cuando vuelve → sincroniza
+   - Si quieres más control → self-host PostgreSQL
+     (Pero es más caro y complejo)
+
+P: ¿Cómo testear pagos sin gastar dinero?
+R: Stripe y PayPal tienen "test mode". Usas tarjetas de prueba.
+   Ejemplo: 4242 4242 4242 4242 (Stripe test card)
+
+P: ¿Necesito saber DevOps?
+R: No. Vercel y Supabase son "managed" → ellos manejan servidores.
+   Solo necesitas saber:
+   - Git (push código)
+   - Configurar variables de entorno
+   - Leer logs
+
+P: ¿Puedo monetizar B2B (empresas)?
+R: Sí. Puedes agregar:
+   - Panel de empresa
+   - Bulk ordering
+   - Facturación mensual
+   - Reporting customizado
+   Todo con la misma arquitectura.
+
+================================================================================
+FIN DE LA DOCUMENTACIÓN
+================================================================================
+
+Este documento explica:
+✓ Qué es HealthyBox
+✓ Por qué cada tecnología fue elegida
+✓ Cómo funciona cada componente
+✓ Cómo escalar cuando crezcas
+
+PRÓXIMOS PASOS:
+1. Lee el roadmap (healthybox_roadmap.txt)
+2. Empieza por Fase 1: Setup
+3. Construye MVP en 6 semanas
+4. Consigue primeros clientes
+5. Itera basado en feedback
+
+¡ÉXITO! 🚀

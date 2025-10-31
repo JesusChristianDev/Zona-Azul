@@ -1,0 +1,196 @@
+path,type,description
+/src/app,folder,Rutas principales (Next.js App Router)
+/src/app/page.tsx,file,Landing page con dos CTAs: Agendar Cita y Ver Carta
+/src/app/layout.tsx,file,Root layout
+/src/app/globals.css,file,Estilos globales + Tailwind
+/src/app/booking,folder,"🆕 Sistema de citas (público, sin login)"
+/src/app/booking/page.tsx,file,Formulario para solicitar cita con nutricionista
+/src/app/booking/success/page.tsx,file,Confirmación de cita solicitada
+/src/app/menu,folder,"🆕 Carta del restaurante (público, modo invitado)"
+/src/app/menu/page.tsx,file,Carta fija del restaurante con precios
+/src/app/menu/[recipeId],folder,Detalle de plato individual
+/src/app/menu/[recipeId]/page.tsx,file,"Ver ingredientes, macros, foto del plato"
+/src/app/activate,folder,🆕 Activación de cuenta (con token)
+/src/app/activate/page.tsx,file,Cliente establece password después de cita
+/src/app/(auth),folder,Autenticación (sin auto-registro)
+/src/app/(auth)/login,folder,Login
+/src/app/(auth)/login/page.tsx,file,Página de login
+/src/app/(auth)/forgot-password,folder,Recuperar contraseña
+/src/app/(auth)/forgot-password/page.tsx,file,Solicitar reset password
+/src/app/(customer),folder,Panel del cliente
+/src/app/(customer)/layout.tsx,file,Layout con navbar y sidebar de cliente
+/src/app/(customer)/dashboard,folder,Dashboard principal
+/src/app/(customer)/dashboard/page.tsx,file,"Vista general: suscripción, próximas comidas, progreso"
+/src/app/(customer)/meals,folder,Menú semanal
+/src/app/(customer)/meals/page.tsx,file,"Ver menú de la semana, cambiar comidas"
+/src/app/(customer)/tracking,folder,Seguimiento de progreso
+/src/app/(customer)/tracking/page.tsx,file,"Peso, medidas, fotos, gráficos"
+/src/app/(customer)/subscription,folder,Gestión de suscripción
+/src/app/(customer)/subscription/page.tsx,file,"Ver plan, pausar, cancelar, cambiar"
+/src/app/(customer)/support,folder,Soporte
+/src/app/(customer)/support/page.tsx,file,"Crear ticket, ver historial"
+/src/app/(nutritionist),folder,Panel del nutricionista
+/src/app/(nutritionist)/layout.tsx,file,Layout de nutricionista
+/src/app/(nutritionist)/dashboard,folder,Dashboard
+/src/app/(nutritionist)/dashboard/page.tsx,file,"Resumen de clientes, próximas citas"
+/src/app/(nutritionist)/appointments,folder,🆕 Gestión de citas
+/src/app/(nutritionist)/appointments/page.tsx,file,Lista de citas pendientes y próximas
+/src/app/(nutritionist)/appointments/[appointmentId],folder,Detalle de cita
+/src/app/(nutritionist)/appointments/[appointmentId]/page.tsx,file,"Ver datos de la cita, crear cliente desde aquí"
+/src/app/(nutritionist)/availability,folder,🆕 Configurar disponibilidad
+/src/app/(nutritionist)/availability/page.tsx,file,"Horarios semanales, duración de citas"
+/src/app/(nutritionist)/clients,folder,Gestión de clientes
+/src/app/(nutritionist)/clients/page.tsx,file,Lista de clientes asignados
+/src/app/(nutritionist)/clients/create,folder,🆕 Crear cliente post-cita
+/src/app/(nutritionist)/clients/create/page.tsx,file,Formulario completo para crear cliente
+/src/app/(nutritionist)/clients/[clientId],folder,Detalle de cliente
+/src/app/(nutritionist)/clients/[clientId]/page.tsx,file,"Ver progreso, sesiones, plan nutricional"
+/src/app/(nutritionist)/recipes,folder,Gestión de recetas
+/src/app/(nutritionist)/recipes/page.tsx,file,Catálogo de recetas
+/src/app/(nutritionist)/recipes/create,folder,Crear receta
+/src/app/(nutritionist)/recipes/create/page.tsx,file,Formulario de receta
+/src/app/(nutritionist)/weekly-menus,folder,Menús semanales
+/src/app/(nutritionist)/weekly-menus/page.tsx,file,Lista de menús
+/src/app/(nutritionist)/weekly-menus/create,folder,Crear menú
+/src/app/(nutritionist)/weekly-menus/create/page.tsx,file,Constructor de menú semanal
+/src/app/(kitchen),folder,Panel de cocina
+/src/app/(kitchen)/layout.tsx,file,Layout de cocina
+/src/app/(kitchen)/dashboard,folder,Dashboard
+/src/app/(kitchen)/dashboard/page.tsx,file,Órdenes del día
+/src/app/(kitchen)/orders,folder,Órdenes
+/src/app/(kitchen)/orders/page.tsx,file,Lista de órdenes
+/src/app/(kitchen)/orders/[orderId],folder,Detalle de orden
+/src/app/(kitchen)/orders/[orderId]/page.tsx,file,Ver platos a preparar
+/src/app/(kitchen)/inventory,folder,Inventario
+/src/app/(kitchen)/inventory/page.tsx,file,Gestión de stock
+/src/app/(logistics),folder,Panel de logística
+/src/app/(logistics)/layout.tsx,file,Layout de logística
+/src/app/(logistics)/dashboard,folder,Dashboard
+/src/app/(logistics)/dashboard/page.tsx,file,Entregas del día
+/src/app/(logistics)/deliveries,folder,Entregas
+/src/app/(logistics)/deliveries/page.tsx,file,Lista de entregas
+/src/app/(logistics)/deliveries/[deliveryId],folder,Detalle de entrega
+/src/app/(logistics)/deliveries/[deliveryId]/page.tsx,file,"Confirmar entrega, foto, firma"
+/src/app/(support),folder,Panel de soporte
+/src/app/(support)/layout.tsx,file,Layout de soporte
+/src/app/(support)/dashboard,folder,Dashboard
+/src/app/(support)/dashboard/page.tsx,file,Tickets abiertos
+/src/app/(support)/tickets,folder,Tickets
+/src/app/(support)/tickets/page.tsx,file,Lista de tickets
+/src/app/(support)/tickets/[ticketId],folder,Detalle de ticket
+/src/app/(support)/tickets/[ticketId]/page.tsx,file,"Chat del ticket, respuestas IA"
+/src/app/(admin),folder,Panel de admin
+/src/app/(admin)/layout.tsx,file,Layout de admin
+/src/app/(admin)/dashboard,folder,Dashboard principal
+/src/app/(admin)/dashboard/page.tsx,file,"KPIs, gráficos, alertas"
+/src/app/(admin)/appointments,folder,🆕 Ver todas las citas
+/src/app/(admin)/appointments/page.tsx,file,Calendario de todas las citas
+/src/app/(admin)/restaurant-menu,folder,🆕 Gestionar carta fija
+/src/app/(admin)/restaurant-menu/page.tsx,file,Editar carta del restaurante
+/src/app/(admin)/users,folder,Gestión de usuarios
+/src/app/(admin)/users/page.tsx,file,"Tabla de usuarios, crear, editar"
+/src/app/(admin)/analytics,folder,Analytics avanzado
+/src/app/(admin)/analytics/page.tsx,file,"Reportes, segmentación, churn"
+/src/app/api,folder,API Routes (backend)
+/src/app/api/appointments,folder,🆕 APIs de citas
+/src/app/api/appointments/request/route.ts,file,POST - Solicitar cita (público)
+/src/app/api/appointments/confirm/route.ts,file,POST - Confirmar cita (nutritionist)
+/src/app/api/appointments/complete/route.ts,file,POST - Marcar cita como completada
+/src/app/api/appointments/[id]/route.ts,file,"GET, PUT, DELETE - Gestionar cita específica"
+/src/app/api/auth,folder,Autenticación (modificado)
+/src/app/api/auth/login/route.ts,file,POST - Login
+/src/app/api/auth/logout/route.ts,file,POST - Logout
+/src/app/api/auth/activate/route.ts,file,🆕 POST - Activar cuenta con token
+/src/app/api/clients,folder,APIs de clientes
+/src/app/api/clients/create-from-appointment/route.ts,file,🆕 POST - Crear cliente desde cita
+/src/app/api/clients/[id]/route.ts,file,"GET, PUT - Gestionar cliente"
+/src/app/api/meals,folder,APIs de comidas
+/src/app/api/meals/change/route.ts,file,POST - Cambiar comida (viernes-domingo)
+/src/app/api/meals/[id]/route.ts,file,GET - Obtener comida específica
+/src/app/api/payments,folder,APIs de pagos
+/src/app/api/payments/create-payment-intent/route.ts,file,POST - Crear intent de Stripe
+/src/app/api/payments/webhook/route.ts,file,POST - Webhook de Stripe
+/src/app/api/restaurant-menu,folder,🆕 APIs de carta pública
+/src/app/api/restaurant-menu/route.ts,file,GET - Obtener carta (público)
+/src/app/api/restaurant-menu/update/route.ts,file,PUT - Actualizar carta (admin)
+/src/app/api/notifications/send/route.ts,file,POST - Enviar notificación
+/src/components,folder,Componentes reutilizables
+/src/components/public,folder,🆕 Componentes públicos (sin auth)
+/src/components/public/BookingForm.tsx,file,Formulario de solicitud de cita
+/src/components/public/AvailableSlots.tsx,file,Selector de fecha/hora disponible
+/src/components/public/RestaurantMenuItem.tsx,file,Card de plato en carta
+/src/components/public/RestaurantMenuGrid.tsx,file,Grid de carta completa
+/src/components/public/Hero.tsx,file,Hero section de landing
+/src/components/ui,folder,Componentes UI básicos
+/src/components/ui/Button.tsx,file,Botón con variantes
+/src/components/ui/Input.tsx,file,Input con validación
+/src/components/ui/Select.tsx,file,Dropdown
+/src/components/ui/Card.tsx,file,Card container
+/src/components/ui/Modal.tsx,file,Modal/dialog
+/src/components/ui/Toast.tsx,file,Notificación toast
+/src/components/ui/Spinner.tsx,file,Loading spinner
+/src/components/ui/Badge.tsx,file,Badge de estado
+/src/components/layout,folder,Componentes de layout
+/src/components/layout/Navbar.tsx,file,Navbar superior
+/src/components/layout/Sidebar.tsx,file,Sidebar de navegación
+/src/components/layout/Footer.tsx,file,Footer
+/src/components/layout/MobileMenu.tsx,file,Menú móvil
+/src/components/customer,folder,Componentes del cliente
+/src/components/customer/MealCard.tsx,file,Card de comida
+/src/components/customer/WeeklyMenuGrid.tsx,file,Grid de menú semanal
+/src/components/customer/ProgressChart.tsx,file,Gráfico de progreso
+/src/components/customer/TrackingForm.tsx,file,Formulario de tracking
+/src/components/customer/SubscriptionCard.tsx,file,Card de suscripción
+/src/components/nutritionist,folder,Componentes del nutricionista
+/src/components/nutritionist/AppointmentCard.tsx,file,🆕 Card de cita pendiente
+/src/components/nutritionist/AppointmentList.tsx,file,🆕 Lista de citas
+/src/components/nutritionist/CreateClientForm.tsx,file,🆕 Formulario crear cliente post-cita
+/src/components/nutritionist/AppointmentDetails.tsx,file,🆕 Detalle completo de cita
+/src/components/nutritionist/AvailabilityCalendar.tsx,file,🆕 Configurar horarios disponibles
+/src/components/nutritionist/ClientCard.tsx,file,Card de cliente
+/src/components/nutritionist/MealPlanBuilder.tsx,file,Constructor de plan nutricional
+/src/components/nutritionist/RecipeForm.tsx,file,Formulario de receta
+/src/components/admin,folder,Componentes del admin
+/src/components/admin/DashboardStats.tsx,file,KPIs principales
+/src/components/admin/RestaurantMenuManager.tsx,file,🆕 Gestionar carta fija
+/src/components/admin/AppointmentCalendar.tsx,file,🆕 Calendario de todas las citas
+/src/components/admin/UserTable.tsx,file,Tabla de usuarios
+/src/components/admin/RevenueChart.tsx,file,Gráfico de ingresos
+/src/components/kitchen,folder,Componentes de cocina
+/src/components/kitchen/OrderList.tsx,file,Lista de órdenes
+/src/components/kitchen/InventoryTable.tsx,file,Tabla de inventario
+/src/components/logistics,folder,Componentes de logística
+/src/components/logistics/DeliveryMap.tsx,file,Mapa de entregas
+/src/components/logistics/DeliveryCard.tsx,file,Card de entrega
+/src/components/support,folder,Componentes de soporte
+/src/components/support/TicketList.tsx,file,Lista de tickets
+/src/components/support/ChatWidget.tsx,file,Chat del ticket
+/src/lib,folder,Utilidades y lógica de negocio
+/src/lib/supabase,folder,Cliente Supabase
+/src/lib/supabase/client.ts,file,Cliente para uso en cliente
+/src/lib/supabase/server.ts,file,Cliente para uso en servidor
+/src/lib/auth/auth.ts,file,Funciones de autenticación
+/src/lib/auth/permissions.ts,file,Sistema de permisos por rol
+/src/lib/payments/stripe.ts,file,Integración con Stripe
+/src/lib/notifications/push.ts,file,Push notifications
+/src/lib/notifications/email.ts,file,Email con Resend
+/src/lib/appointments/availability.ts,file,🆕 Calcular slots disponibles
+/src/lib/utils/date.ts,file,Utilidades de fechas
+/src/hooks,folder,Custom React Hooks
+/src/hooks/useAuth.ts,file,Hook de autenticación
+/src/hooks/useCustomer.ts,file,Hook de datos de cliente
+/src/hooks/useMeals.ts,file,Hook de comidas
+/src/hooks/useAppointments.ts,file,🆕 Hook de citas
+/src/types,folder,TypeScript types
+/src/types/database.types.ts,file,Tipos de BD auto-generados
+/src/types/appointment.types.ts,file,🆕 Tipos de citas
+/public,folder,Archivos estáticos
+/public/icons,folder,Iconos PWA
+/public/images,folder,Imágenes
+/public/manifest.json,file,PWA manifest
+/public/sw.js,file,Service worker
+/next.config.js,file,Configuración de Next.js
+/tailwind.config.ts,file,Configuración de Tailwind
+/tsconfig.json,file,Configuración de TypeScript
+/.env.local,file,Variables de entorno (gitignored)
+/package.json,file,Dependencias del proyecto
