@@ -1,40 +1,79 @@
 "use client"
 import React, { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import AvailableSlots from './AvailableSlots'
 
 export default function BookingForm() {
+  const router = useRouter()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  function handleSubmit(e: React.FormEvent) {
+  function validateForm(): boolean {
+    if (!name.trim()) {
+      setError('El nombre es requerido')
+      return false
+    }
+    if (!email.trim()) {
+      setError('El email es requerido')
+      return false
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError('El email no es válido')
+      return false
+    }
+    if (!selectedSlot) {
+      setError('Debes seleccionar un slot disponible')
+      return false
+    }
+    setError(null)
+    return true
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const payload = { name, email, phone, slot: selectedSlot }
-    // Try to POST to local API; fallback to localStorage if network fails
-    ;(async () => {
+    
+    if (!validateForm()) {
+      return
+    }
+
+    setIsSubmitting(true)
+    setError(null)
+
+    const payload = { name: name.trim(), email: email.trim(), phone: phone.trim(), slot: selectedSlot }
+
+    try {
+      const res = await fetch('/api/appointments/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      
+      if (res.ok) {
+        showToast('Solicitud enviada ✔️')
+        setTimeout(() => router.push('/booking/success'), 800)
+        return
+      }
+      
+      const errorData = await res.json().catch(() => ({}))
+      throw new Error(errorData.error || `Error ${res.status}: ${res.statusText}`)
+    } catch (err: any) {
+      // Fallback a localStorage
       try {
-        const res = await fetch('/api/appointments/request', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
-        if (res.ok) {
-          const data = await res.json()
-          showToast('Solicitud enviada ✔️')
-          setTimeout(() => (window.location.href = '/booking/success'), 800)
-          return
-        }
-        throw new Error('API responded with ' + res.status)
-      } catch (err) {
-        // fallback
         const existing = JSON.parse(localStorage.getItem('demo_appointments') || '[]')
-        existing.push({ id: `m-${Date.now()}`, ...payload })
+        existing.push({ id: `m-${Date.now()}`, ...payload, created_at: new Date().toISOString() })
         localStorage.setItem('demo_appointments', JSON.stringify(existing))
         showToast('Solicitud guardada localmente ✔️')
-        setTimeout(() => (window.location.href = '/booking/success'), 900)
+        setTimeout(() => router.push('/booking/success'), 900)
+      } catch (storageErr) {
+        console.error('Error saving to localStorage:', storageErr)
+        setError('Error al guardar la solicitud. Por favor, inténtalo de nuevo.')
+        setIsSubmitting(false)
       }
-    })()
+    }
   }
 
   function showToast(text: string) {
@@ -52,30 +91,78 @@ export default function BookingForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 card">
-      <h2 className="text-xl font-semibold">Solicitar cita con nutricionista</h2>
+    <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+      <h2 className="text-xl sm:text-2xl font-semibold">Solicitar cita con nutricionista</h2>
+
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded">
+          {error}
+        </div>
+      )}
 
       <div>
-        <label className="block text-sm">Nombre</label>
-        <input required value={name} onChange={(e) => setName(e.target.value)} className="w-full mt-1 p-2 border rounded" />
+        <label htmlFor="name" className="block text-sm font-medium mb-1">
+          Nombre <span className="text-red-500">*</span>
+        </label>
+        <input
+          id="name"
+          required
+          type="text"
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value)
+            setError(null)
+          }}
+          className="w-full mt-1 p-2 border rounded focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+          placeholder="Ingresa tu nombre completo"
+        />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm">Email</label>
-          <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full mt-1 p-2 border rounded" />
+          <label htmlFor="email" className="block text-sm font-medium mb-1">
+            Email <span className="text-red-500">*</span>
+          </label>
+          <input
+            id="email"
+            required
+            type="email"
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value)
+              setError(null)
+            }}
+            className="w-full mt-1 p-2 border rounded focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+            placeholder="ejemplo@email.com"
+          />
         </div>
         <div>
-          <label className="block text-sm">Teléfono</label>
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full mt-1 p-2 border rounded" />
+          <label htmlFor="phone" className="block text-sm font-medium mb-1">
+            Teléfono
+          </label>
+          <input
+            id="phone"
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="w-full mt-1 p-2 border rounded focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+            placeholder="Opcional"
+          />
         </div>
       </div>
 
-      <AvailableSlots onSelect={(id) => setSelectedSlot(id)} />
+      <AvailableSlots onSelect={(id) => {
+        setSelectedSlot(id)
+        setError(null)
+      }} selectedSlot={selectedSlot} />
 
       <div>
-        <button type="submit" disabled={!selectedSlot} className="px-4 py-2 bg-green-600 text-white rounded disabled:opacity-50">
-          Enviar solicitud
+        <button
+          type="submit"
+          disabled={!selectedSlot || isSubmitting}
+          className="w-full sm:w-auto px-6 py-3 bg-green-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-green-700 transition-colors text-sm sm:text-base font-medium"
+        >
+          {isSubmitting ? 'Enviando...' : 'Enviar solicitud'}
         </button>
       </div>
     </form>

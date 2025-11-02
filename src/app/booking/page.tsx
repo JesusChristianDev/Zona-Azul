@@ -5,7 +5,7 @@ const BookingForm = dynamic(() => import('../../components/public/BookingForm'),
 export default function BookingPage() {
   return (
     <section className="container">
-      <div className="card">
+      <div className="card p-4 sm:p-6">
         <BookingForm />
       </div>
     </section>

@@ -20,27 +20,6 @@ export const recipes = [
     fats: 18,
     price: 7.9,
     photo_url: '/images/bowl.svg',
-  }, {
-    id: 'r1',
-    name: 'Ensalada mediterránea',
-    description: 'Lechuga, tomate, pepino, garbanzos, aceite de oliva',
-    calories: 420,
-    protein: 12,
-    carbs: 40,
-    fats: 22,
-    price: 6.5,
-    photo_url: '/images/salad.svg',
-  },
-  {
-    id: 'r2',
-    name: 'Bowl de pollo y quinoa',
-    description: 'Pollo a la plancha, quinoa, verduras asadas, salsa ligera',
-    calories: 620,
-    protein: 38,
-    carbs: 55,
-    fats: 18,
-    price: 7.9,
-    photo_url: '/images/bowl.svg',
   },
   {
     id: 'r3',
@@ -51,7 +30,7 @@ export const recipes = [
     carbs: 48,
     fats: 18,
     price: 8.9,
-    photo_url: '/images/salmon.svg',
+    photo_url: '/images/bowl.svg',
   },
   {
     id: 'r4',
@@ -62,7 +41,7 @@ export const recipes = [
     carbs: 42,
     fats: 16,
     price: 6.9,
-    photo_url: '/images/wrap.svg',
+    photo_url: '/images/salad.svg',
   },
   {
     id: 'r5',
@@ -73,7 +52,7 @@ export const recipes = [
     carbs: 60,
     fats: 14,
     price: 7.5,
-    photo_url: '/images/tofu.svg',
+    photo_url: '/images/bowl.svg',
   },
   {
     id: 'r6',
@@ -84,7 +63,7 @@ export const recipes = [
     carbs: 52,
     fats: 20,
     price: 9.2,
-    photo_url: '/images/poke.svg',
+    photo_url: '/images/bowl.svg',
   },
   {
     id: 'r7',
@@ -95,7 +74,7 @@ export const recipes = [
     carbs: 60,
     fats: 20,
     price: 8.3,
-    photo_url: '/images/pasta.svg',
+    photo_url: '/images/bowl.svg',
   },
   {
     id: 'r8',
@@ -106,7 +85,7 @@ export const recipes = [
     carbs: 14,
     fats: 18,
     price: 5.9,
-    photo_url: '/images/omelette.svg',
+    photo_url: '/images/salad.svg',
   },
   {
     id: 'r9',
@@ -117,7 +96,7 @@ export const recipes = [
     carbs: 28,
     fats: 16,
     price: 4.9,
-    photo_url: '/images/soup.svg',
+    photo_url: '/images/bowl.svg',
   },
   {
     id: 'r10',
@@ -128,7 +107,7 @@ export const recipes = [
     carbs: 65,
     fats: 15,
     price: 7.4,
-    photo_url: '/images/lentils.svg',
+    photo_url: '/images/bowl.svg',
   }
 
 ]
