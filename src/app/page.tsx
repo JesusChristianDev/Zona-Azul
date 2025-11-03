@@ -36,9 +36,9 @@ export default function HomePage() {
           />
         </div>
       </div>
-<div style={{ display: "flex", gap: "1rem", marginTop: "2rem" }}>
-        <Link href="/invitado">
-          <button className={styles.btn}>Entrar como Invitado</button>
+<div className="mt-4 flex flex-col sm:flex-row gap-3 justify-center sm:justify-start">
+        <Link href="/invitado" className="inline-block px-5 py-3 border border-gray-200 rounded-full hover:bg-gray-50 transition-colors text-center text-sm sm:text-base">
+          Entrar como Invitado
         </Link>
 </div>
 
