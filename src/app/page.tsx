@@ -36,6 +36,10 @@ export default function HomePage() {
           />
         </div>
       </div>
+<div style={{ display: "flex", gap: "1rem", marginTop: "2rem" }}>
+        <Link href="/invitado">
+          <button className={styles.btn}>Entrar como Invitado</button>
+        </Link>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <div className="card text-center p-4 sm:p-6">
