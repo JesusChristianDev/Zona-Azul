@@ -157,32 +157,7 @@ export default function HomePage() {
         <div className="container mx-auto px-4 text-center text-sm">
           <p>© 2025 Zona Azul HealthyBox. Todos los derechos reservados.</p>
         </div>
-<<<<<<< HEAD
       </footer>
     </div>
-=======
-      </div>
-<div className="mt-4 flex flex-col sm:flex-row gap-3 justify-center sm:justify-start">
-        <Link href="/invitado" className="inline-block px-5 py-3 border border-gray-200 rounded-full hover:bg-gray-50 transition-colors text-center text-sm sm:text-base">
-          Entrar como Invitado
-        </Link>
-</div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="card text-center p-4 sm:p-6">
-          <h3 className="font-semibold text-base sm:text-lg">Rápido</h3>
-          <p className="muted mt-2 text-xs sm:text-sm">Pedidos y gestión simples para clientes ocupados.</p>
-        </div>
-        <div className="card text-center p-4 sm:p-6">
-          <h3 className="font-semibold text-base sm:text-lg">Personalizado</h3>
-          <p className="muted mt-2 text-xs sm:text-sm">Planes y menús hechos por nutricionistas.</p>
-        </div>
-        <div className="card text-center p-4 sm:p-6 sm:col-span-2 lg:col-span-1">
-          <h3 className="font-semibold text-base sm:text-lg">Entrega</h3>
-          <p className="muted mt-2 text-xs sm:text-sm">Logística integrada para entregas puntuales.</p>
-        </div>
-      </div>
-    </section>
->>>>>>> 4e7b504aa020ec2781caf47bf091f0921a3e2cce
   )
 }
