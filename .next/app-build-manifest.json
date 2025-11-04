@@ -11,20 +11,20 @@
       "static/css/app/layout.css",
       "static/chunks/app/layout.js"
     ],
-    "/booking/page": [
+    "/invitado/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/booking/page.js"
+      "static/chunks/app/invitado/page.js"
     ],
     "/menu/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/menu/page.js"
     ],
-    "/invitado/page": [
+    "/booking/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/invitado/page.js"
+      "static/chunks/app/booking/page.js"
     ],
     "/suscriptor/page": [
       "static/chunks/webpack.js",
