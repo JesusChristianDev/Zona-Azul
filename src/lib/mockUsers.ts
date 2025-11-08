@@ -54,14 +54,9 @@ export const mockUsers: User[] = [
   },
 ]
 
-// Función helper para buscar usuario por email
-export function findUserByEmail(email: string): User | undefined {
-  return mockUsers.find((user) => user.email.toLowerCase() === email.toLowerCase())
-}
-
 // Función helper para validar credenciales
 export function validateCredentials(email: string, password: string): User | null {
-  const user = findUserByEmail(email)
+  const user = mockUsers.find((u) => u.email.toLowerCase() === email.toLowerCase())
   if (!user) return null
   if (user.password !== password) return null
   return user

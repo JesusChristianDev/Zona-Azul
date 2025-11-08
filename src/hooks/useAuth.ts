@@ -30,6 +30,7 @@ const getStoredAuth = async (): Promise<AuthState> => {
         const response = await fetch('/api/auth/session', {
             method: 'GET',
             credentials: 'include',
+            cache: 'no-store', // Evitar cacheo estático durante build
         })
 
         if (response.ok) {
