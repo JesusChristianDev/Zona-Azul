@@ -1,0 +1,71 @@
+
+# Proyecto: Zona Azul - Prompts optimizados para Cursor Agent
+
+## Objetivo del agente
+Generar un plan completo y accionable para *Zona Azul*, incluyendo branding, modelo de negocio, experiencia del cliente, app, comunidad digital y estrategia de expansión física. Mantener **tono motivador, inclusivo y empático**, alineado con la misión de ayudar a las personas a mejorar su bienestar y alcanzar sus objetivos personales.
+
+---
+
+## 1️⃣ Branding y comunicación
+1. Genera **5 propuestas de logo** con estilo accesible y cercano.
+2. Sugiere **3 paletas de colores** que transmitan salud, energía y superación.
+3. Recomienda **tipografía y estilo visual** coherentes con tono humano y motivador.
+4. Escribe **10 ejemplos de mensajes de marketing y copywriting** para web, redes y app.
+5. Resume **tono de comunicación de la marca** en una guía breve para todo el contenido.
+
+---
+
+## 2️⃣ Modelo de negocio
+1. Crea **flujo completo de servicio para cliente ocasional**: llegada, pedido, comida y seguimiento.
+2. Crea **flujo completo de servicio para cliente suscriptor**: nutricionista, plan personalizado, pedidos, seguimiento y feedback.
+3. Genera **propuesta de carta dinámica**: 10 platos iniciales para clientes ocasionales.
+4. Genera **plan de suscripción con nutricionista**: 3 niveles de planes, objetivos, precios y beneficios.
+5. Elaborar **plan financiero preliminar**: ingresos por carta fija, suscripciones, estimación de costos y margen.
+6. Proponer **estrategias de fidelización y retención de clientes**.
+
+---
+
+## 3️⃣ Experiencia del cliente
+1. Describe **experiencia completa dentro del restaurante**: ambiente, trato, decoración y presentación de platos.
+2. Diseña **experiencia digital complementaria**: app, notificaciones, seguimiento de objetivos.
+3. Genera **guía de interacción con clientes** para personalizar su experiencia sin juicio.
+4. Escribe **mensajes motivacionales y de superación** que se puedan enviar a clientes vía app o email.
+
+---
+
+## 4️⃣ Expansión digital y comunidad
+1. Genera **wireframes de app**: pantalla principal, pedidos, nutricionista, seguimiento de objetivos, personalización de menús, registro de hábitos.
+2. Define **roadmap de desarrollo de app**: MVP, funcionalidades iniciales, mejoras futuras.
+3. Crea **estrategia de comunidad online**: interacción, retos, logros, contenido motivador.
+4. Sugiere **estrategias de engagement en redes sociales**: posts, reels, historias, interacción diaria.
+5. Proponer **funcionalidades gamificadas** para aumentar compromiso y retención de clientes.
+
+---
+
+## 5️⃣ Expansión física y alianzas
+1. Genera **plan de expansión de restaurantes**: número de locales, ubicación estratégica y cronograma de apertura.
+2. Proponer **ideas de alianzas con gimnasios y entrenadores**.
+3. Diseña **experiencia combinada física + digital**: cómo usar la app dentro del restaurante y con socios deportivos.
+4. Crear **estrategia de marketing local** para lanzamiento de nuevos locales.
+
+---
+
+## 6️⃣ Propuesta de valor y mensaje central
+1. Redacta **resumen de propuesta de valor**: servicio personalizado, guía con nutricionista, acompañamiento en hábitos y objetivos.
+2. Genera **mensaje central para clientes**: “Zona Azul es más que comida saludable, es un espacio y guía para mejorar hábitos y resultados.”
+3. Crear **10 ejemplos de mensajes motivacionales** para usar en app, emails y redes.
+
+---
+
+## 7️⃣ Roadmap de ejecución
+1. Crea **lista de tareas paso a paso** para ejecutar todo el proyecto en los próximos 12 meses.
+2. Asigna **prioridades y tiempos estimados** para branding, carta, suscripciones, app, comunidad y expansión física.
+3. Genera **checklist de hitos clave**: lanzamiento del primer restaurante, app MVP, comunidad inicial, primeras alianzas.
+
+---
+
+## Instrucciones adicionales
+- Mantener **tono motivador, inclusivo y empático** en todo el contenido.
+- Generar **ejemplos concretos y visualizaciones** siempre que sea posible.
+- Priorizar acciones que permitan **medir resultados y escalar el proyecto** de manera efectiva.
+- Todo el contenido debe estar listo para **uso inmediato en diseño, desarrollo y marketing**.

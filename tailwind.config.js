@@ -6,8 +6,10 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: '#059669',
-        accent: '#0ea5e9'
+        primary: '#1d4ed8', // Azul profundo Zona Azul
+        accent: '#14b8a6', // Turquesa energizante
+        highlight: '#f97316', // Toque cálido para llamados de atención
+        neutral: '#0f172a'
       },
       fontFamily: {
         sans: ['Inter', 'ui-sans-serif', 'system-ui']

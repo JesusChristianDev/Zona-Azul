@@ -82,9 +82,9 @@ export default function MobileMenu() {
           <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-primary/5 to-accent/5">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white font-bold text-sm">
-                HB
+                ZA
               </div>
-              <span className="font-semibold text-gray-900">HealthyBox</span>
+              <span className="font-semibold text-gray-900">Zona Azul</span>
             </div>
             <button
               onClick={() => setIsOpen(false)}
@@ -154,12 +154,53 @@ export default function MobileMenu() {
                 </svg>
                 <span className="font-medium">Carta</span>
               </Link>
+
+              <Link
+                href="/login"
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                  pathname === '/login'
+                    ? 'bg-primary text-white shadow-md'
+                    : 'text-gray-700 hover:bg-gray-100 hover:text-primary'
+                }`}
+                onClick={() => setIsOpen(false)}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 12h14m-7-7l7 7-7 7"
+                  />
+                </svg>
+                <span className="font-medium">Acceso demo</span>
+              </Link>
+            </div>
+
+            <div className="mt-6 border-t border-gray-100 pt-4 px-4 space-y-2">
+              <p className="text-xs uppercase tracking-wider text-gray-400">Dashboards</p>
+              {[
+                { href: '/invitado', label: 'Selección de rol' },
+                { href: '/suscriptor', label: 'Suscriptor' },
+                { href: '/admin', label: 'Admin' },
+                { href: '/nutricionista', label: 'Nutricionista' },
+                { href: '/repartidor', label: 'Repartidor' },
+              ].map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="flex items-center gap-3 rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-primary/5 hover:text-primary transition"
+                  onClick={() => setIsOpen(false)}
+                >
+                  <span className="h-2 w-2 rounded-full bg-primary/30"></span>
+                  <span>{link.label}</span>
+                </Link>
+              ))}
             </div>
           </div>
 
           {/* Footer del menú */}
           <div className="border-t p-4 bg-gray-50">
-            <p className="text-xs text-gray-500 text-center">HealthyBox Demo</p>
+            <p className="text-xs text-gray-500 text-center">Zona Azul · Demo PWA</p>
           </div>
         </div>
       </nav>

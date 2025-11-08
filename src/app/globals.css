@@ -5,7 +5,7 @@
 @tailwind utilities;
 
 :root {
-  --bg: #f8fafc;
+  --bg: #f5f8ff;
 }
 
 html,
@@ -25,12 +25,8 @@ body,
   @apply text-sm text-gray-500
 }
 
-.hero-gradient {
-  background: linear-gradient(90deg, rgba(14, 165, 233, 0.08), rgba(5, 150, 105, 0.04));
-}
-
 .badge {
-  @apply inline-block px-2 py-1 rounded-full text-xs bg-green-50 text-green-700
+  @apply inline-block px-2 py-1 rounded-full text-xs bg-primary/10 text-primary
 }
 
 .container {

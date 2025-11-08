@@ -1,6 +1,7 @@
 {
-  "name": "healthybox-demo",
+  "name": "zona-azul-pwa",
   "version": "0.1.0",
+  "description": "Experiencia PWA para Zona Azul: bienestar integral, dashboards por rol y contenido estratégico.",
   "private": true,
   "scripts": {
     "dev": "next dev",

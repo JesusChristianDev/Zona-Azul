@@ -1,25 +1,49 @@
 "use client"
 
-import React from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '../../hooks/useAuth'
 import MobileMenu from '../MobileMenu'
 
 export default function DashboardHeader() {
   const pathname = usePathname()
+  const router = useRouter()
   const { role, logout } = useAuth()
 
-  // Determinar el título del breadcrumb según la ruta
-  const getBreadcrumbTitle = () => {
-    if (pathname === '/suscriptor') return 'Dashboard Suscriptor'
-    if (pathname === '/admin') return 'Panel Administración'
-    if (pathname === '/invitado') return 'Selección de Rol'
-    return null
+  const handleLogout = async () => {
+    await logout()
+    router.push('/')
   }
 
-  const breadcrumbTitle = getBreadcrumbTitle()
-  const isDashboardPage = pathname === '/suscriptor' || pathname === '/admin' || pathname === '/invitado'
+  const segments = pathname?.split('/').filter(Boolean) ?? []
+  const sectionKey = segments[0]
+
+  const baseTitles: Record<string, string> = {
+    invitado: 'Selección de Rol',
+    admin: 'Panel Administración',
+    suscriptor: 'Dashboard Suscriptor',
+    nutricionista: 'Panel Nutricionista',
+    repartidor: 'Panel Repartidor',
+  }
+
+  const detailTitles: Record<string, string> = {
+    'admin/menu': 'Gestión del Menú',
+    'admin/usuarios': 'Gestión de Usuarios',
+    'admin/pedidos': 'Pedidos Globales',
+    'suscriptor/plan': 'Mi Plan de Comidas',
+    'suscriptor/pedidos': 'Seguimiento de Pedidos',
+    'suscriptor/progreso': 'Progreso Físico',
+    'nutricionista/clientes': 'Lista de Suscriptores',
+    'nutricionista/planes': 'Crear Planes',
+    'repartidor/pedidos': 'Pedidos Asignados',
+    'repartidor/historial': 'Historial de Entregas',
+  }
+
+  const sectionPath = segments.slice(0, 2).join('/')
+  const breadcrumbTitle = detailTitles[sectionPath] ?? baseTitles[sectionKey ?? ''] ?? null
+
+  const dashboardRoots = ['invitado', 'admin', 'suscriptor', 'nutricionista', 'repartidor']
+  const isDashboardPage = sectionKey ? dashboardRoots.includes(sectionKey) : false
 
   return (
     <header className="bg-white shadow-sm sticky top-0 z-50 border-b">
@@ -28,9 +52,9 @@ export default function DashboardHeader() {
         <div className="flex items-center justify-between py-3 px-4 sm:py-4">
           <Link href="/" className="flex items-center gap-2 sm:gap-3 hover:opacity-80 transition-opacity">
             <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-base">
-              HB
+              ZA
             </div>
-            <h1 className="text-base sm:text-lg font-semibold">HealthyBox</h1>
+            <h1 className="text-base sm:text-lg font-semibold">Zona Azul</h1>
           </Link>
 
           {/* Navegación desktop - solo en páginas públicas */}
@@ -45,6 +69,9 @@ export default function DashboardHeader() {
               <Link href="/menu" className="text-sm text-gray-700 hover:text-primary transition-colors">
                 Carta
               </Link>
+              <Link href="/login" className="text-sm text-gray-700 hover:text-primary transition-colors">
+                Acceso
+              </Link>
             </nav>
           )}
 
@@ -56,7 +83,7 @@ export default function DashboardHeader() {
               </Link>
               {role !== 'invitado' && (
                 <button
-                  onClick={logout}
+                  onClick={handleLogout}
                   className="px-3 py-1.5 text-sm text-gray-700 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                 >
                   Salir
@@ -77,7 +104,7 @@ export default function DashboardHeader() {
             <div className="sm:hidden flex items-center gap-2">
               {role !== 'invitado' && (
                 <button
-                  onClick={logout}
+                  onClick={handleLogout}
                   className="p-2 text-gray-700 hover:text-red-600 rounded-lg transition-colors"
                   aria-label="Salir"
                 >

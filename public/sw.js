@@ -1,12 +1,31 @@
-// Service Worker para HealthyBox PWA
-const CACHE_NAME = 'healthybox-v1'
+// Service Worker para la PWA Zona Azul
+const CACHE_NAME = 'zona-azul-cache-v3'
 const urlsToCache = [
   '/',
+  '/login',
+  '/invitado',
   '/booking',
+  '/activate',
   '/menu',
+  '/admin',
+  '/admin/menu',
+  '/admin/usuarios',
+  '/admin/pedidos',
+  '/suscriptor',
+  '/suscriptor/plan',
+  '/suscriptor/pedidos',
+  '/suscriptor/progreso',
+  '/nutricionista',
+  '/nutricionista/clientes',
+  '/nutricionista/planes',
+  '/repartidor',
+  '/repartidor/pedidos',
+  '/repartidor/historial',
   '/images/salad.svg',
   '/images/bowl.svg',
   '/manifest.json',
+  '/icon-192x192.png',
+  '/icon-512x512.png',
 ]
 
 // Instalación del Service Worker
@@ -14,7 +33,7 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        console.log('Service Worker: Cache abierto')
+        console.log('Zona Azul SW: caché precargado')
         return cache.addAll(urlsToCache)
       })
   )
@@ -27,7 +46,7 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
-            console.log('Service Worker: Eliminando cache antiguo', cacheName)
+            console.log('Zona Azul SW: eliminando caché antiguo', cacheName)
             return caches.delete(cacheName)
           }
         })
@@ -38,22 +57,46 @@ self.addEventListener('activate', (event) => {
 
 // Estrategia: Network First, fallback a cache
 self.addEventListener('fetch', (event) => {
+  const { request } = event
+  const url = new URL(request.url)
+
+  // No cachear requests POST, PUT, DELETE, etc. (solo GET)
+  if (request.method !== 'GET') {
+    return
+  }
+
+  // No cachear requests a API routes
+  if (url.pathname.startsWith('/api/')) {
+    return
+  }
+
+  // No cachear requests a _next (Next.js internals)
+  if (url.pathname.startsWith('/_next/')) {
+    return
+  }
+
   event.respondWith(
-    fetch(event.request)
+    fetch(request)
       .then((response) => {
-        // Clonar la respuesta
+        // Solo cachear respuestas exitosas y básicas (no opaques)
+        if (!response || response.status !== 200 || response.type !== 'basic') {
+          return response
+        }
+
         const responseToCache = response.clone()
 
-        // Agregar al cache
+        // Cachear en background (no bloquear la respuesta)
         caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache)
+          cache.put(request, responseToCache).catch((err) => {
+            console.warn('Zona Azul SW: Error al cachear', request.url, err)
+          })
         })
 
         return response
       })
       .catch(() => {
-        // Si falla la red, usar cache
-        return caches.match(event.request)
+        // Si falla la red, intentar obtener del cache
+        return caches.match(request)
       })
   )
 })

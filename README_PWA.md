@@ -11,7 +11,7 @@ Puedes generar estos iconos usando:
 - [RealFaviconGenerator](https://realfavicongenerator.net/)
 - O cualquier herramienta de diseño que genere PNG
 
-El icono base puede ser un logo de HealthyBox con las iniciales "HB" en verde (#059669).
+El icono base puede ser un logo de **Zona Azul** con las iniciales "ZA" en azul (#1d4ed8) y acentos turquesa.
 
 También puedes usar el archivo `public/icon.svg` como base para generar los iconos.
 

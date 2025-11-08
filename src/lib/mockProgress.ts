@@ -8,6 +8,13 @@ export interface ProgressEntry {
   fats: number
 }
 
+export interface ProgressMetric {
+  label: string
+  value: string
+  goal: string
+  tip: string
+}
+
 export interface ProgressStats {
   weeklyData: ProgressEntry[]
   monthlyData: ProgressEntry[]
@@ -19,6 +26,7 @@ export interface ProgressStats {
     water: number // percentage
     weight?: number // percentage
   }
+  metrics: ProgressMetric[]
 }
 
 export const mockProgress: ProgressStats = {
@@ -92,5 +100,25 @@ export const mockProgress: ProgressStats = {
     water: 97.5, // 1950 / 2000 * 100
     weight: 98.1, // (75 / 76.5) * 100
   },
+  metrics: [
+    {
+      label: 'Peso corporal',
+      value: '76.1 kg',
+      goal: '75.5 kg',
+      tip: 'Excelente tendencia: mantén la hidratación y registra sensaciones cada mañana.',
+    },
+    {
+      label: 'Hidratación promedio',
+      value: '1,950 ml',
+      goal: '2,000 ml',
+      tip: 'Añade un vaso extra al despertar y otro a media tarde para cerrar la brecha.',
+    },
+    {
+      label: 'Nivel de energía',
+      value: '8/10',
+      goal: '>= 7',
+      tip: 'Continúa con las pausas activas. Considera respirar profundo 5 minutos post almuerzo.',
+    },
+  ],
 }
 

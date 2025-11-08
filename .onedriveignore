@@ -1,0 +1,8 @@
+# Excluir directorios de build y caché de OneDrive
+.next/
+node_modules/
+out/
+build/
+*.log
+.env*.local
+

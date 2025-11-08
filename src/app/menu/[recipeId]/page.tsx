@@ -1,5 +1,4 @@
 "use client"
-import React from 'react'
 import { useParams } from 'next/navigation'
 import { recipes } from '../../../lib/mockData'
 

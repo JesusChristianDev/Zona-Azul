@@ -1,7 +1,6 @@
-import React from 'react'
-import DashboardInvitado from '../../components/dashboard/DashboardInvitado'
+import { redirect } from 'next/navigation'
 
 export default function InvitadoPage() {
-  return <DashboardInvitado />
+  redirect('/')
 }
 
