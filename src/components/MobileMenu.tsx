@@ -73,9 +73,8 @@ export default function MobileMenu() {
       {/* Menú deslizante */}
       <nav
         data-mobile-menu="menu"
-        className={`fixed top-0 right-0 h-full w-80 max-w-[85vw] bg-white shadow-2xl z-50 sm:hidden transform transition-transform duration-300 ease-in-out ${
-          isOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
+        className={`fixed top-0 right-0 h-full w-80 max-w-[85vw] bg-white shadow-2xl z-50 sm:hidden transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-full'
+          }`}
       >
         <div className="flex flex-col h-full">
           {/* Header del menú */}
@@ -102,11 +101,10 @@ export default function MobileMenu() {
             <div className="px-4 space-y-1">
               <Link
                 href="/"
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                  pathname === '/'
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${pathname === '/'
                     ? 'bg-primary text-white shadow-md'
                     : 'text-gray-700 hover:bg-gray-100 hover:text-primary'
-                }`}
+                  }`}
                 onClick={() => setIsOpen(false)}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -117,11 +115,10 @@ export default function MobileMenu() {
 
               <Link
                 href="/booking"
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                  pathname === '/booking'
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${pathname === '/booking'
                     ? 'bg-primary text-white shadow-md'
                     : 'text-gray-700 hover:bg-gray-100 hover:text-primary'
-                }`}
+                  }`}
                 onClick={() => setIsOpen(false)}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -137,11 +134,10 @@ export default function MobileMenu() {
 
               <Link
                 href="/menu"
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                  pathname === '/menu' || pathname?.startsWith('/menu/')
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${pathname === '/menu' || pathname?.startsWith('/menu/')
                     ? 'bg-primary text-white shadow-md'
                     : 'text-gray-700 hover:bg-gray-100 hover:text-primary'
-                }`}
+                  }`}
                 onClick={() => setIsOpen(false)}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -157,11 +153,10 @@ export default function MobileMenu() {
 
               <Link
                 href="/login"
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                  pathname === '/login'
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${pathname === '/login'
                     ? 'bg-primary text-white shadow-md'
                     : 'text-gray-700 hover:bg-gray-100 hover:text-primary'
-                }`}
+                  }`}
                 onClick={() => setIsOpen(false)}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -172,35 +167,15 @@ export default function MobileMenu() {
                     d="M5 12h14m-7-7l7 7-7 7"
                   />
                 </svg>
-                <span className="font-medium">Acceso demo</span>
+                <span className="font-medium">Acceso</span>
               </Link>
             </div>
 
-            <div className="mt-6 border-t border-gray-100 pt-4 px-4 space-y-2">
-              <p className="text-xs uppercase tracking-wider text-gray-400">Dashboards</p>
-              {[
-                { href: '/invitado', label: 'Selección de rol' },
-                { href: '/suscriptor', label: 'Suscriptor' },
-                { href: '/admin', label: 'Admin' },
-                { href: '/nutricionista', label: 'Nutricionista' },
-                { href: '/repartidor', label: 'Repartidor' },
-              ].map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="flex items-center gap-3 rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-primary/5 hover:text-primary transition"
-                  onClick={() => setIsOpen(false)}
-                >
-                  <span className="h-2 w-2 rounded-full bg-primary/30"></span>
-                  <span>{link.label}</span>
-                </Link>
-              ))}
-            </div>
           </div>
 
           {/* Footer del menú */}
           <div className="border-t p-4 bg-gray-50">
-            <p className="text-xs text-gray-500 text-center">Zona Azul · Demo PWA</p>
+            <p className="text-xs text-gray-500 text-center">Zona Azul · PWA</p>
           </div>
         </div>
       </nav>
