@@ -4,7 +4,22 @@ import type { NextRequest } from 'next/server'
 // Rutas públicas (accesibles sin autenticación)
 const PUBLIC_ROUTES = ['/', '/login', '/booking', '/menu', '/activate', '/api/appointments', '/api/auth']
 
-// Mapeo de roles a rutas permitidas
+/**
+ * Mapeo de roles a rutas permitidas
+ * 
+ * NOTA: Las rutas base incluyen automáticamente todas sus subrutas mediante `startsWith()`.
+ * Por ejemplo, '/admin' permite acceso a:
+ *   - /admin
+ *   - /admin/menu
+ *   - /admin/usuarios
+ *   - /admin/pedidos
+ * 
+ * Subrutas existentes por rol:
+ * - admin: /admin, /admin/menu, /admin/usuarios, /admin/pedidos
+ * - suscriptor: /suscriptor, /suscriptor/plan, /suscriptor/progreso, /suscriptor/pedidos
+ * - nutricionista: /nutricionista, /nutricionista/clientes, /nutricionista/planes
+ * - repartidor: /repartidor, /repartidor/pedidos, /repartidor/historial
+ */
 const ROLE_ROUTES: Record<string, string[]> = {
   admin: ['/admin'],
   suscriptor: ['/suscriptor'],
@@ -14,6 +29,7 @@ const ROLE_ROUTES: Record<string, string[]> = {
 }
 
 // Rutas que requieren autenticación (cualquier rol autenticado)
+// Incluye todas las subrutas mediante startsWith()
 const AUTHENTICATED_ROUTES = ['/admin', '/suscriptor', '/nutricionista', '/repartidor']
 
 export function middleware(request: NextRequest) {
