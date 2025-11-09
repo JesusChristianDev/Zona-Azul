@@ -82,14 +82,32 @@ export default function SuscriptorProgresoPage() {
       ? entries
           .filter((e) => e.hydration)
           .reduce((sum, e) => sum + (e.hydration || 0), 0) / entries.filter((e) => e.hydration).length
-      : mockProgress.metrics.find((m) => m.label === 'Hidratación')?.value || 0
+      : (() => {
+          const mockValue = mockProgress.metrics.find((m) => m.label === 'Hidratación')?.value
+          if (typeof mockValue === 'number') return mockValue
+          if (typeof mockValue === 'string') {
+            // Extraer número del string (ej: "1,950 ml" -> 1.95)
+            const numStr = mockValue.replace(/[^\d.,]/g, '').replace(',', '.')
+            return parseFloat(numStr) || 0
+          }
+          return 0
+        })()
 
   const avgEnergy =
     entries.filter((e) => e.energy).length > 0
       ? entries
           .filter((e) => e.energy)
           .reduce((sum, e) => sum + (e.energy || 0), 0) / entries.filter((e) => e.energy).length
-      : mockProgress.metrics.find((m) => m.label === 'Energía')?.value || 0
+      : (() => {
+          const mockValue = mockProgress.metrics.find((m) => m.label === 'Energía')?.value
+          if (typeof mockValue === 'number') return mockValue
+          if (typeof mockValue === 'string') {
+            // Extraer número del string (ej: "8/10" -> 8)
+            const numStr = mockValue.split('/')[0].trim()
+            return parseFloat(numStr) || 0
+          }
+          return 0
+        })()
 
   return (
     <div className="space-y-6">
@@ -146,7 +164,7 @@ export default function SuscriptorProgresoPage() {
           <p className="mt-3 text-3xl font-bold text-gray-900">
             {latestHydration ? `${latestHydration}L` : avgHydration ? `${Math.round(avgHydration)}L` : '—'}
           </p>
-          <p className="mt-2 text-xs text-gray-500">Promedio: {Math.round(avgHydration)}L</p>
+          <p className="mt-2 text-xs text-gray-500">Promedio: {avgHydration ? Math.round(avgHydration) : 0}L</p>
           <p className="mt-2 text-sm font-medium text-gray-600">
             {mockProgress.metrics.find((m) => m.label === 'Hidratación')?.tip ||
               'Bebe agua durante todo el día'}

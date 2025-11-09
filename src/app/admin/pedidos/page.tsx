@@ -14,6 +14,8 @@ interface Order {
   channel: string
   items?: string[]
   total?: number
+  createdAt?: string
+  date?: string
 }
 
 // Generar pedidos iniciales basados en suscriptores reales

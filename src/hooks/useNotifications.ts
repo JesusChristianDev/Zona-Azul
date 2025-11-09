@@ -10,7 +10,7 @@ interface NotificationOptions {
   tag?: string
   requireInteraction?: boolean
   data?: any
-  actions?: NotificationAction[]
+  actions?: Array<{ action: string; title: string; icon?: string }>
 }
 
 export function useNotifications() {
@@ -81,7 +81,7 @@ export function useNotifications() {
             data: options.data || {},
             vibrate: [200, 100, 200],
             actions: options.actions || [],
-          })
+          } as any)
 
           return true
         } else {

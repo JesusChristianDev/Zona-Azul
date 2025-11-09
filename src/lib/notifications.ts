@@ -81,7 +81,7 @@ export async function showAppNotification(data: NotificationData): Promise<boole
         timestamp: Date.now(),
       },
       vibrate: [200, 100, 200],
-    })
+    } as any)
 
     return true
   } catch (error) {

@@ -273,7 +273,7 @@ export default function DashboardAdmin() {
       const cashFlow = netMargin
 
       // Revenue per Employee
-      const revenuePerEmployee = teamMembers > 0 ? monthlyRevenue / teamMembers : 0
+      const revenuePerEmployee = teamMembers.length > 0 ? monthlyRevenue / teamMembers.length : 0
 
       // Order Frequency (pedidos por cliente por mes)
       const orderFrequency = subscribers.length > 0 ? monthlyOrders / subscribers.length : 0
@@ -679,9 +679,13 @@ export default function DashboardAdmin() {
                   cx="50%"
                   cy="50%"
                   labelLine={true}
-                  label={({ label, percent, value }) => {
-                    if (percent < 0.05) return '' // Ocultar etiquetas muy pequeñas
-                    return `${label}\n${(percent * 100).toFixed(0)}%\n€${value.toFixed(2)}`
+                  label={(props: any) => {
+                    const { label, percent, value } = props
+                    if (typeof percent === 'number' && percent < 0.05) return '' // Ocultar etiquetas muy pequeñas
+                    if (typeof percent === 'number' && typeof value === 'number') {
+                      return `${label}\n${(percent * 100).toFixed(0)}%\n€${value.toFixed(2)}`
+                    }
+                    return ''
                   }}
                   outerRadius={90}
                   fill="#8884d8"

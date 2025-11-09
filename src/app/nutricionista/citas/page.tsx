@@ -12,7 +12,7 @@ interface Appointment {
   phone?: string
   slot: string
   created_at?: string
-  status?: 'pendiente' | 'confirmada' | 'cancelada' | 'completada'
+  status?: 'pendiente' | 'nueva' | 'confirmada' | 'cancelada' | 'completada'
   notes?: string
   nutritionistId?: string
 }
