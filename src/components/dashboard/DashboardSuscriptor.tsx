@@ -230,10 +230,13 @@ export default function DashboardSuscriptor() {
     : []
 
   return (
-    <div className="space-y-8">
-      <InteractiveGreeting userName={profile.name} role="suscriptor" />
+    <div className="space-y-4 sm:space-y-6 lg:space-y-8">
+      {/* Saludo siempre primero */}
+      <div className="w-full">
+        <InteractiveGreeting userName={profile.name} role="suscriptor" />
+      </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
         <SummaryCard
           title="Calorías Promedio"
           value={Math.round(stats.averageCalories)}
@@ -290,17 +293,17 @@ export default function DashboardSuscriptor() {
 
       {/* Gráficos */}
       {weeklyChartData.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 mb-6 sm:mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8 mb-4 sm:mb-6 lg:mb-8">
           {/* Gráfico de progreso semanal */}
-          <div className="bg-white rounded-xl shadow-md p-4 sm:p-6">
-            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">Progreso Semanal</h2>
-            <ResponsiveContainer width="100%" height={300}>
+          <div className="bg-white rounded-xl shadow-md p-3 sm:p-4 lg:p-6 overflow-hidden">
+            <h2 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900 mb-3 sm:mb-4">Progreso Semanal</h2>
+            <ResponsiveContainer width="100%" height={250} className="sm:h-[300px]">
               <LineChart data={weeklyChartData}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="fecha" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Legend />
+                <XAxis dataKey="fecha" tick={{ fontSize: 10 }} className="sm:text-xs" />
+                <YAxis tick={{ fontSize: 10 }} className="sm:text-xs" />
+                <Tooltip contentStyle={{ fontSize: '12px' }} />
+                <Legend wrapperStyle={{ fontSize: '12px' }} />
                 <Line type="monotone" dataKey="calorías" stroke="#059669" strokeWidth={2} name="Calorías" />
                 <Line type="monotone" dataKey="agua" stroke="#0ea5e9" strokeWidth={2} name="Agua (ml)" />
               </LineChart>
@@ -308,14 +311,14 @@ export default function DashboardSuscriptor() {
           </div>
 
           {/* Gráfico de hidratación */}
-          <div className="bg-white rounded-xl shadow-md p-4 sm:p-6">
-            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">Hidratación Diaria</h2>
-            <ResponsiveContainer width="100%" height={300}>
+          <div className="bg-white rounded-xl shadow-md p-3 sm:p-4 lg:p-6 overflow-hidden">
+            <h2 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900 mb-3 sm:mb-4">Hidratación Diaria</h2>
+            <ResponsiveContainer width="100%" height={250} className="sm:h-[300px]">
               <BarChart data={weeklyChartData}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="fecha" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
+                <XAxis dataKey="fecha" tick={{ fontSize: 10 }} className="sm:text-xs" />
+                <YAxis tick={{ fontSize: 10 }} className="sm:text-xs" />
+                <Tooltip contentStyle={{ fontSize: '12px' }} />
                 <Bar dataKey="agua" fill="#0ea5e9" radius={[8, 8, 0, 0]} name="Agua (ml)" />
               </BarChart>
             </ResponsiveContainer>

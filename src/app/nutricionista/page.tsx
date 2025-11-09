@@ -99,22 +99,25 @@ export default function NutricionistaPage() {
   }, [userId])
 
   return (
-    <div className="space-y-6">
-      <InteractiveGreeting userName={userName || 'Nutricionista'} role="nutricionista" />
-      <section className="grid gap-4 md:grid-cols-3">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Saludo siempre primero */}
+      <div className="w-full">
+        <InteractiveGreeting userName={userName || 'Nutricionista'} role="nutricionista" />
+      </div>
+      <section className="grid gap-3 sm:gap-4 md:grid-cols-3">
         {summary.map((item) => (
           <article
             key={item.label}
-            className="rounded-2xl border border-primary/20 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+            className="rounded-2xl border border-primary/20 bg-white p-4 sm:p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
           >
             <p className="text-xs font-semibold uppercase tracking-wider text-primary/60">{item.label}</p>
-            <p className="mt-3 text-3xl font-bold text-gray-900">{item.value}</p>
-            <p className="mt-2 text-xs font-medium text-gray-500">{item.delta}</p>
+            <p className="mt-2 sm:mt-3 text-2xl sm:text-3xl font-bold text-gray-900">{item.value}</p>
+            <p className="mt-1 sm:mt-2 text-xs font-medium text-gray-500">{item.delta}</p>
           </article>
         ))}
       </section>
 
-      <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+      <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Próximas citas confirmadas</h2>

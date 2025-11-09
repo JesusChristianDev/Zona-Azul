@@ -787,14 +787,14 @@ export default function MessagesWidget() {
           />
           
           <div 
-            className="fixed top-16 right-2 sm:right-4 w-[calc(100vw-1rem)] sm:w-[600px] md:w-[700px] h-[calc(100vh-5rem)] bg-white rounded-2xl shadow-2xl z-[60] flex flex-col border border-gray-200"
+            className="fixed top-0 left-0 right-0 bottom-0 sm:top-16 sm:left-auto sm:right-2 sm:bottom-2 sm:w-[600px] md:w-[700px] sm:h-[calc(100vh-5rem)] sm:rounded-2xl bg-white shadow-2xl z-[60] flex flex-col border border-gray-200"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b bg-primary text-white rounded-t-2xl">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex items-center justify-between p-3 sm:p-4 border-b bg-primary text-white sm:rounded-t-2xl">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -803,8 +803,8 @@ export default function MessagesWidget() {
                     />
                   </svg>
                 </div>
-                <div>
-                  <h3 className="font-semibold">Mensajes</h3>
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-semibold text-sm sm:text-base truncate">Mensajes</h3>
                   {unreadTotal > 0 && (
                     <p className="text-xs text-white/80">{unreadTotal} no leídos</p>
                   )}
@@ -819,7 +819,7 @@ export default function MessagesWidget() {
                   setIsComposing(false)
                   setSelectedRecipient(null)
                 }}
-                className="p-1 hover:bg-white/20 rounded-lg transition-colors"
+                className="p-1.5 sm:p-2 hover:bg-white/20 rounded-lg transition-colors flex-shrink-0"
                 aria-label="Cerrar"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -828,10 +828,10 @@ export default function MessagesWidget() {
               </button>
             </div>
 
-            {/* Contenido principal - dos columnas */}
+            {/* Contenido principal - responsive: móvil fullscreen, desktop dos columnas */}
             <div className="flex flex-1 overflow-hidden">
-              {/* Lista de conversaciones */}
-              <div className="w-1/3 border-r bg-gray-50 overflow-y-auto flex flex-col">
+              {/* Lista de conversaciones - oculta en móvil cuando hay conversación seleccionada */}
+              <div className={`${selectedConversation || (isComposing && selectedRecipient) ? 'hidden sm:flex' : 'flex'} w-full sm:w-1/3 border-r bg-gray-50 overflow-y-auto flex-col`}>
                 {/* Botones de acción */}
                 <div className="p-2 border-b bg-white flex gap-2">
                   {availableContacts.length > 0 && (
@@ -1008,45 +1008,62 @@ export default function MessagesWidget() {
                 </div>
               </div>
 
-              {/* Vista de mensajes */}
-              <div className="flex-1 flex flex-col bg-white">
+              {/* Vista de mensajes - oculta en móvil cuando no hay conversación seleccionada */}
+              <div className={`${selectedConversation || (isComposing && selectedRecipient) ? 'flex' : 'hidden sm:flex'} flex-1 flex-col bg-white`}>
                 {selectedConversation || (isComposing && selectedRecipient) ? (
                   <>
                     {/* Header de conversación */}
-                    <div className="p-4 border-b bg-gray-50">
-                      {selectedConversation ? (
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                            <span className="text-primary font-semibold">
-                              {selectedConversation.contactName.charAt(0).toUpperCase()}
-                            </span>
+                    <div className="p-3 sm:p-4 border-b bg-gray-50 flex items-center gap-2 sm:gap-0">
+                      {/* Botón volver - solo visible en móvil */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedConversation(null)
+                          setIsComposing(false)
+                          setSelectedRecipient(null)
+                        }}
+                        className="sm:hidden p-1.5 hover:bg-gray-200 rounded-lg transition-colors"
+                        aria-label="Volver"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                      </button>
+                      <div className="flex-1">
+                        {selectedConversation ? (
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
+                              <span className="text-primary font-semibold text-sm sm:text-base">
+                                {selectedConversation.contactName.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-semibold text-gray-900 text-sm sm:text-base truncate">{selectedConversation.contactName}</p>
+                              <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${getRoleBadgeColor(selectedConversation.contactRole)}`}>
+                                {getRoleLabel(selectedConversation.contactRole)}
+                              </span>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-semibold text-gray-900">{selectedConversation.contactName}</p>
-                            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${getRoleBadgeColor(selectedConversation.contactRole)}`}>
-                              {getRoleLabel(selectedConversation.contactRole)}
-                            </span>
+                        ) : selectedRecipient ? (
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
+                              <span className="text-primary font-semibold text-sm sm:text-base">
+                                {selectedRecipient.name.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-semibold text-gray-900 text-sm sm:text-base truncate">{selectedRecipient.name}</p>
+                              <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${getRoleBadgeColor(selectedRecipient.role)}`}>
+                                {getRoleLabel(selectedRecipient.role)}
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      ) : selectedRecipient ? (
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                            <span className="text-primary font-semibold">
-                              {selectedRecipient.name.charAt(0).toUpperCase()}
-                            </span>
-                          </div>
-                          <div>
-                            <p className="font-semibold text-gray-900">{selectedRecipient.name}</p>
-                            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${getRoleBadgeColor(selectedRecipient.role)}`}>
-                              {getRoleLabel(selectedRecipient.role)}
-                            </span>
-                          </div>
-                        </div>
-                      ) : null}
+                        ) : null}
+                      </div>
                     </div>
 
                     {/* Mensajes */}
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4">
                       {selectedConversation && selectedConversation.messages.length === 0 && !isComposing && (
                         <div className="text-center text-gray-400 text-sm py-8">
                           <p>No hay mensajes en esta conversación</p>
@@ -1063,7 +1080,7 @@ export default function MessagesWidget() {
                           className={`flex ${msg.fromId === userId ? 'justify-end' : 'justify-start'}`}
                         >
                           <div
-                            className={`max-w-[80%] rounded-2xl px-4 py-2 ${
+                            className={`max-w-[85%] sm:max-w-[80%] rounded-2xl px-3 py-2 sm:px-4 sm:py-2 ${
                               msg.fromId === userId
                                 ? 'bg-primary text-white'
                                 : 'bg-gray-100 text-gray-900'
@@ -1091,7 +1108,7 @@ export default function MessagesWidget() {
                     </div>
 
                     {/* Input de mensaje */}
-                    <form onSubmit={handleSendMessage} className="p-4 border-t bg-gray-50">
+                    <form onSubmit={handleSendMessage} className="p-3 sm:p-4 border-t bg-gray-50">
                       {isComposing && !selectedConversation && (
                         <input
                           type="text"
@@ -1107,12 +1124,12 @@ export default function MessagesWidget() {
                           value={newMessageText}
                           onChange={(e) => setNewMessageText(e.target.value)}
                           placeholder="Escribe un mensaje..."
-                          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                          className="flex-1 px-3 sm:px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                         />
                         <button
                           type="submit"
                           disabled={!newMessageText.trim()}
-                          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="px-3 sm:px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
                         >
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />

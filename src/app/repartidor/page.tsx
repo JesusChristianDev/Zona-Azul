@@ -153,19 +153,22 @@ export default function RepartidorPage() {
   }, [userId])
 
   return (
-    <div className="space-y-6">
-      <InteractiveGreeting userName={userName || 'Repartidor'} role="repartidor" />
-      <section className="grid gap-4 md:grid-cols-3">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Saludo siempre primero */}
+      <div className="w-full">
+        <InteractiveGreeting userName={userName || 'Repartidor'} role="repartidor" />
+      </div>
+      <section className="grid gap-3 sm:gap-4 md:grid-cols-3">
         {metrics.map((metric) => (
-          <article key={metric.label} className="rounded-2xl border border-highlight/30 bg-white p-5 shadow-sm">
+          <article key={metric.label} className="rounded-2xl border border-highlight/30 bg-white p-4 sm:p-5 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wider text-highlight/80">{metric.label}</p>
-            <p className="mt-3 text-3xl font-bold text-gray-900">{metric.value}</p>
-            <p className="mt-2 text-xs font-medium text-gray-500">{metric.delta}</p>
+            <p className="mt-2 sm:mt-3 text-2xl sm:text-3xl font-bold text-gray-900">{metric.value}</p>
+            <p className="mt-1 sm:mt-2 text-xs font-medium text-gray-500">{metric.delta}</p>
           </article>
         ))}
       </section>
 
-      <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+      <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-gray-900">Tips de excelencia Zona Azul</h2>
         <ul className="mt-4 space-y-2 text-sm text-gray-600">
           {safetyTips.map((tip) => (

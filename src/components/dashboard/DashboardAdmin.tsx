@@ -533,25 +533,28 @@ export default function DashboardAdmin() {
   }, [])
 
   return (
-    <div className="space-y-8">
-      <InteractiveGreeting userName={userName || 'Administrador'} role="admin" />
+    <div className="space-y-4 sm:space-y-6 lg:space-y-8">
+      {/* Saludo siempre primero */}
+      <div className="w-full">
+        <InteractiveGreeting userName={userName || 'Administrador'} role="admin" />
+      </div>
 
       {/* Dashboard Financiero Profesional */}
-      <section className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-100">
-        <div className="flex items-center justify-between mb-6">
+      <section className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 sm:p-6 border border-blue-100">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 gap-3">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2 flex items-center gap-2">
-              <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1 sm:mb-2 flex items-center gap-2">
+              <svg className="w-5 h-5 sm:w-6 sm:h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
               Dashboard Financiero
             </h2>
-            <p className="text-gray-600">KPIs y métricas de rendimiento empresarial</p>
+            <p className="text-sm sm:text-base text-gray-600">KPIs y métricas de rendimiento empresarial</p>
           </div>
         </div>
 
         {/* KPIs Principales */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
           <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-gray-600">Ingresos Totales</span>
@@ -597,7 +600,7 @@ export default function DashboardAdmin() {
         </div>
 
         {/* KPIs de Cliente */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
           <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-gray-600">LTV (Lifetime Value)</span>
@@ -643,11 +646,11 @@ export default function DashboardAdmin() {
         </div>
 
         {/* Gráficos */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
           {/* Tendencia de Ingresos */}
-          <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Tendencia de Ingresos (7 días)</h3>
-            <ResponsiveContainer width="100%" height={250}>
+          <div className="bg-white rounded-lg p-3 sm:p-4 lg:p-6 shadow-sm border border-gray-200 overflow-hidden">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Tendencia de Ingresos (7 días)</h3>
+            <ResponsiveContainer width="100%" height={200} className="sm:h-[250px]">
               <AreaChart data={stats.revenueTrend}>
                 <defs>
                   <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
@@ -656,23 +659,23 @@ export default function DashboardAdmin() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(value: number) => [`€${value.toFixed(2)}`, 'Ingresos']} />
+                <XAxis dataKey="date" tick={{ fontSize: 10 }} className="sm:text-xs" />
+                <YAxis tick={{ fontSize: 10 }} className="sm:text-xs" />
+                <Tooltip formatter={(value: number) => [`€${value.toFixed(2)}`, 'Ingresos']} contentStyle={{ fontSize: '12px' }} />
                 <Area type="monotone" dataKey="revenue" stroke="#3b82f6" fillOpacity={1} fill="url(#colorRevenue)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
 
           {/* Distribución por Estado */}
-          <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-            <div className="mb-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-1">Distribución de Ingresos por Estado</h3>
+          <div className="bg-white rounded-lg p-3 sm:p-4 lg:p-6 shadow-sm border border-gray-200 overflow-hidden">
+            <div className="mb-3 sm:mb-4">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-1">Distribución de Ingresos por Estado</h3>
               <p className="text-xs text-gray-500">
                 Muestra cómo se distribuyen los ingresos totales según el estado actual de los pedidos
               </p>
             </div>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={250} className="sm:h-[300px]">
               <PieChart>
                 <Pie
                   data={stats.revenueByStatus}
@@ -687,7 +690,7 @@ export default function DashboardAdmin() {
                     }
                     return ''
                   }}
-                  outerRadius={90}
+                  outerRadius={70}
                   fill="#8884d8"
                   dataKey="value"
                 >
@@ -708,10 +711,12 @@ export default function DashboardAdmin() {
                     const entry = payload?.[0]?.payload
                     return entry?.label || entry?.status || label
                   }}
+                  contentStyle={{ fontSize: '12px' }}
                 />
                 <Legend 
                   verticalAlign="bottom" 
-                  height={60}
+                  height={50}
+                  wrapperStyle={{ fontSize: '11px' }}
                   formatter={(value, entry: any) => {
                     const data = entry?.payload
                     if (data) {
