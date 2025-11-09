@@ -716,7 +716,7 @@ export default function DashboardAdmin() {
                 <Legend 
                   verticalAlign="bottom" 
                   height={50}
-                  wrapperStyle={{ fontSize: '11px' }}
+                  wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
                   formatter={(value, entry: any) => {
                     const data = entry?.payload
                     if (data) {
@@ -724,7 +724,6 @@ export default function DashboardAdmin() {
                     }
                     return value
                   }}
-                  wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
                 />
               </PieChart>
             </ResponsiveContainer>
