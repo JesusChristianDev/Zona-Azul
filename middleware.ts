@@ -15,10 +15,10 @@ const PUBLIC_ROUTES = ['/', '/login', '/booking', '/menu', '/activate', '/api/ap
  *   - /admin/pedidos
  * 
  * Subrutas existentes por rol:
- * - admin: /admin, /admin/menu, /admin/usuarios, /admin/pedidos
- * - suscriptor: /suscriptor, /suscriptor/plan, /suscriptor/progreso, /suscriptor/pedidos
- * - nutricionista: /nutricionista, /nutricionista/clientes, /nutricionista/planes
- * - repartidor: /repartidor, /repartidor/pedidos, /repartidor/historial
+ * - admin: /admin, /admin/menu, /admin/usuarios, /admin/pedidos, /admin/ajustes
+ * - suscriptor: /suscriptor, /suscriptor/plan, /suscriptor/progreso, /suscriptor/pedidos, /suscriptor/ajustes
+ * - nutricionista: /nutricionista, /nutricionista/clientes, /nutricionista/planes, /nutricionista/citas, /nutricionista/ajustes
+ * - repartidor: /repartidor, /repartidor/pedidos, /repartidor/historial, /repartidor/ajustes
  */
 const ROLE_ROUTES: Record<string, string[]> = {
   admin: ['/admin'],
@@ -78,6 +78,8 @@ export function middleware(request: NextRequest) {
     const response = NextResponse.redirect(new URL('/login', request.url))
     response.cookies.delete('user_role')
     response.cookies.delete('user_id')
+    response.cookies.delete('user_name')
+    response.cookies.delete('user_email')
     response.cookies.delete('session_token')
     return response
   }

@@ -24,7 +24,7 @@ export const mockUsers: User[] = [
     email: 'cliente@zonaazul.com',
     password: 'cliente123',
     role: 'suscriptor',
-    name: 'Cliente Demo',
+    name: 'Gregorio',
     createdAt: '2025-01-01T00:00:00Z',
   },
   {
@@ -49,14 +49,50 @@ export const mockUsers: User[] = [
     email: 'test@zonaazul.com',
     password: 'test123',
     role: 'suscriptor',
-    name: 'Usuario de Prueba',
+    name: 'Paco',
     createdAt: '2025-01-01T00:00:00Z',
   },
 ]
 
+// Función helper para obtener todos los usuarios (mock + localStorage)
+export function getAllUsers(): User[] {
+  // En el servidor, solo retornar mockUsers
+  if (typeof window === 'undefined') {
+    return mockUsers
+  }
+
+  // En el cliente, combinar mockUsers con usuarios de localStorage
+  try {
+    const stored = localStorage.getItem('zona_azul_users')
+    if (stored) {
+      const storedUsers: User[] = JSON.parse(stored)
+      // Combinar usuarios, evitando duplicados por ID
+      const usersMap = new Map<string, User>()
+      
+      // Primero agregar mockUsers
+      mockUsers.forEach((u) => usersMap.set(u.id, u))
+      
+      // Luego agregar usuarios de localStorage (tienen prioridad si hay duplicados)
+      storedUsers.forEach((u) => {
+        // Solo incluir si tiene los campos necesarios para login
+        if (u.email && u.password && u.role) {
+          usersMap.set(u.id, u)
+        }
+      })
+      
+      return Array.from(usersMap.values())
+    }
+  } catch (error) {
+    console.error('Error loading users from localStorage:', error)
+  }
+  
+  return mockUsers
+}
+
 // Función helper para validar credenciales
 export function validateCredentials(email: string, password: string): User | null {
-  const user = mockUsers.find((u) => u.email.toLowerCase() === email.toLowerCase())
+  const allUsers = getAllUsers()
+  const user = allUsers.find((u) => u.email.toLowerCase() === email.toLowerCase())
   if (!user) return null
   if (user.password !== password) return null
   return user

@@ -40,13 +40,24 @@ export default function LoginForm() {
     setIsLoading(true)
 
     try {
+      // Obtener usuarios de localStorage para enviarlos al servidor
+      let storedUsers: any[] = []
+      try {
+        const stored = localStorage.getItem('zona_azul_users')
+        if (stored) {
+          storedUsers = JSON.parse(stored)
+        }
+      } catch (error) {
+        console.error('Error loading users from localStorage:', error)
+      }
+
       const response = await fetch('/api/auth/validate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, storedUsers }),
       })
 
       const data = await response.json()
@@ -172,16 +183,6 @@ export default function LoginForm() {
         </form>
 
         <div className="mt-8 pt-6 border-t">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-            <p className="text-xs font-semibold text-blue-900 mb-2">Credenciales de prueba:</p>
-            <div className="space-y-1 text-xs text-blue-700">
-              <p><strong>Admin:</strong> admin@zonaazul.com / admin123</p>
-              <p><strong>Cliente:</strong> cliente@zonaazul.com / cliente123</p>
-              <p><strong>Nutricionista:</strong> nutricionista@zonaazul.com / nutri123</p>
-              <p><strong>Repartidor:</strong> repartidor@zonaazul.com / repartidor123</p>
-            </div>
-          </div>
-
           <div className="text-center">
             <Link href="/" className="text-sm text-primary hover:underline">
               ← Volver al inicio

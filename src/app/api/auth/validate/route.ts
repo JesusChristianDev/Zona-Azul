@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { validateCredentials } from '../../../../lib/mockUsers'
+import { validateCredentials, mockUsers, User } from '../../../../lib/mockUsers'
 
 // Forzar renderizado dinámico porque usa cookies
 export const dynamic = 'force-dynamic'
@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { email, password } = body
+    const { email, password, storedUsers } = body
 
     if (!email || !password) {
       return NextResponse.json(
@@ -16,10 +16,24 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validar credenciales
-    const user = validateCredentials(email, password)
+    // Combinar mockUsers con usuarios almacenados del cliente
+    let allUsers: User[] = [...mockUsers]
+    if (storedUsers && Array.isArray(storedUsers)) {
+      // Combinar usuarios, evitando duplicados por ID
+      const usersMap = new Map<string, User>()
+      mockUsers.forEach((u) => usersMap.set(u.id, u))
+      storedUsers.forEach((u: User) => {
+        if (u.email && u.password && u.role) {
+          usersMap.set(u.id, u)
+        }
+      })
+      allUsers = Array.from(usersMap.values())
+    }
 
-    if (!user) {
+    // Buscar usuario por email
+    const user = allUsers.find((u) => u.email.toLowerCase() === email.toLowerCase())
+
+    if (!user || user.password !== password) {
       return NextResponse.json(
         { error: 'Credenciales inválidas' },
         { status: 401 }
@@ -50,6 +64,22 @@ export async function POST(request: NextRequest) {
     })
 
     response.cookies.set('user_id', user.id, {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7,
+      path: '/',
+    })
+
+    response.cookies.set('user_name', user.name, {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7,
+      path: '/',
+    })
+
+    response.cookies.set('user_email', user.email, {
       httpOnly: false,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',

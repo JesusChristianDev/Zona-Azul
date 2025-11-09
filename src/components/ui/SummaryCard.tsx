@@ -21,16 +21,19 @@ export default function SummaryCard({
   className = '',
 }: SummaryCardProps) {
   return (
-    <div className={`bg-white rounded-xl shadow-md p-4 sm:p-6 ${className}`}>
+    <div 
+      className={`bg-white rounded-xl shadow-md p-4 sm:p-6 transition-all duration-200 ease-out hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] animate-in fade-in slide-in-from-bottom-2 ${className}`}
+      style={{ willChange: 'transform, box-shadow' }}
+    >
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <p className="text-sm text-gray-600 mb-1">{title}</p>
-          <p className="text-2xl sm:text-3xl font-bold text-gray-900">{value}</p>
-          {subtitle && <p className="text-xs sm:text-sm text-gray-500 mt-1">{subtitle}</p>}
+          <p className="text-sm text-gray-600 mb-1 transition-colors duration-150">{title}</p>
+          <p className="text-2xl sm:text-3xl font-bold text-gray-900 transition-all duration-200">{value}</p>
+          {subtitle && <p className="text-xs sm:text-sm text-gray-500 mt-1 transition-colors duration-150">{subtitle}</p>}
           {trend && (
-            <div className="flex items-center gap-1 mt-2">
+            <div className="flex items-center gap-1 mt-2 animate-in fade-in slide-in-from-left-2">
               <svg
-                className={`w-4 h-4 ${trend.isPositive ? 'text-green-500' : 'text-red-500'}`}
+                className={`w-4 h-4 transition-colors duration-150 ${trend.isPositive ? 'text-green-500' : 'text-red-500'}`}
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -41,13 +44,13 @@ export default function SummaryCard({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 )}
               </svg>
-              <span className={`text-xs font-medium ${trend.isPositive ? 'text-green-600' : 'text-red-600'}`}>
+              <span className={`text-xs font-medium transition-colors duration-150 ${trend.isPositive ? 'text-green-600' : 'text-red-600'}`}>
                 {trend.value > 0 ? '+' : ''}{trend.value.toFixed(1)}%
               </span>
             </div>
           )}
         </div>
-        {icon && <div className="text-primary opacity-80">{icon}</div>}
+        {icon && <div className="text-primary opacity-80 transition-all duration-200 ease-out hover:opacity-100 hover:scale-110 active:scale-95">{icon}</div>}
       </div>
     </div>
   )

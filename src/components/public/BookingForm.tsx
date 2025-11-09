@@ -53,6 +53,18 @@ export default function BookingForm() {
       })
       
       if (res.ok) {
+        const data = await res.json()
+        // Guardar también en localStorage para sincronización
+        try {
+          const existing = JSON.parse(localStorage.getItem('demo_appointments') || '[]')
+          const appointment = { ...data.appointment, status: 'pendiente' }
+          existing.push(appointment)
+          localStorage.setItem('demo_appointments', JSON.stringify(existing))
+        } catch (e) {
+          // Ignorar errores de localStorage
+        }
+        // Notificar que se creó una nueva cita
+        window.dispatchEvent(new Event('zona_azul_appointments_updated'))
         showToast('Solicitud enviada ✔️')
         setTimeout(() => router.push('/booking/success'), 800)
         return
@@ -64,8 +76,11 @@ export default function BookingForm() {
       // Fallback a localStorage
       try {
         const existing = JSON.parse(localStorage.getItem('demo_appointments') || '[]')
-        existing.push({ id: `m-${Date.now()}`, ...payload, created_at: new Date().toISOString() })
+        const newAppointment = { id: `m-${Date.now()}`, ...payload, created_at: new Date().toISOString(), status: 'pendiente' }
+        existing.push(newAppointment)
         localStorage.setItem('demo_appointments', JSON.stringify(existing))
+        // Notificar que se creó una nueva cita
+        window.dispatchEvent(new Event('zona_azul_appointments_updated'))
         showToast('Solicitud guardada localmente ✔️')
         setTimeout(() => router.push('/booking/success'), 900)
       } catch (storageErr) {

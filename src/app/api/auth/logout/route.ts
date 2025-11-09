@@ -12,6 +12,8 @@ export async function POST(request: NextRequest) {
     // Eliminar todas las cookies de sesión
     response.cookies.delete('user_role')
     response.cookies.delete('user_id')
+    response.cookies.delete('user_name')
+    response.cookies.delete('user_email')
     response.cookies.delete('session_token')
 
     return response

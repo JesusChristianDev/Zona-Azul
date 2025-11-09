@@ -31,3 +31,46 @@ yarn-error.log*
 
 # TypeScript
 *.tsbuildinfo
+
+# Documentación y archivos de desarrollo (no necesarios para PWA)
+/documentacion/
+*.md
+!README.md
+VERIFICACION_*.md
+*.txt
+
+# Datos de desarrollo/testing
+/data/
+/data/*.json
+
+# Archivos de IDE/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# Archivos temporales
+*.tmp
+*.temp
+.cache/
+.turbo/
+
+# Archivos de sistema
+Thumbs.db
+Desktop.ini
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# OneDrive
+.onedriveignore
+
+# Archivos de backup
+*.bak
+*.backup
+*_backup
+*_old

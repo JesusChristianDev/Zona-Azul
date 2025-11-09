@@ -10,6 +10,8 @@ export interface AuthState {
     role: UserRole
     isAuthenticated: boolean
     userId?: string
+    userName?: string
+    userEmail?: string
 }
 
 // Función helper para leer cookies del cliente
@@ -40,6 +42,8 @@ const getStoredAuth = async (): Promise<AuthState> => {
                     role: data.role as UserRole,
                     isAuthenticated: true,
                     userId: data.userId,
+                    userName: data.userName,
+                    userEmail: data.userEmail,
                 }
             }
         }
@@ -50,12 +54,16 @@ const getStoredAuth = async (): Promise<AuthState> => {
     // Fallback a cookies del cliente
     const cookieRole = getCookie('user_role') as UserRole | null
     const cookieUserId = getCookie('user_id') ?? undefined
+    const cookieUserName = getCookie('user_name') ?? undefined
+    const cookieUserEmail = getCookie('user_email') ?? undefined
 
     if (cookieRole && AVAILABLE_ROLES.includes(cookieRole)) {
         return {
             role: cookieRole,
             isAuthenticated: cookieRole !== 'invitado',
             userId: cookieUserId,
+            userName: cookieUserName,
+            userEmail: cookieUserEmail,
         }
     }
 

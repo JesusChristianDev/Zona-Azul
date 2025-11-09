@@ -4,6 +4,7 @@ import RoleLayoutShell from '../../components/layout/RoleLayoutShell'
 
 const links = [
   { href: '/nutricionista', label: 'Resumen', description: 'Indicadores del equipo y próximos hitos' },
+  { href: '/nutricionista/citas', label: 'Citas', description: 'Gestionar citas y consultas nutricionales' },
   { href: '/nutricionista/clientes', label: 'Clientes', description: 'Seguimiento de progreso y adherencia' },
   { href: '/nutricionista/planes', label: 'Planes', description: 'Plantillas y ajustes personalizados' },
 ]

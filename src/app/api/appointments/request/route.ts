@@ -16,7 +16,7 @@ export async function POST(request: Request) {
 
     const raw = await fs.readFile(DATA_FILE, 'utf8')
     const arr = raw ? JSON.parse(raw) : []
-    const entry = { id: `a-${Date.now()}`, ...body, created_at: new Date().toISOString() }
+    const entry = { id: `a-${Date.now()}`, ...body, created_at: new Date().toISOString(), status: 'pendiente' }
     arr.push(entry)
     await fs.writeFile(DATA_FILE, JSON.stringify(arr, null, 2))
     return NextResponse.json({ ok: true, appointment: entry }, { status: 201 })

@@ -8,8 +8,22 @@ export default function RegisterServiceWorker() {
       window.addEventListener('load', () => {
         navigator.serviceWorker
           .register('/sw.js')
-          .then(() => {
-            // Service Worker registrado exitosamente
+          .then((registration) => {
+            console.log('Service Worker registrado exitosamente:', registration.scope)
+            
+            // Solicitar permiso de notificaciones después de registrar el SW
+            if ('Notification' in window && Notification.permission === 'default') {
+              // Esperar un poco antes de solicitar permiso para mejor UX
+              setTimeout(() => {
+                Notification.requestPermission().then((permission) => {
+                  if (permission === 'granted') {
+                    console.log('Permiso de notificaciones concedido')
+                  } else {
+                    console.log('Permiso de notificaciones denegado o ignorado')
+                  }
+                })
+              }, 3000) // Esperar 3 segundos después de cargar
+            }
           })
           .catch((error) => {
             console.error('Error al registrar Service Worker:', error)

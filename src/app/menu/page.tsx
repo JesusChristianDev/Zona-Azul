@@ -12,15 +12,21 @@ export default function MenuPage() {
         <div className="container mx-auto px-4 relative z-10">
           <div className="max-w-3xl mx-auto text-center text-white">
             <div className="inline-block mb-4 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full border border-white/30">
-              <span className="text-sm font-semibold uppercase tracking-wider">Carta Dinámica</span>
+              <span className="text-sm font-semibold uppercase tracking-wider">📋 Carta - Compra Individual</span>
             </div>
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4 leading-tight">
               Nuestra Carta
             </h1>
             <p className="text-lg sm:text-xl text-white/90 mb-6 max-w-2xl mx-auto leading-relaxed">
-              Platos diseñados por nutricionistas, frescos y balanceados. 
+              <strong>Platos disponibles para compra individual.</strong> Diseñados por nutricionistas, frescos y balanceados. 
               Cada receta es un paso más cerca de tus metas de bienestar.
             </p>
+            <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-sm font-medium">Compra individual - No incluido en suscripción</span>
+            </div>
             <Link
               href="/"
               className="inline-flex items-center text-white/90 hover:text-white transition-colors text-sm sm:text-base"
@@ -39,13 +45,28 @@ export default function MenuPage() {
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto text-center">
             <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-4">
-              Nutrición que se adapta a ti
+              Carta - Compra Individual
             </h2>
             <p className="text-lg text-gray-600 leading-relaxed mb-6">
+              <strong className="text-gray-900">Estos platos son de compra individual</strong> y no están incluidos en tu plan de suscripción. 
               Nuestra carta dinámica incluye platos diseñados para diferentes objetivos: 
               pérdida de peso, ganancia muscular, mantenimiento o simplemente comer más saludable. 
               Todos nuestros platos incluyen información nutricional detallada para que tomes decisiones informadas.
             </p>
+            <div className="bg-blue-50 border-l-4 border-primary p-4 rounded-lg mb-6">
+              <div className="flex items-start gap-3">
+                <svg className="w-6 h-6 text-primary flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <p className="font-semibold text-gray-900 mb-1">¿Buscas un plan semanal personalizado?</p>
+                  <p className="text-sm text-gray-700">
+                    Si tienes una suscripción activa, tus platos del plan semanal están en tu área de suscriptor. 
+                    Estos platos de la carta son adicionales y se compran por separado.
+                  </p>
+                </div>
+              </div>
+            </div>
             <div className="flex flex-wrap justify-center gap-4 sm:gap-6">
               {[
                 { icon: '🥗', label: 'Fresco y natural' },

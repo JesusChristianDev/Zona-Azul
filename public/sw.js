@@ -101,3 +101,71 @@ self.addEventListener('fetch', (event) => {
   )
 })
 
+// Manejar notificaciones push
+self.addEventListener('push', (event) => {
+  let notificationData = {
+    title: 'Zona Azul',
+    body: 'Tienes una nueva notificación',
+    icon: '/icon-192x192.png',
+    badge: '/icon-192x192.png',
+    tag: 'zona-azul-notification',
+    requireInteraction: false,
+    data: {}
+  }
+
+  if (event.data) {
+    try {
+      const data = event.data.json()
+      notificationData = {
+        ...notificationData,
+        ...data,
+        data: data.data || {}
+      }
+    } catch (e) {
+      notificationData.body = event.data.text() || notificationData.body
+    }
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(notificationData.title, {
+      body: notificationData.body,
+      icon: notificationData.icon,
+      badge: notificationData.badge,
+      tag: notificationData.tag,
+      requireInteraction: notificationData.requireInteraction,
+      data: notificationData.data,
+      vibrate: [200, 100, 200],
+      actions: notificationData.actions || []
+    })
+  )
+})
+
+// Manejar clics en notificaciones
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+
+  const notificationData = event.notification.data || {}
+  const urlToOpen = notificationData.url || '/'
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // Si hay una ventana abierta, enfocarla
+      for (let i = 0; i < clientList.length; i++) {
+        const client = clientList[i]
+        if (client.url === urlToOpen && 'focus' in client) {
+          return client.focus()
+        }
+      }
+      // Si no hay ventana abierta, abrir una nueva
+      if (clients.openWindow) {
+        return clients.openWindow(urlToOpen)
+      }
+    })
+  )
+})
+
+// Manejar cierre de notificaciones
+self.addEventListener('notificationclose', (event) => {
+  console.log('Notificación cerrada:', event.notification.tag)
+})
+
