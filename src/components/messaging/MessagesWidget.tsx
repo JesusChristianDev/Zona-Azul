@@ -49,7 +49,7 @@ async function hasOrderIncidents(subscriberId: string): Promise<{ hasIncident: b
     // Obtener todos los pedidos del suscriptor
     const orders = await api.getOrders()
     const subscriberOrders = orders.filter((order: any) => order.user_id === subscriberId)
-    
+
     // Verificar si alguno tiene incidencias
     for (const order of subscriberOrders) {
       const incidents = await api.getOrderIncidents(order.id)
@@ -138,7 +138,7 @@ export default function MessagesWidget() {
       const preferences = await api.getChatPreferences()
       const archived = new Set<string>()
       const deleted = new Set<string>()
-      
+
       preferences.forEach((pref: any) => {
         if (pref.is_archived) {
           archived.add(pref.contact_id)
@@ -147,7 +147,7 @@ export default function MessagesWidget() {
           deleted.add(pref.contact_id)
         }
       })
-      
+
       return { archived, deleted }
     } catch (error) {
       console.error('Error loading chat status:', error)
@@ -162,7 +162,7 @@ export default function MessagesWidget() {
       // Obtener todas las preferencias actuales
       const preferences = await api.getChatPreferences()
       const preferenceMap = new Map(preferences.map((p: any) => [p.contact_id, p]))
-      
+
       // Actualizar cada preferencia
       const allContactIds = new Set([...Array.from(archived), ...Array.from(deleted)])
       for (const contactId of Array.from(allContactIds)) {
@@ -184,7 +184,7 @@ export default function MessagesWidget() {
 
     try {
       const apiMessages = await getMessages()
-      
+
       // Convertir mensajes de API a formato Message
       const allMessages: Message[] = apiMessages.map((msg: any) => ({
         id: msg.id,
@@ -202,9 +202,9 @@ export default function MessagesWidget() {
         createdAt: msg.created_at,
         reply: msg.reply || undefined,
       }))
-      
+
       const chatStatus = await getUserChatStatus()
-      
+
       // Filtrar mensajes relevantes: todos los mensajes donde el usuario es remitente o destinatario
       const relevantMessages = allMessages.filter(
         (msg) => msg.fromId === userId || msg.toId === userId
@@ -226,7 +226,7 @@ export default function MessagesWidget() {
 
         if (showArchived && !isArchived && !isDeleted) return
         if (!showArchived && isArchived) return
-        
+
         const contactName = msg.fromId === userId ? msg.toName : msg.fromName
         const contactEmail = msg.fromId === userId ? msg.to : msg.from
         // Obtener el rol del contacto desde el mensaje
@@ -287,23 +287,23 @@ export default function MessagesWidget() {
           .filter((conv) => !conv.archived)
           .reduce((sum, conv) => sum + conv.unreadCount, 0)
       )
-      
+
       // Actualizar conversación seleccionada si existe (solo si realmente cambió)
       if (selectedConversation) {
         const updatedConv = conversationsArray.find((c) => c.contactId === selectedConversation.contactId)
         if (updatedConv) {
           // Solo actualizar si hay diferencias reales para evitar bucles
-          const hasChanges = 
+          const hasChanges =
             updatedConv.messages.length !== selectedConversation.messages.length ||
             updatedConv.unreadCount !== selectedConversation.unreadCount ||
             updatedConv.lastMessage !== selectedConversation.lastMessage
-          
+
           if (hasChanges) {
             setSelectedConversation(updatedConv)
           }
         }
       }
-      
+
       return conversationsArray
     } catch (error) {
       console.error('Error loading conversations:', error)
@@ -323,12 +323,12 @@ export default function MessagesWidget() {
     const checkForNewMessages = async () => {
       // Prevenir ejecuciones simultáneas
       if (isProcessing) return
-      
+
       // Throttling: no ejecutar más de una vez cada 500ms
       const now = Date.now()
       if (now - lastUpdateTime < 500) return
       lastUpdateTime = now
-      
+
       isProcessing = true
 
       try {
@@ -350,7 +350,7 @@ export default function MessagesWidget() {
           createdAt: msg.created_at,
           reply: msg.reply || undefined,
         }))
-        
+
         // Detectar nuevos mensajes recibidos
         const newMessages = allMessages.filter(
           (msg) =>
@@ -393,22 +393,22 @@ export default function MessagesWidget() {
           loadConversations()
         }
       }, 200)
-      }
-    
-            window.addEventListener('zona_azul_messages_updated', handleMessagesUpdate)
-            const interval = setInterval(() => {
-              if (!isProcessing) {
-                checkForNewMessages()
-                // Recargar conversaciones periódicamente para mantener actualizado
-                loadConversations()
-              }
-            }, 3000) // Aumentar intervalo a 3 segundos para reducir carga
+    }
 
-            return () => {
-              window.removeEventListener('zona_azul_messages_updated', handleMessagesUpdate)
-              clearInterval(interval)
-              isProcessing = false
-            }
+    window.addEventListener('zona_azul_messages_updated', handleMessagesUpdate)
+    const interval = setInterval(() => {
+      if (!isProcessing) {
+        checkForNewMessages()
+        // Recargar conversaciones periódicamente para mantener actualizado
+        loadConversations()
+      }
+    }, 3000) // Aumentar intervalo a 3 segundos para reducir carga
+
+    return () => {
+      window.removeEventListener('zona_azul_messages_updated', handleMessagesUpdate)
+      clearInterval(interval)
+      isProcessing = false
+    }
   }, [userId, role, showArchived]) // Agregar showArchived como dependencia
 
   // Marcar mensajes como leídos al abrir conversación
@@ -419,20 +419,20 @@ export default function MessagesWidget() {
       try {
         const apiMessages = await getMessages()
         const unreadMessages = apiMessages.filter(
-          (msg: any) => 
-            msg.to_id === userId && 
-            msg.from_id === selectedConversation.contactId && 
+          (msg: any) =>
+            msg.to_id === userId &&
+            msg.from_id === selectedConversation.contactId &&
             !msg.read
         )
-        
+
         // Marcar todos los mensajes no leídos como leídos
         if (unreadMessages.length > 0) {
           await Promise.all(
-            unreadMessages.map((msg: any) => 
+            unreadMessages.map((msg: any) =>
               updateMessage(msg.id, { read: true })
             )
           )
-          
+
           // Recargar conversaciones
           await loadConversations()
         }
@@ -470,7 +470,7 @@ export default function MessagesWidget() {
           recipient = contacts.find((u: any) => u.id === selectedConversation.contactId) as User
         }
       }
-      
+
       if (!recipient) {
         console.error('No recipient selected')
         alert('Por favor, selecciona un destinatario')
@@ -495,7 +495,7 @@ export default function MessagesWidget() {
       // Limpiar campos
       setNewMessageText('')
       setNewMessageSubject('')
-      
+
       // Si el destinatario está marcado como eliminado, restaurarlo automáticamente
       const chatStatus = await getUserChatStatus()
       if (chatStatus.deleted.has(recipient.id)) {
@@ -504,16 +504,16 @@ export default function MessagesWidget() {
           is_deleted: false,
         })
       }
-      
+
       // Esperar un poco para que la base de datos se actualice
       await new Promise(resolve => setTimeout(resolve, 600))
-      
+
       // Recargar conversaciones para obtener el mensaje recién enviado
       const updatedConversations = await loadConversations()
-      
+
       // Buscar y seleccionar la conversación con el destinatario
       const targetConversation = updatedConversations.find(c => c.contactId === recipient.id)
-      
+
       if (targetConversation) {
         setSelectedConversation(targetConversation)
         setIsComposing(false)
@@ -523,7 +523,7 @@ export default function MessagesWidget() {
         await new Promise(resolve => setTimeout(resolve, 500))
         const retryConversations = await loadConversations()
         const retryTarget = retryConversations.find(c => c.contactId === recipient.id)
-        
+
         if (retryTarget) {
           setSelectedConversation(retryTarget)
           setIsComposing(false)
@@ -539,12 +539,12 @@ export default function MessagesWidget() {
             const contacts = await getAvailableContactsList()
             recipientUser = contacts.find((u: any) => u.id === recipient.id) as User || null
           }
-          
+
           if (recipientUser) {
             const apiMessages = await getMessages()
             const convMessages = apiMessages
-              .filter((msg: any) => 
-                (msg.from_id === userId && msg.to_id === recipient.id) || 
+              .filter((msg: any) =>
+                (msg.from_id === userId && msg.to_id === recipient.id) ||
                 (msg.to_id === userId && msg.from_id === recipient.id)
               )
               .map((msg: any) => ({
@@ -562,7 +562,7 @@ export default function MessagesWidget() {
                 createdAt: msg.created_at,
                 reply: msg.reply || undefined,
               } as Message))
-            
+
             if (convMessages.length > 0) {
               const currentChatStatus = await getUserChatStatus()
               const newConv: Conversation = {
@@ -580,7 +580,7 @@ export default function MessagesWidget() {
               setSelectedConversation(newConv)
               setIsComposing(false)
               setSelectedRecipient(null)
-              
+
               setTimeout(() => {
                 loadConversations()
               }, 300)
@@ -642,20 +642,20 @@ export default function MessagesWidget() {
       e.preventDefault()
     }
     if (!userId) return
-    
+
     const chatStatus = await getUserChatStatus()
     const isArchived = chatStatus.archived.has(contactId)
-    
+
     // Actualizar en la API
     await api.updateChatPreference(contactId, {
       is_archived: !isArchived,
       is_deleted: false, // Si estaba eliminada, restaurarla como archivada
     })
-    
+
     if (selectedConversation?.contactId === contactId) {
       setSelectedConversation(null)
     }
-    
+
     // Recargar conversaciones inmediatamente
     loadConversations()
   }
@@ -667,18 +667,18 @@ export default function MessagesWidget() {
       e.preventDefault()
     }
     if (!userId) return
-    
+
     // Actualizar en la API
     await api.updateChatPreference(contactId, {
       is_archived: false,
       is_deleted: false,
     })
-    
+
     // Si estamos viendo archivados, cambiar a vista normal
     if (showArchived) {
       setShowArchived(false)
     }
-    
+
     // Recargar conversaciones inmediatamente
     loadConversations()
   }
@@ -693,27 +693,27 @@ export default function MessagesWidget() {
     if (!confirm('¿Estás seguro de que quieres eliminar esta conversación? Se borrarán todos los mensajes y no podrás recuperarlos.')) {
       return
     }
-    
+
     try {
       // Primero eliminar todos los mensajes de la conversación
       const messagesDeleted = await api.deleteConversationMessages(contactId)
-      
+
       if (!messagesDeleted) {
         console.error('Error deleting conversation messages')
         alert('Error al eliminar los mensajes. Por favor, intenta de nuevo.')
         return
       }
-      
+
       // Luego marcar la conversación como eliminada
       await api.updateChatPreference(contactId, {
         is_archived: false,
         is_deleted: true,
       })
-      
+
       if (selectedConversation?.contactId === contactId) {
         setSelectedConversation(null)
       }
-      
+
       // Recargar conversaciones
       await loadConversations()
     } catch (error) {
@@ -797,8 +797,8 @@ export default function MessagesWidget() {
             onMouseDown={(e) => e.stopPropagation()}
             style={{ pointerEvents: isOpen ? 'auto' : 'none' }}
           />
-          
-          <div 
+
+          <div
             className="fixed top-0 left-0 right-0 bottom-0 sm:top-16 sm:left-auto sm:right-2 sm:bottom-2 sm:w-[600px] md:w-[700px] sm:h-[calc(100vh-5rem)] sm:rounded-2xl bg-white shadow-2xl z-[60] flex flex-col border border-gray-200"
             onClick={(e) => e.stopPropagation()}
           >
@@ -865,16 +865,15 @@ export default function MessagesWidget() {
                       setIsComposing(false)
                       setSelectedRecipient(null)
                     }}
-                    className={`px-3 py-2 rounded-lg transition text-sm font-medium ${
-                      showArchived
-                        ? 'bg-primary text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
+                    className={`px-3 py-2 rounded-lg transition text-sm font-medium ${showArchived
+                      ? 'bg-primary text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
                   >
                     {showArchived ? '📂 Archivados' : '📁 Ver archivados'}
                   </button>
                 </div>
-                
+
                 {isComposing && (
                   <div className="p-2 border-b bg-white">
                     <p className="text-xs font-semibold text-gray-500 mb-2 px-2">Seleccionar destinatario:</p>
@@ -920,9 +919,8 @@ export default function MessagesWidget() {
                     conversations.map((conv) => (
                       <div
                         key={conv.contactId}
-                        className={`relative group ${
-                          selectedConversation?.contactId === conv.contactId ? 'bg-primary/5' : ''
-                        }`}
+                        className={`relative group ${selectedConversation?.contactId === conv.contactId ? 'bg-primary/5' : ''
+                          }`}
                         onMouseEnter={() => setHoveredConversation(conv.contactId)}
                         onMouseLeave={() => setHoveredConversation(null)}
                       >
@@ -961,10 +959,10 @@ export default function MessagesWidget() {
                             </div>
                           </div>
                         </button>
-                        
+
                         {/* Botones de acción al hacer hover */}
                         {hoveredConversation === conv.contactId && !conv.deleted && (
-                          <div 
+                          <div
                             className="absolute top-2 right-2 flex gap-1 bg-white rounded-lg shadow-lg border border-gray-200 p-1 z-10"
                             onClick={(e) => e.stopPropagation()}
                             onMouseDown={(e) => e.stopPropagation()}
@@ -1112,11 +1110,10 @@ export default function MessagesWidget() {
                           className={`flex ${msg.fromId === userId ? 'justify-end' : 'justify-start'}`}
                         >
                           <div
-                            className={`max-w-[85%] sm:max-w-[80%] rounded-2xl px-3 py-2 sm:px-4 sm:py-2 ${
-                              msg.fromId === userId
-                                ? 'bg-primary text-white'
-                                : 'bg-gray-100 text-gray-900'
-                            }`}
+                            className={`max-w-[85%] sm:max-w-[80%] rounded-2xl px-3 py-2 sm:px-4 sm:py-2 ${msg.fromId === userId
+                              ? 'bg-primary text-white'
+                              : 'bg-gray-100 text-gray-900'
+                              }`}
                           >
                             {msg.subject && msg.subject !== 'Mensaje' && (
                               <p className={`text-xs font-semibold mb-1 ${msg.fromId === userId ? 'text-white/80' : 'text-gray-500'}`}>
