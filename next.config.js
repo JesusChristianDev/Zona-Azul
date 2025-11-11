@@ -52,10 +52,8 @@ const nextConfig = {
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
   
-  // Deshabilitar generación estática de páginas de error
-  experimental: {
-    missingSuspenseWithCSRBailout: false,
-  },
+  // Configuración para evitar errores de prerenderizado
+  output: 'standalone',
 }
 
 module.exports = nextConfig
