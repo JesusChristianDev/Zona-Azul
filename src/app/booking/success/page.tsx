@@ -16,28 +16,31 @@ export default function BookingSuccess() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const loadLastAppointment = async () => {
+    const loadLastAppointment = () => {
       try {
-        const { getAppointments } = await import('../../../lib/api')
-        const appointments = await getAppointments()
-        if (appointments && appointments.length > 0) {
-          // Ordenar por fecha y obtener el más reciente
-          const sorted = appointments.sort((a: any, b: any) => 
-            new Date(b.created_at || b.date_time).getTime() - new Date(a.created_at || a.date_time).getTime()
-          )
-          const lastAppointment = sorted[0]
+        // Intentar leer de sessionStorage (para usuarios que acaban de crear una cita)
+        const storedBooking = sessionStorage.getItem('lastBooking')
+        if (storedBooking) {
+          const bookingData = JSON.parse(storedBooking)
           setLast({
-            id: lastAppointment.id,
-            name: lastAppointment.user_name || 'Usuario',
-            email: lastAppointment.user_email || '',
-            phone: lastAppointment.user_phone,
-            slot: new Date(lastAppointment.date_time).toLocaleString('es-ES'),
-            created_at: lastAppointment.created_at,
+            id: bookingData.id,
+            name: bookingData.name || 'Usuario',
+            email: bookingData.email || '',
+            phone: bookingData.phone,
+            slot: bookingData.slot || new Date(bookingData.date_time).toLocaleString('es-ES'),
+            created_at: bookingData.created_at,
           })
+          // Limpiar sessionStorage después de leer
+          sessionStorage.removeItem('lastBooking')
+          setLoading(false)
+          return
         }
+
+        // Si no hay datos en sessionStorage, simplemente no mostrar nada
+        // (La página de éxito solo debería mostrar datos si el usuario acaba de crear una cita)
+        setLoading(false)
       } catch (error) {
-        console.error('Error reading appointments:', error)
-      } finally {
+        console.error('Error reading appointment:', error)
         setLoading(false)
       }
     }

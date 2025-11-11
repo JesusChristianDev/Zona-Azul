@@ -35,12 +35,12 @@ export interface DatabaseProfile {
 
 export interface DatabaseAppointment {
   id: string
-  user_id: string
-  nutricionista_id?: string
+  user_id: string | null
+  nutricionista_id?: string | null
   date_time: string
   status: 'pendiente' | 'confirmada' | 'completada' | 'cancelada'
-  notes?: string
-  google_calendar_event_id?: string
+  notes?: string | null
+  google_calendar_event_id?: string | null
   created_at: string
   updated_at: string
 }
@@ -544,13 +544,103 @@ export async function getAllAppointments(): Promise<DatabaseAppointment[]> {
   return data as DatabaseAppointment[]
 }
 
+// Verificar si hay conflictos de horario para una cita
+export async function checkAppointmentConflict(
+  dateTime: string,
+  excludeAppointmentId?: string,
+  nutricionistaId?: string | null,
+  userId?: string | null
+): Promise<{ hasConflict: boolean; conflictReason?: string }> {
+  try {
+    const appointmentDate = new Date(dateTime)
+    
+    // Normalizar la fecha para comparación: redondear a minutos (ignorar segundos y milisegundos)
+    const normalizedDate = new Date(appointmentDate)
+    normalizedDate.setSeconds(0, 0)
+    normalizedDate.setMilliseconds(0)
+    
+    // Calcular rango de tiempo: desde el inicio del minuto hasta el final del minuto
+    // Esto asegura que detectemos citas en el mismo minuto, incluso con diferencias de segundos/milisegundos
+    const startRange = new Date(normalizedDate)
+    const endRange = new Date(normalizedDate)
+    endRange.setSeconds(59, 999) // Hasta el final del minuto
+    
+    // Buscar citas en el mismo rango de tiempo (misma fecha y hora, ignorando segundos y milisegundos)
+    // Usamos gte (greater than or equal) y lte (less than or equal) para el rango
+    const { data: conflictingAppointments, error } = await supabase
+      .from('appointments')
+      .select('*')
+      .gte('date_time', startRange.toISOString())
+      .lte('date_time', endRange.toISOString())
+      .neq('status', 'cancelada') // Ignorar citas canceladas
+
+    if (error) {
+      console.error('Error checking appointment conflict:', error)
+      return { hasConflict: false } // En caso de error, permitir la cita
+    }
+
+    if (!conflictingAppointments || conflictingAppointments.length === 0) {
+      return { hasConflict: false }
+    }
+
+    // Filtrar la cita actual si se está actualizando
+    const otherAppointments = excludeAppointmentId
+      ? conflictingAppointments.filter(apt => apt.id !== excludeAppointmentId)
+      : conflictingAppointments
+
+    if (otherAppointments.length === 0) {
+      return { hasConflict: false }
+    }
+
+    // IMPORTANTE: No permitir duplicados en la misma fecha y hora, independientemente de los datos
+    // Esto previene que se creen múltiples citas en el mismo horario, incluso con los mismos datos
+    // Verificar conflictos con el nutricionista
+    if (nutricionistaId) {
+      const nutricionistaConflict = otherAppointments.find(
+        apt => apt.nutricionista_id === nutricionistaId
+      )
+      if (nutricionistaConflict) {
+        return {
+          hasConflict: true,
+          conflictReason: 'El nutricionista ya tiene una cita en este horario'
+        }
+      }
+    }
+
+    // Verificar conflictos con el usuario
+    if (userId) {
+      const userConflict = otherAppointments.find(
+        apt => apt.user_id === userId
+      )
+      if (userConflict) {
+        return {
+          hasConflict: true,
+          conflictReason: 'Ya tienes una cita en este horario'
+        }
+      }
+    }
+
+    // REGLA PRINCIPAL: Si hay citas en el mismo horario (misma fecha y hora), es un conflicto
+    // Esto previene duplicados incluso si son con los mismos datos o diferentes usuarios/nutricionistas
+    // No puede haber múltiples citas en la misma fecha y hora
+    return {
+      hasConflict: true,
+      conflictReason: 'Ya existe una cita en este horario. No se pueden crear citas duplicadas en la misma fecha y hora.'
+    }
+  } catch (error) {
+    console.error('Error checking appointment conflict:', error)
+    return { hasConflict: false } // En caso de error, permitir la cita
+  }
+}
+
 export async function getAppointmentsByNutricionistaId(
   nutricionistaId: string
 ): Promise<DatabaseAppointment[]> {
+  // Incluir citas asignadas a este nutricionista O citas sin nutricionista asignado (pendientes)
   const { data, error } = await supabase
     .from('appointments')
     .select('*')
-    .eq('nutricionista_id', nutricionistaId)
+    .or(`nutricionista_id.eq.${nutricionistaId},nutricionista_id.is.null`)
     .order('date_time', { ascending: false })
 
   if (error || !data) {
@@ -576,6 +666,19 @@ export async function updateAppointment(
     return null
   }
   return data as DatabaseAppointment
+}
+
+export async function deleteAppointment(appointmentId: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('appointments')
+    .delete()
+    .eq('id', appointmentId)
+
+  if (error) {
+    console.error('Error deleting appointment:', error)
+    return false
+  }
+  return true
 }
 
 // Funciones para mensajes

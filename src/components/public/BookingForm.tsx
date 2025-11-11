@@ -83,6 +83,18 @@ export default function BookingForm({ nutricionistaId: propNutricionistaId }: Bo
       
       if (res.ok) {
         const data = await res.json()
+        // Guardar información de la cita en sessionStorage para mostrarla en la página de éxito
+        if (data.appointment) {
+          sessionStorage.setItem('lastBooking', JSON.stringify({
+            id: data.appointment.id,
+            name: name.trim(),
+            email: email.trim(),
+            phone: phone.trim(),
+            slot: new Date(selectedSlot!).toLocaleString('es-ES'),
+            date_time: selectedSlot,
+            created_at: data.appointment.created_at,
+          }))
+        }
         // Notificar que se creó una nueva cita
         window.dispatchEvent(new Event('zona_azul_appointments_updated'))
         showToast('Solicitud enviada ✔️')

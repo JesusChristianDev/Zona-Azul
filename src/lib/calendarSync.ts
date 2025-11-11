@@ -68,11 +68,32 @@ export async function syncAppointmentToCalendar(
       return null
     }
 
-    // Obtener datos del usuario
-    const user = await getUserById(appointment.user_id)
-    if (!user) {
-      console.error('User not found:', appointment.user_id)
-      return null
+    // Si la cita no tiene user_id, extraer datos del invitado de las notes
+    let userName = 'Cliente'
+    let userEmail = ''
+    
+    if (appointment.user_id) {
+      const user = await getUserById(appointment.user_id)
+      if (user) {
+        userName = user.name
+        userEmail = user.email
+      } else {
+        console.warn('User not found for appointment:', appointmentId, 'user_id:', appointment.user_id)
+      }
+    } else {
+      // Extraer datos del invitado de las notes
+      if (appointment.notes) {
+        try {
+          const guestDataMatch = appointment.notes.match(/--- DATOS DEL INVITADO ---\s*(\{[\s\S]*?\})/)
+          if (guestDataMatch) {
+            const guestData = JSON.parse(guestDataMatch[1])
+            userName = guestData.name || 'Cliente'
+            userEmail = guestData.email || ''
+          }
+        } catch (error) {
+          console.error('Error parsing guest data from notes:', error)
+        }
+      }
     }
 
     // Crear evento en Google Calendar
@@ -81,8 +102,8 @@ export async function syncAppointmentToCalendar(
     endDateTime.setHours(endDateTime.getHours() + 1) // Duración de 1 hora por defecto
 
     const eventData = {
-      summary: `Consulta nutricional - ${user.name}`,
-      description: appointment.notes || `Consulta nutricional con ${user.name}`,
+      summary: `Consulta nutricional - ${userName}`,
+      description: appointment.notes || `Consulta nutricional con ${userName}`,
       start: {
         dateTime: dateTime.toISOString(),
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Madrid',
@@ -91,7 +112,7 @@ export async function syncAppointmentToCalendar(
         dateTime: endDateTime.toISOString(),
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Madrid',
       },
-      attendees: user.email ? [{ email: user.email }] : [],
+      attendees: userEmail ? [{ email: userEmail }] : [],
     }
 
     const calendarEvent = await createCalendarEvent(
@@ -160,9 +181,27 @@ export async function updateCalendarEventForAppointment(
       }
     }
 
-    const user = await getUserById(appointment.user_id)
-    if (!user) {
-      return false
+    // Obtener datos del usuario o del invitado
+    let userName = 'Cliente'
+    
+    if (appointment.user_id) {
+      const user = await getUserById(appointment.user_id)
+      if (user) {
+        userName = user.name
+      }
+    } else {
+      // Extraer datos del invitado de las notes
+      if (appointment.notes) {
+        try {
+          const guestDataMatch = appointment.notes.match(/--- DATOS DEL INVITADO ---\s*(\{[\s\S]*?\})/)
+          if (guestDataMatch) {
+            const guestData = JSON.parse(guestDataMatch[1])
+            userName = guestData.name || 'Cliente'
+          }
+        } catch (error) {
+          console.error('Error parsing guest data from notes:', error)
+        }
+      }
     }
 
     const dateTime = new Date(appointment.date_time)
@@ -175,8 +214,8 @@ export async function updateCalendarEventForAppointment(
       credentials.calendar_id,
       appointment.google_calendar_event_id,
       {
-        summary: `Consulta nutricional - ${user.name}`,
-        description: appointment.notes || `Consulta nutricional con ${user.name}`,
+        summary: `Consulta nutricional - ${userName}`,
+        description: appointment.notes || `Consulta nutricional con ${userName}`,
         start: {
           dateTime: dateTime.toISOString(),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Madrid',

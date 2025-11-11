@@ -42,6 +42,24 @@ const nextConfig = {
           },
         ],
       },
+      {
+        // Forzar no-cache para la página de admin/citas para evitar problemas de renderizado
+        source: '/admin/citas',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+          },
+          {
+            key: 'Pragma',
+            value: 'no-cache',
+          },
+          {
+            key: 'Expires',
+            value: '0',
+          },
+        ],
+      },
     ]
   },
   

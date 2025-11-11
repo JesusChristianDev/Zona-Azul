@@ -54,11 +54,17 @@ export async function createUser(userData: {
   role: string
   name: string
   phone?: string
+  subscription_status?: 'active' | 'inactive' | 'expired'
 }) {
   const response = await apiRequest<{ user: any }>('/api/users', {
     method: 'POST',
     body: JSON.stringify(userData),
   })
+  
+  if (response.error) {
+    throw new Error(response.error)
+  }
+  
   return response.data?.user || null
 }
 
@@ -184,6 +190,18 @@ export async function updateAppointment(id: string, appointmentData: Partial<any
     body: JSON.stringify(appointmentData),
   })
   return response.data?.appointment || null
+}
+
+export async function deleteAppointment(id: string): Promise<boolean> {
+  try {
+    const response = await apiRequest<{ success: boolean; message?: string }>(`/api/appointments/${id}`, {
+      method: 'DELETE',
+    })
+    return response.data?.success || false
+  } catch (error) {
+    console.error('Error deleting appointment:', error)
+    return false
+  }
 }
 
 // ==================== GOOGLE CALENDAR ====================

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAppointment } from '../../../../lib/db'
+import { createAppointment, checkAppointmentConflict } from '../../../../lib/db'
 import { cookies } from 'next/headers'
 
 export const dynamic = 'force-dynamic'
@@ -10,15 +10,8 @@ export async function POST(request: NextRequest) {
     const cookieStore = await cookies()
     const userId = cookieStore.get('user_id')?.value
 
-    if (!userId) {
-      return NextResponse.json(
-        { ok: false, error: 'Usuario no autenticado' },
-        { status: 401 }
-      )
-    }
-
     // Validar datos requeridos
-    if (!body.date_time) {
+    if (!body.date_time && !body.slot) {
       return NextResponse.json(
         { ok: false, error: 'Fecha y hora son requeridas' },
         { status: 400 }
@@ -35,12 +28,55 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Verificar conflictos de horario
+    const conflict = await checkAppointmentConflict(
+      dateTime,
+      undefined, // No excluir ninguna cita (es una nueva)
+      body.nutricionista_id || null,
+      userId || null
+    )
+
+    if (conflict.hasConflict) {
+      return NextResponse.json(
+        { ok: false, error: conflict.conflictReason || 'Ya existe una cita en este horario' },
+        { status: 409 } // 409 Conflict
+      )
+    }
+
+    // Si el usuario está autenticado, usar su ID
+    // Si no está autenticado, NO crear usuario todavía - se creará cuando el nutricionista confirme la cita
+    let finalUserId: string | null = userId || null
+
+    // Crear notas con información del invitado si no está autenticado
+    let notes = body.notes || null
+    if (!userId) {
+      // Usuario no autenticado - guardar datos en notes para crear usuario después
+      if (!body.email || !body.name) {
+        return NextResponse.json(
+          { ok: false, error: 'Email y nombre son requeridos para solicitar una cita' },
+          { status: 400 }
+        )
+      }
+
+      // Guardar datos del invitado en formato JSON dentro de notes
+      const guestData = {
+        name: body.name.trim(),
+        email: body.email.trim().toLowerCase(),
+        phone: body.phone?.trim() || null,
+      }
+      
+      const guestDataJson = JSON.stringify(guestData)
+      notes = notes 
+        ? `${notes}\n\n--- DATOS DEL INVITADO ---\n${guestDataJson}`
+        : `--- DATOS DEL INVITADO ---\n${guestDataJson}`
+    }
+
     const appointment = await createAppointment({
-      user_id: userId,
+      user_id: finalUserId,
       nutricionista_id: body.nutricionista_id || null,
       date_time: dateTime,
       status: 'pendiente',
-      notes: body.notes || null,
+      notes: notes,
     })
 
     if (!appointment) {

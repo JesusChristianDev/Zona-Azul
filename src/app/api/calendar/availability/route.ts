@@ -12,23 +12,29 @@ export async function GET(request: NextRequest) {
     const userId = cookieStore.get('user_id')?.value
     const role = cookieStore.get('user_role')?.value
 
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'No autenticado' },
-        { status: 401 }
-      )
-    }
-
-    // Solo nutricionistas pueden ver disponibilidad
-    if (role !== 'nutricionista' && role !== 'admin') {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 403 }
-      )
-    }
-
     const { searchParams } = new URL(request.url)
-    const nutricionistaId = searchParams.get('nutricionista_id') || userId
+    const nutricionistaIdParam = searchParams.get('nutricionista_id')
+    
+    // Si se especifica un nutricionista_id, permitir acceso público (para página de booking)
+    // Si no se especifica, requerir autenticación y usar el userId del usuario autenticado
+    if (!nutricionistaIdParam) {
+      if (!userId) {
+        return NextResponse.json(
+          { error: 'No autenticado' },
+          { status: 401 }
+        )
+      }
+
+      // Solo nutricionistas pueden ver su propia disponibilidad sin especificar ID
+      if (role !== 'nutricionista' && role !== 'admin') {
+        return NextResponse.json(
+          { error: 'No autorizado' },
+          { status: 403 }
+        )
+      }
+    }
+
+    const nutricionistaId = nutricionistaIdParam || userId
     const timeMin = searchParams.get('timeMin')
     const timeMax = searchParams.get('timeMax')
 
