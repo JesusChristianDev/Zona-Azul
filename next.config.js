@@ -54,6 +54,12 @@ const nextConfig = {
   
   // Configuración para evitar errores de prerenderizado de páginas de error
   // Las páginas de error (404, 500) son Client Components y no deben prerenderizarse
+  skipTrailingSlashRedirect: true,
+  
+  // Deshabilitar generación estática de páginas de error
+  generateStaticParams: async () => {
+    return []
+  },
 }
 
 module.exports = nextConfig
