@@ -52,8 +52,8 @@ const nextConfig = {
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
   
-  // Configuración para evitar errores de prerenderizado
-  output: 'standalone',
+  // Configuración para evitar errores de prerenderizado de páginas de error
+  // Las páginas de error (404, 500) son Client Components y no deben prerenderizarse
 }
 
 module.exports = nextConfig
