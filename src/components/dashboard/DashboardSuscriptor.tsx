@@ -3,10 +3,9 @@
 import { useState, useEffect } from 'react'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { useAuth } from '../../hooks/useAuth'
-import { mockProfile, UserProfile } from '../../lib/mockProfile'
-import { mockMealPlan, MealPlan } from '../../lib/mockPlan'
-import { getUserData, setUserData } from '../../lib/storage'
-import { mockUsers, User } from '../../lib/mockUsers'
+import { UserProfile, MealPlan, User } from '../../lib/types'
+import { getPlan, getProgress, getProfile, getUserById } from '../../lib/api'
+import * as api from '../../lib/api'
 import SummaryCard from '../ui/SummaryCard'
 import InteractiveGreeting from '../ui/InteractiveGreeting'
 
@@ -18,66 +17,33 @@ interface ProgressEntry {
   notes?: string
 }
 
-// Función para obtener el nutricionista asignado al suscriptor
-function getAssignedNutricionista(subscriberId: string): User | null {
-  // Obtener todos los usuarios (mock + localStorage)
-  const stored = localStorage.getItem('zona_azul_users')
-  let allUsers: User[] = []
-
-  if (stored) {
-    try {
-      allUsers = JSON.parse(stored)
-    } catch (e) {
-      // Error al parsear
-    }
-  }
-
-  // Combinar nutricionistas, priorizando los de localStorage sobre mockUsers
-  // Usar un Map para evitar duplicados por ID
-  const nutricionistasMap = new Map<string, User>()
-
-  // Primero agregar los de localStorage (tienen prioridad)
-  allUsers
-    .filter((u) => u.role === 'nutricionista')
-    .forEach((nutri) => nutricionistasMap.set(nutri.id, nutri))
-
-  // Luego agregar los de mockUsers solo si no existen ya
-  mockUsers
-    .filter((u) => u.role === 'nutricionista')
-    .forEach((nutri) => {
-      if (!nutricionistasMap.has(nutri.id)) {
-        nutricionistasMap.set(nutri.id, nutri)
+// Función para obtener el nutricionista asignado al suscriptor desde la API
+async function getAssignedNutricionista(subscriberId: string): Promise<User | null> {
+  try {
+    // Buscar asignación desde la API
+    const assignment = await api.getNutricionistaByClientId(subscriberId)
+    if (assignment && assignment.nutricionista_id) {
+      // Obtener información del nutricionista específico
+      const nutricionista = await getUserById(assignment.nutricionista_id)
+      if (nutricionista) {
+        return nutricionista as User
       }
-    })
-
-  const allNutricionistas = Array.from(nutricionistasMap.values())
-
-  // Buscar en los clientes de cada nutricionista
-  for (const nutricionista of allNutricionistas) {
-    try {
-      const stored = localStorage.getItem(`zona_azul_clients_user_${nutricionista.id}`)
-      if (stored) {
-        const clients = JSON.parse(stored)
-        if (Array.isArray(clients) && clients.some((client: any) => client.id === subscriberId)) {
-          return nutricionista
-        }
-      }
-    } catch (error) {
-      console.error(`Error checking clients for nutricionista ${nutricionista.id}:`, error)
     }
-  }
 
-  // Si no se encuentra, NO devolver un nutricionista por defecto
-  // Devolver null para que no se muestre información incorrecta
-  return null
+    return null
+  } catch (error) {
+    console.error('Error getting assigned nutricionista:', error)
+    return null
+  }
 }
 
 export default function DashboardSuscriptor() {
   const { userId, userName, userEmail } = useAuth()
-  const [profile, setProfile] = useState<UserProfile>(mockProfile)
+  const [profile, setProfile] = useState<UserProfile | null>(null)
   const [plan, setPlan] = useState<MealPlan | null>(null)
   const [progressEntries, setProgressEntries] = useState<ProgressEntry[]>([])
   const [assignedNutricionista, setAssignedNutricionista] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState({
     averageCalories: 0,
     averageWater: 0,
@@ -86,77 +52,83 @@ export default function DashboardSuscriptor() {
   })
 
   useEffect(() => {
-    if (!userId || !userName || !userEmail) return
+    const loadData = async () => {
+      if (!userId || !userName || !userEmail) return
 
-    // Cargar perfil personalizado o crear uno nuevo
-    const storedProfile = getUserData<UserProfile>('zona_azul_profile', userId)
-    if (storedProfile) {
-      setProfile(storedProfile)
-    } else {
-      // Crear perfil inicial basado en el usuario autenticado
-      const newProfile: UserProfile = {
-        ...mockProfile,
-        id: userId,
-        name: userName,
-        email: userEmail,
-      }
-      setProfile(newProfile)
-      setUserData('zona_azul_profile', newProfile, userId)
-    }
+      setLoading(true)
+      try {
+        // Cargar perfil desde API
+        const apiProfile = await getProfile()
+        if (apiProfile) {
+          setProfile({
+            id: userId,
+            name: userName,
+            email: userEmail,
+            phone: apiProfile.phone || '',
+            subscriptionStatus: apiProfile.subscription_status || 'inactive',
+            goals: {
+              calories: apiProfile.goals_calories || 2000,
+              water: apiProfile.goals_water || 2000,
+              weight: apiProfile.goals_weight || 70,
+            },
+          } as UserProfile)
+        } else {
+          // Crear perfil inicial si no existe
+          const newProfile: UserProfile = {
+            id: userId,
+            name: userName,
+            email: userEmail,
+            phone: '',
+            subscriptionStatus: 'inactive',
+            goals: {
+              calories: 2000,
+              water: 2000,
+              weight: 70,
+            },
+          }
+          setProfile(newProfile)
+        }
 
-    // Cargar plan real (solo si existe, no usar fallback)
-    const storedPlan = getUserData<MealPlan>('zona_azul_suscriptor_plan', userId, null)
-    if (storedPlan && storedPlan.days && storedPlan.days.length > 0) {
-      setPlan(storedPlan)
-    } else {
-      // No asignar plan por defecto - el usuario no tiene plan hasta que se le asigne
-      setPlan(null)
-    }
+        // Cargar plan desde API
+        const apiPlan = await getPlan()
+        if (apiPlan && apiPlan.days && apiPlan.days.length > 0) {
+          setPlan(apiPlan as MealPlan)
+        } else {
+          setPlan(null)
+        }
 
-    // Cargar progreso real
-    const storedProgress = getUserData<ProgressEntry[]>('zona_azul_progress', userId, [])
-    if (storedProgress) {
-      setProgressEntries(storedProgress)
-    }
+        // Cargar progreso desde API
+        const apiProgress = await getProgress()
+        if (apiProgress && apiProgress.length > 0) {
+          const formattedProgress: ProgressEntry[] = apiProgress.map((p: any) => ({
+            date: p.date,
+            weight: p.weight,
+            hydration: p.water ? p.water / 1000 : undefined, // Convertir ml a litros
+            energy: p.calories,
+            notes: p.notes,
+          }))
+          setProgressEntries(formattedProgress)
+        } else {
+          setProgressEntries([])
+        }
 
-    // Obtener nutricionista asignado
-    if (userId) {
-      const nutricionista = getAssignedNutricionista(userId)
-      setAssignedNutricionista(nutricionista)
-    }
-
-    // Escuchar actualizaciones
-    const handlePlanUpdate = () => {
-      const updatedPlan = getUserData<MealPlan>('zona_azul_suscriptor_plan', userId, null)
-      if (updatedPlan && updatedPlan.days && updatedPlan.days.length > 0) {
-        setPlan(updatedPlan)
-      } else {
-        setPlan(null)
-      }
-    }
-
-    const handleProgressUpdate = () => {
-      const updatedProgress = getUserData<ProgressEntry[]>('zona_azul_progress', userId, [])
-      if (updatedProgress) {
-        setProgressEntries(updatedProgress)
-      }
-    }
-
-    const handleClientsUpdate = () => {
-      if (userId) {
-        const nutricionista = getAssignedNutricionista(userId)
+        // Obtener nutricionista asignado
+        const nutricionista = await getAssignedNutricionista(userId)
         setAssignedNutricionista(nutricionista)
+      } catch (error) {
+        console.error('Error loading dashboard data:', error)
+      } finally {
+        setLoading(false)
       }
     }
 
-    window.addEventListener('zona_azul_plan_updated', handlePlanUpdate)
-    window.addEventListener('storage', handleProgressUpdate)
-    window.addEventListener('zona_azul_clients_updated', handleClientsUpdate)
+    loadData()
+
+    // Polling cada 30 segundos para actualizar datos
+    const interval = setInterval(loadData, 30000)
 
     return () => {
-      window.removeEventListener('zona_azul_plan_updated', handlePlanUpdate)
-      window.removeEventListener('storage', handleProgressUpdate)
-      window.removeEventListener('zona_azul_clients_updated', handleClientsUpdate)
+      clearInterval(interval)
     }
   }, [userId, userName, userEmail])
 
@@ -228,6 +200,17 @@ export default function DashboardSuscriptor() {
       { nombre: 'Grasas', valor: 0 },
     ]
     : []
+
+  if (loading || !profile) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-gray-600">Cargando datos...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4 sm:space-y-6 lg:space-y-8">

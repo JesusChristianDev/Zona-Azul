@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { getSubscribers } from '../../lib/subscribers'
+import { getOrders } from '../../lib/api'
+import { convertApiOrdersToFrontend } from '../../lib/orderHelpers'
 import InteractiveGreeting from '../../components/ui/InteractiveGreeting'
 
 interface AdminOrder {
@@ -33,91 +35,85 @@ export default function RepartidorPage() {
   ])
 
   useEffect(() => {
-    const loadStats = () => {
+    const loadStats = async () => {
       if (!userId) return
 
-      // Obtener pedidos del admin
-      const adminOrdersStr = localStorage.getItem('zona_azul_admin_orders')
-      if (adminOrdersStr) {
-        try {
-          const adminOrders: AdminOrder[] = JSON.parse(adminOrdersStr)
-          const subscribers = getSubscribers()
-          const validSubscriberIds = new Set(subscribers.map((s) => s.id))
-          
-          // Filtrar pedidos válidos (no cancelados y con suscriptores válidos)
-          const validOrders = adminOrders.filter(
-            (order) =>
-              validSubscriberIds.has(order.customerId) &&
-              order.status !== 'Cancelado' &&
-              (order.status === 'En camino' || order.status === 'Preparando' || order.status === 'Entregado')
+      try {
+        // Obtener pedidos desde la API
+        const apiOrders = await getOrders()
+        const frontendOrders = await convertApiOrdersToFrontend(apiOrders)
+        
+        // Filtrar pedidos asignados a este repartidor o sin asignar
+        const myOrders = frontendOrders.filter(
+          (order) => !order.repartidor_id || order.repartidor_id === userId
+        )
+
+        // Filtrar pedidos válidos (no cancelados)
+        const validOrders = myOrders.filter(
+          (order) =>
+            order.status !== 'Cancelado' &&
+            (order.status === 'En camino' || order.status === 'Preparando' || order.status === 'Entregado')
+        )
+
+        // Pedidos del día
+        const todayDeliveries = validOrders.length
+
+        // Pedidos pendientes (no entregados)
+        const pendingDeliveries = validOrders.filter(
+          (order) => order.status !== 'Entregado'
+        ).length
+
+        // Calcular tiempo promedio basado en ETA de pedidos en camino
+        const ordersInRoute = validOrders.filter((order) => order.status === 'En camino')
+        let avgTime = 0
+        if (ordersInRoute.length > 0) {
+          const totalMinutes = ordersInRoute.reduce((sum, order) => {
+            const etaStr = order.eta
+            if (etaStr === '—' || !etaStr) return sum
+            const minutes = parseInt(etaStr.replace(/[^0-9]/g, '')) || 0
+            return sum + minutes
+          }, 0)
+          avgTime = Math.round(totalMinutes / ordersInRoute.length)
+        } else if (validOrders.length > 0) {
+          // Si no hay pedidos en camino, usar ETA de pedidos preparando
+          const preparingOrders = validOrders.filter(
+            (order) => order.status === 'Preparando'
           )
-
-          // Pedidos del día (todos los asignados al repartidor)
-          const todayDeliveries = validOrders.length
-
-          // Pedidos pendientes (no entregados)
-          const pendingDeliveries = validOrders.filter(
-            (order) => order.status !== 'Entregado'
-          ).length
-
-          // Calcular tiempo promedio basado en ETA de pedidos en camino
-          const ordersInRoute = validOrders.filter((order) => order.status === 'En camino')
-          let avgTime = 0
-          if (ordersInRoute.length > 0) {
-            const totalMinutes = ordersInRoute.reduce((sum, order) => {
+          if (preparingOrders.length > 0) {
+            const totalMinutes = preparingOrders.reduce((sum, order) => {
               const etaStr = order.eta
-              if (etaStr === '—' || !etaStr) return sum
-              const minutes = parseInt(etaStr.replace(/[^0-9]/g, '')) || 0
+              if (etaStr === '—' || !etaStr) return sum + 30 // Default 30 min
+              const minutes = parseInt(etaStr.replace(/[^0-9]/g, '')) || 30
               return sum + minutes
             }, 0)
-            avgTime = Math.round(totalMinutes / ordersInRoute.length)
-          } else if (validOrders.length > 0) {
-            // Si no hay pedidos en camino, usar ETA de pedidos preparando
-            const preparingOrders = validOrders.filter(
-              (order) => order.status === 'Preparando'
-            )
-            if (preparingOrders.length > 0) {
-              const totalMinutes = preparingOrders.reduce((sum, order) => {
-                const etaStr = order.eta
-                if (etaStr === '—' || !etaStr) return sum + 30 // Default 30 min
-                const minutes = parseInt(etaStr.replace(/[^0-9]/g, '')) || 30
-                return sum + minutes
-              }, 0)
-              avgTime = Math.round(totalMinutes / preparingOrders.length)
-            }
+            avgTime = Math.round(totalMinutes / preparingOrders.length)
           }
-
-          const avgTimeStr = avgTime > 0 ? `${avgTime} min` : '—'
-
-          setMetrics([
-            {
-              label: 'Pedidos del día',
-              value: todayDeliveries,
-              delta: `${pendingDeliveries} pendientes de entregar`,
-            },
-            {
-              label: 'Tiempo promedio',
-              value: avgTimeStr,
-              delta: 'Objetivo < 30 min',
-            },
-            {
-              label: 'Satisfacción clientes',
-              value: '4.9/5',
-              delta: 'Basado en 42 calificaciones',
-            },
-          ])
-        } catch (error) {
-          console.error('Error loading stats from admin orders:', error)
-          setMetrics([
-            { label: 'Pedidos del día', value: 0, delta: 'Error al cargar' },
-            { label: 'Tiempo promedio', value: '—', delta: 'Error al cargar' },
-            { label: 'Satisfacción clientes', value: '4.9/5', delta: 'Basado en 42 calificaciones' },
-          ])
         }
-      } else {
+
+        const avgTimeStr = avgTime > 0 ? `${avgTime} min` : '—'
+
         setMetrics([
-          { label: 'Pedidos del día', value: 0, delta: 'Sin pedidos asignados' },
-          { label: 'Tiempo promedio', value: '—', delta: 'Sin pedidos asignados' },
+          {
+            label: 'Pedidos del día',
+            value: todayDeliveries,
+            delta: `${pendingDeliveries} pendientes de entregar`,
+          },
+          {
+            label: 'Tiempo promedio',
+            value: avgTimeStr,
+            delta: 'Objetivo < 30 min',
+          },
+          {
+            label: 'Satisfacción clientes',
+            value: '4.9/5',
+            delta: 'Basado en 42 calificaciones',
+          },
+        ])
+      } catch (error) {
+        console.error('Error loading stats:', error)
+        setMetrics([
+          { label: 'Pedidos del día', value: 0, delta: 'Error al cargar' },
+          { label: 'Tiempo promedio', value: '—', delta: 'Error al cargar' },
           { label: 'Satisfacción clientes', value: '4.9/5', delta: 'Basado en 42 calificaciones' },
         ])
       }
@@ -125,29 +121,10 @@ export default function RepartidorPage() {
 
     loadStats()
 
-    // Escuchar cambios
-    const handleOrdersUpdate = () => loadStats()
-    window.addEventListener('zona_azul_admin_orders_updated', handleOrdersUpdate)
-    window.addEventListener('zona_azul_deliveries_updated', handleOrdersUpdate)
-    window.addEventListener('zona_azul_subscribers_updated', handleOrdersUpdate)
-
-    // Escuchar cambios en localStorage (otras pestañas)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'zona_azul_admin_orders') {
-        loadStats()
-      }
-    }
-
-    window.addEventListener('storage', handleStorageChange)
-
-    // Polling cada 3 segundos como fallback
-    const interval = setInterval(loadStats, 3000)
+    // Polling cada 30 segundos para actualizar
+    const interval = setInterval(loadStats, 30000)
 
     return () => {
-      window.removeEventListener('zona_azul_admin_orders_updated', handleOrdersUpdate)
-      window.removeEventListener('zona_azul_deliveries_updated', handleOrdersUpdate)
-      window.removeEventListener('zona_azul_subscribers_updated', handleOrdersUpdate)
-      window.removeEventListener('storage', handleStorageChange)
       clearInterval(interval)
     }
   }, [userId])

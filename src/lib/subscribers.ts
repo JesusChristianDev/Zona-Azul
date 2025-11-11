@@ -1,46 +1,46 @@
 /**
  * Utilidades para trabajar con suscriptores
+ * Ahora usa la API en lugar de localStorage/mock
  */
 
-import { mockUsers, User } from './mockUsers'
+import { User } from './types'
+import { getSubscribers as getSubscribersFromApi } from './api'
 
 /**
- * Obtiene todos los usuarios con rol 'suscriptor'
- * Incluye tanto los de mockUsers como los creados dinámicamente desde admin
- * Solo devuelve suscriptores que existen en zona_azul_users (no eliminados)
+ * Obtiene todos los usuarios con rol 'suscriptor' desde la API
+ * Según el rol del usuario:
+ * - Admin: obtiene todos los suscriptores
+ * - Nutricionista: obtiene solo sus clientes asignados
+ * - Otros: devuelve array vacío
+ * @returns Promise con array de suscriptores
  */
-export function getSubscribers(): User[] {
-  // Primero obtener todos los usuarios de localStorage (fuente de verdad)
-  if (typeof window !== 'undefined') {
-    try {
-      const stored = localStorage.getItem('zona_azul_users')
-      if (stored) {
-        const allUsers: User[] = JSON.parse(stored)
-        // Filtrar solo suscriptores que están en zona_azul_users
-        return allUsers.filter((user) => user.role === 'suscriptor')
-      }
-    } catch (error) {
-      console.error('Error loading subscribers from localStorage:', error)
-    }
+export async function getSubscribers(): Promise<User[]> {
+  try {
+    const subscribers = await getSubscribersFromApi()
+    return subscribers.map((user: any) => user as User)
+  } catch (error) {
+    console.error('Error loading subscribers:', error)
+    return []
   }
-  
-  // Fallback: si no hay localStorage, usar solo mockUsers
-  return mockUsers.filter((user) => user.role === 'suscriptor')
 }
 
 /**
  * Obtiene un suscriptor por ID
+ * @param id ID del suscriptor
+ * @returns Promise con el suscriptor o undefined
  */
-export function getSubscriberById(id: string): User | undefined {
-  const allSubscribers = getSubscribers()
+export async function getSubscriberById(id: string): Promise<User | undefined> {
+  const allSubscribers = await getSubscribers()
   return allSubscribers.find((user) => user.id === id)
 }
 
 /**
  * Obtiene un suscriptor por email
+ * @param email Email del suscriptor
+ * @returns Promise con el suscriptor o undefined
  */
-export function getSubscriberByEmail(email: string): User | undefined {
-  const allSubscribers = getSubscribers()
+export async function getSubscriberByEmail(email: string): Promise<User | undefined> {
+  const allSubscribers = await getSubscribers()
   return allSubscribers.find((user) => user.email.toLowerCase() === email.toLowerCase())
 }
 

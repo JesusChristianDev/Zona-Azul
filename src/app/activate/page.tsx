@@ -7,10 +7,11 @@ export default function ActivatePage() {
   const [password, setPassword] = useState('')
   const [done, setDone] = useState(false)
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    // Demo behaviour: store a flag in localStorage to simulate activation
-    localStorage.setItem(`activation_${token}`, JSON.stringify({ activated_at: new Date().toISOString() }))
+    // TODO: Implementar activación real usando API
+    // Por ahora, solo marcamos como completado
+    // En producción, esto debería llamar a una API que valide el token y active la cuenta
     setDone(true)
   }
 

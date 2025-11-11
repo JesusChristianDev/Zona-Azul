@@ -3,8 +3,10 @@
 import { useState, useEffect } from 'react'
 import Modal from '../../../components/ui/Modal'
 import { useAuth } from '../../../hooks/useAuth'
-import { getUserData, setUserData } from '../../../lib/storage'
+import * as api from '../../../lib/api'
 import { getSubscribers, getSubscriberAddress, getSubscriberInstructions } from '../../../lib/subscribers'
+import { getOrders, updateOrder } from '../../../lib/api'
+import { convertApiOrdersToFrontend, mapFrontendStatusToApi } from '../../../lib/orderHelpers'
 import { NotificationHelpers } from '../../../lib/notifications'
 
 interface AdminOrder {
@@ -69,64 +71,58 @@ export default function RepartidorPedidosPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
-  // Función para cargar pedidos desde admin
-  const loadDeliveries = () => {
+  // Función para cargar pedidos desde la API
+  const loadDeliveries = async () => {
     if (!userId) return
 
-    // Obtener pedidos del admin
-    const adminOrdersStr = localStorage.getItem('zona_azul_admin_orders')
-    if (adminOrdersStr) {
-      try {
-        const adminOrders: AdminOrder[] = JSON.parse(adminOrdersStr)
-        const subscribers = getSubscribers()
-        const validSubscriberIds = new Set(subscribers.map((s) => s.id))
+    try {
+      // Obtener pedidos desde la API
+      const apiOrders = await getOrders()
+      const frontendOrders = await convertApiOrdersToFrontend(apiOrders)
+      
+      // Filtrar pedidos asignados a este repartidor o sin asignar
+      const myOrders = frontendOrders.filter(
+        (order) => !order.repartidor_id || order.repartidor_id === userId
+      )
 
-        // Filtrar pedidos válidos (no cancelados y con suscriptores válidos)
-        const validOrders = adminOrders.filter(
-          (order) =>
-            validSubscriberIds.has(order.customerId) &&
-            order.status !== 'Cancelado' &&
-            (order.status === 'En camino' || order.status === 'Preparando' || order.status === 'Entregado')
+      // Filtrar pedidos válidos (no cancelados)
+      const validOrders = myOrders.filter(
+        (order) =>
+          order.status !== 'Cancelado' &&
+          (order.status === 'En camino' || order.status === 'Preparando' || order.status === 'Entregado')
+      )
+
+      // Convertir a formato Delivery
+      const deliveries = validOrders.map(convertAdminOrderToDelivery)
+
+      // Obtener incidencias desde la API
+      const incidents = await api.getOrderIncidents(undefined, userId)
+      const incidentsByOrderId = new Map(incidents.map((inc: any) => [inc.order_id, inc]))
+      
+      // Marcar entregas con incidencias
+      const finalDeliveries: Delivery[] = deliveries.map((delivery) => {
+        const incident = incidentsByOrderId.get(delivery.id)
+        if (incident && incident.status === 'reported') {
+          return { ...delivery, status: 'incidencia' as const }
+        }
+        return delivery
+      })
+
+      // Detectar nuevos pedidos asignados
+      if (previousDeliveries.length > 0 && document.hidden) {
+        const newDeliveries = finalDeliveries.filter(
+          (current) => !previousDeliveries.some((prev) => prev.id === current.id)
         )
 
-        // Convertir a formato Delivery
-        const deliveries = validOrders.map(convertAdminOrderToDelivery)
-
-        // Mantener estados personalizados del repartidor (incidencias) desde localStorage
-        const storedDeliveries = getUserData<Delivery[]>('zona_azul_deliveries', userId, [])
-        let finalDeliveries: Delivery[] = []
-
-        if (storedDeliveries && storedDeliveries.length > 0) {
-          // Preservar incidencias reportadas
-          finalDeliveries = deliveries.map((delivery) => {
-            const stored = storedDeliveries.find((d) => d.id === delivery.id)
-            if (stored && stored.status === 'incidencia') {
-              return stored // Mantener la incidencia
-            }
-            return delivery
-          })
-        } else {
-          finalDeliveries = deliveries
-        }
-
-        // Detectar nuevos pedidos asignados
-        if (previousDeliveries.length > 0 && document.hidden) {
-          const newDeliveries = finalDeliveries.filter(
-            (current) => !previousDeliveries.some((prev) => prev.id === current.id)
-          )
-
-          newDeliveries.forEach((delivery) => {
-            NotificationHelpers.newOrderAssigned(delivery.customer, '/repartidor/pedidos', userId)
-          })
-        }
-
-        setPreviousDeliveries(finalDeliveries)
-        setDeliveries(finalDeliveries)
-      } catch (error) {
-        console.error('Error loading deliveries from admin:', error)
-        setDeliveries([])
+        newDeliveries.forEach((delivery) => {
+          NotificationHelpers.newOrderAssigned(delivery.customer, '/repartidor/pedidos', userId)
+        })
       }
-    } else {
+
+      setPreviousDeliveries(finalDeliveries)
+      setDeliveries(finalDeliveries)
+    } catch (error) {
+      console.error('Error loading deliveries:', error)
       setDeliveries([])
     }
   }
@@ -136,31 +132,10 @@ export default function RepartidorPedidosPage() {
 
     loadDeliveries()
 
-    // Escuchar cambios en localStorage para actualizar en tiempo real (otras pestañas)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'zona_azul_admin_orders' || (e.key && e.key.startsWith('zona_azul_deliveries_user_'))) {
-        loadDeliveries()
-      }
-    }
-
-    // Escuchar cambios locales (misma pestaña)
-    const handleCustomDeliveriesChange = () => {
-      loadDeliveries()
-    }
-
-    window.addEventListener('storage', handleStorageChange)
-    window.addEventListener('zona_azul_deliveries_updated', handleCustomDeliveriesChange)
-    window.addEventListener('zona_azul_admin_orders_updated', loadDeliveries) // Escuchar cambios en pedidos del admin
-    window.addEventListener('zona_azul_subscribers_updated', loadDeliveries) // Escuchar nuevos suscriptores
-
-    // Polling cada 2 segundos para detectar cambios (fallback)
-    const interval = setInterval(loadDeliveries, 2000)
+    // Polling cada 30 segundos para actualizar desde la API
+    const interval = setInterval(loadDeliveries, 30000)
 
     return () => {
-      window.removeEventListener('storage', handleStorageChange)
-      window.removeEventListener('zona_azul_deliveries_updated', handleCustomDeliveriesChange)
-      window.removeEventListener('zona_azul_admin_orders_updated', loadDeliveries)
-      window.removeEventListener('zona_azul_subscribers_updated', loadDeliveries)
       clearInterval(interval)
     }
   }, [userId])
@@ -175,66 +150,39 @@ export default function RepartidorPedidosPage() {
     }
   }
 
-  // Notificar a otras pestañas/componentes que los pedidos fueron actualizados
-  const notifyDeliveriesUpdate = () => {
-    window.dispatchEvent(new Event('zona_azul_deliveries_updated'))
+
+  const handleStartRoute = async (deliveryId: string) => {
+    try {
+      // Actualizar pedido en la API
+      const apiStatus = mapFrontendStatusToApi('En camino')
+      await updateOrder(deliveryId, { 
+        status: apiStatus,
+        repartidor_id: userId 
+      })
+
+      // Recargar pedidos desde la API
+      await loadDeliveries()
+      showToast('Ruta iniciada')
+    } catch (error: any) {
+      console.error('Error starting route:', error)
+      showToast('Error al iniciar la ruta', true)
+    }
   }
 
-  const handleStartRoute = (deliveryId: string) => {
-    // Actualizar en pedidos del admin
-    const adminOrdersStr = localStorage.getItem('zona_azul_admin_orders')
-    if (adminOrdersStr) {
-      try {
-        const adminOrders: AdminOrder[] = JSON.parse(adminOrdersStr)
-        const updatedAdminOrders = adminOrders.map((order) =>
-          order.id === deliveryId ? { ...order, status: 'En camino' } : order
-        )
-        localStorage.setItem('zona_azul_admin_orders', JSON.stringify(updatedAdminOrders))
-        window.dispatchEvent(new Event('zona_azul_admin_orders_updated'))
-      } catch (error) {
-        console.error('Error updating admin order:', error)
-      }
-    }
+  const handleMarkDelivered = async (deliveryId: string) => {
+    if (!confirm('¿Confirmas que este pedido fue entregado correctamente?')) return
 
-    // Actualizar en deliveries del repartidor
-    const updated = deliveries.map((d) =>
-      d.id === deliveryId ? { ...d, status: 'en_camino' as const } : d
-    )
-    setDeliveries(updated)
-    if (userId) {
-      setUserData('zona_azul_deliveries', updated, userId)
-      notifyDeliveriesUpdate()
-    }
-    showToast('Ruta iniciada')
-  }
+    try {
+      // Actualizar pedido en la API
+      const apiStatus = mapFrontendStatusToApi('Entregado')
+      await updateOrder(deliveryId, { status: apiStatus })
 
-  const handleMarkDelivered = (deliveryId: string) => {
-    if (confirm('¿Confirmas que este pedido fue entregado correctamente?')) {
-      // Actualizar en pedidos del admin
-      const adminOrdersStr = localStorage.getItem('zona_azul_admin_orders')
-      if (adminOrdersStr) {
-        try {
-          const adminOrders: AdminOrder[] = JSON.parse(adminOrdersStr)
-          const updatedAdminOrders = adminOrders.map((order) =>
-            order.id === deliveryId ? { ...order, status: 'Entregado', eta: '—' } : order
-          )
-          localStorage.setItem('zona_azul_admin_orders', JSON.stringify(updatedAdminOrders))
-          window.dispatchEvent(new Event('zona_azul_admin_orders_updated'))
-        } catch (error) {
-          console.error('Error updating admin order:', error)
-        }
-      }
-
-      // Actualizar en deliveries del repartidor
-      const updated = deliveries.map((d) =>
-        d.id === deliveryId ? { ...d, status: 'entregado' as const } : d
-      )
-      setDeliveries(updated)
-      if (userId) {
-        setUserData('zona_azul_deliveries', updated, userId)
-        notifyDeliveriesUpdate()
-      }
+      // Recargar pedidos desde la API
+      await loadDeliveries()
       showToast('Pedido marcado como entregado')
+    } catch (error: any) {
+      console.error('Error marking as delivered:', error)
+      showToast('Error al marcar como entregado', true)
     }
   }
 
@@ -244,26 +192,33 @@ export default function RepartidorPedidosPage() {
     setIsIncidentModalOpen(true)
   }
 
-  const handleSubmitIncident = (e: React.FormEvent) => {
+  const handleSubmitIncident = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedDelivery) return
+    if (!selectedDelivery || !userId) return
 
     if (!incidentDescription.trim()) {
       setError('Por favor describe la incidencia')
       return
     }
 
-    const updated = deliveries.map((d) =>
-      d.id === selectedDelivery.id ? { ...d, status: 'incidencia' as const } : d
-    )
-    setDeliveries(updated)
-    if (userId) {
-      setUserData('zona_azul_deliveries', updated, userId)
-      notifyDeliveriesUpdate()
+    try {
+      // Crear incidencia en la API
+      await api.createOrderIncident({
+        order_id: selectedDelivery.id,
+        description: incidentDescription.trim(),
+      })
+      
+      setIsIncidentModalOpen(false)
+      setSelectedDelivery(null)
+      showToast('Incidencia reportada correctamente')
+      
+      // Recargar pedidos desde la API
+      await loadDeliveries()
+    } catch (error: any) {
+      console.error('Error reporting incident:', error)
+      setError(error.message || 'Error al reportar la incidencia')
+      showToast('Error al reportar la incidencia', true)
     }
-    setIsIncidentModalOpen(false)
-    setSelectedDelivery(null)
-    showToast('Incidencia reportada correctamente')
   }
 
   const getStatusBadge = (status: Delivery['status']) => {

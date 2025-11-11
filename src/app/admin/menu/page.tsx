@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import Modal from '../../../components/ui/Modal'
+import { useMeals } from '../../../hooks/useApi'
+import * as api from '../../../lib/api'
 
 interface MenuItem {
   id: string
@@ -13,37 +15,29 @@ interface MenuItem {
   description?: string
 }
 
-const initialItems: MenuItem[] = [
-  {
-    id: 'item-1',
-    name: 'Bowl Vitalidad',
-    category: 'Plato principal',
-    price: 11.9,
-    availability: 'Disponible',
-    calories: 620,
-    description: 'Base de quinoa, garbanzos especiados, aguacate y salsa tahini.',
-  },
-  {
-    id: 'item-2',
-    name: 'Smoothie Azul',
-    category: 'Bebida funcional',
-    price: 4.5,
-    availability: 'Disponible',
-    calories: 180,
-    description: 'Blueberries, plátano, leche de almendra y espirulina.',
-  },
-  {
-    id: 'item-3',
-    name: 'Wrap Proteico',
-    category: 'On the go',
-    price: 9.2,
-    availability: 'Agendar reposición',
-    calories: 540,
-    description: 'Tortilla integral con falafel, hummus y vegetales frescos.',
-  },
-]
+// Mapear tipo de meal a categoría para mostrar
+const typeToCategory: Record<string, string> = {
+  breakfast: 'Desayuno',
+  lunch: 'Plato principal',
+  dinner: 'Cena',
+  snack: 'Bebida funcional',
+}
+
+// Mapear meal de API a MenuItem para mostrar
+function mealToMenuItem(meal: any): MenuItem {
+  return {
+    id: meal.id,
+    name: meal.name,
+    category: typeToCategory[meal.type] || meal.type,
+    price: meal.price || 0,
+    availability: meal.available ? 'Disponible' : 'Agendar reposición',
+    calories: meal.calories,
+    description: meal.description || '',
+  }
+}
 
 export default function AdminMenuPage() {
+  const { meals, loading, error: apiError, refetch } = useMeals()
   const [items, setItems] = useState<MenuItem[]>([])
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
@@ -59,15 +53,14 @@ export default function AdminMenuPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
+  // Convertir meals a items cuando se cargan o cambian
   useEffect(() => {
-    const stored = localStorage.getItem('zona_azul_menu')
-    if (stored) {
-      setItems(JSON.parse(stored))
-    } else {
-      setItems(initialItems)
-      localStorage.setItem('zona_azul_menu', JSON.stringify(initialItems))
+    if (meals && meals.length > 0) {
+      setItems(meals.map(mealToMenuItem))
+    } else if (!loading) {
+      setItems([])
     }
-  }, [])
+  }, [meals, loading])
 
   const showToast = (message: string, isError = false) => {
     if (isError) {
@@ -79,10 +72,6 @@ export default function AdminMenuPage() {
     }
   }
 
-  // Notificar a otras pestañas/componentes que el menú fue actualizado
-  const notifyMenuUpdate = () => {
-    window.dispatchEvent(new Event('zona_azul_menu_updated'))
-  }
 
   const handleCreate = () => {
     setFormData({
@@ -111,32 +100,36 @@ export default function AdminMenuPage() {
     setIsEditModalOpen(true)
   }
 
-  const handleDelete = (itemId: string) => {
-    if (confirm('¿Estás seguro de eliminar este plato del menú?')) {
-      const updated = items.filter((i) => i.id !== itemId)
-      setItems(updated)
-      localStorage.setItem('zona_azul_menu', JSON.stringify(updated))
-      notifyMenuUpdate()
+  const handleDelete = async (itemId: string) => {
+    if (!confirm('¿Estás seguro de eliminar este plato del menú?')) {
+      return
+    }
+
+    try {
+      await api.deleteMeal(itemId)
+      await refetch() // Recargar datos
       showToast('Plato eliminado correctamente')
+    } catch (err: any) {
+      showToast(err.message || 'Error al eliminar el plato', true)
     }
   }
 
-  const handleToggleAvailability = (itemId: string) => {
-    const updated = items.map((item) =>
-      item.id === itemId
-        ? {
-            ...item,
-            availability: item.availability === 'Disponible' ? 'Agendar reposición' : 'Disponible',
-          }
-        : item
-    )
-    setItems(updated)
-    localStorage.setItem('zona_azul_menu', JSON.stringify(updated))
-    notifyMenuUpdate()
-    showToast('Disponibilidad actualizada')
+  const handleToggleAvailability = async (itemId: string) => {
+    try {
+      const currentMeal = meals.find((m) => m.id === itemId)
+      if (!currentMeal) return
+
+      await api.updateMeal(itemId, {
+        available: !currentMeal.available,
+      })
+      await refetch() // Recargar datos
+      showToast('Disponibilidad actualizada')
+    } catch (err: any) {
+      showToast(err.message || 'Error al actualizar disponibilidad', true)
+    }
   }
 
-  const handleSubmitCreate = (e: React.FormEvent) => {
+  const handleSubmitCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
@@ -145,25 +138,36 @@ export default function AdminMenuPage() {
       return
     }
 
-    const newItem: MenuItem = {
-      id: `item-${Date.now()}`,
-      name: formData.name,
-      category: formData.category,
-      price: formData.price,
-      availability: formData.availability,
-      calories: formData.calories,
-      description: formData.description,
-    }
+    try {
+      // Mapear categoría a tipo de meal
+      const categoryToType: Record<string, string> = {
+        'Desayuno': 'breakfast',
+        'Plato principal': 'lunch',
+        'Cena': 'dinner',
+        'Bebida funcional': 'snack',
+        'On the go': 'snack',
+      }
 
-    const updated = [...items, newItem]
-    setItems(updated)
-    localStorage.setItem('zona_azul_menu', JSON.stringify(updated))
-    notifyMenuUpdate()
-    setIsCreateModalOpen(false)
-    showToast('Plato creado correctamente')
+      const mealData = {
+        name: formData.name,
+        description: formData.description || null,
+        type: categoryToType[formData.category] || 'lunch',
+        calories: formData.calories,
+        price: formData.price,
+        available: formData.availability === 'Disponible',
+      }
+
+      await api.createMeal(mealData)
+      await refetch() // Recargar datos
+      setIsCreateModalOpen(false)
+      showToast('Plato creado correctamente')
+    } catch (err: any) {
+      setError(err.message || 'Error al crear el plato')
+      showToast(err.message || 'Error al crear el plato', true)
+    }
   }
 
-  const handleSubmitEdit = (e: React.FormEvent) => {
+  const handleSubmitEdit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
@@ -174,26 +178,33 @@ export default function AdminMenuPage() {
       return
     }
 
-    const updated = items.map((item) =>
-      item.id === selectedItem.id
-        ? {
-            ...item,
-            name: formData.name,
-            category: formData.category,
-            price: formData.price,
-            availability: formData.availability,
-            calories: formData.calories,
-            description: formData.description,
-          }
-        : item
-    )
+    try {
+      const categoryToType: Record<string, string> = {
+        'Desayuno': 'breakfast',
+        'Plato principal': 'lunch',
+        'Cena': 'dinner',
+        'Bebida funcional': 'snack',
+        'On the go': 'snack',
+      }
 
-    setItems(updated)
-    localStorage.setItem('zona_azul_menu', JSON.stringify(updated))
-    notifyMenuUpdate()
-    setIsEditModalOpen(false)
-    setSelectedItem(null)
-    showToast('Plato actualizado correctamente')
+      const mealData = {
+        name: formData.name,
+        description: formData.description || null,
+        type: categoryToType[formData.category] || 'lunch',
+        calories: formData.calories,
+        price: formData.price,
+        available: formData.availability === 'Disponible',
+      }
+
+      await api.updateMeal(selectedItem.id, mealData)
+      await refetch() // Recargar datos
+      setIsEditModalOpen(false)
+      setSelectedItem(null)
+      showToast('Plato actualizado correctamente')
+    } catch (err: any) {
+      setError(err.message || 'Error al actualizar el plato')
+      showToast(err.message || 'Error al actualizar el plato', true)
+    }
   }
 
   return (
@@ -241,6 +252,22 @@ export default function AdminMenuPage() {
           </button>
         </div>
       </header>
+
+      {loading && (
+        <div className="text-center py-8 text-gray-500">Cargando menú...</div>
+      )}
+
+      {apiError && (
+        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm">
+          Error al cargar el menú: {apiError}
+        </div>
+      )}
+
+      {!loading && !apiError && items.length === 0 && (
+        <div className="text-center py-8 text-gray-500">
+          No hay platos en el menú. Crea el primero haciendo clic en "Agregar plato".
+        </div>
+      )}
 
       <section className="grid gap-4 md:grid-cols-3">
         {items.map((item) => (

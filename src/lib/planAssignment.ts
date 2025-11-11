@@ -2,11 +2,9 @@
  * Utilidades para asignar planes a suscriptores
  */
 
-import { MealPlan, MealPlanDay } from './mockPlan'
-import { mockMealPlan } from './mockPlan'
+import { MealPlan, MealPlanDay } from './types'
 import { getSubscribers } from './subscribers'
-import { setUserData, getUserData } from './storage'
-import { mockUsers } from './mockUsers'
+import * as api from './api'
 
 export interface PlanTemplate {
   id: string
@@ -62,7 +60,7 @@ export const defaultGlobalTemplates: PlanTemplate[] = [
  * Obtiene todos los templates disponibles (globales + de todos los nutricionistas)
  * Elimina duplicados tanto por ID como por nombre+focus (para evitar planes con mismo nombre)
  */
-export function getAllAvailableTemplates(): PlanTemplate[] {
+export async function getAllAvailableTemplates(): Promise<PlanTemplate[]> {
   const templates: PlanTemplate[] = []
   const seenIds = new Set<string>()
   const seenNames = new Set<string>()
@@ -80,26 +78,34 @@ export function getAllAvailableTemplates(): PlanTemplate[] {
   if (typeof window === 'undefined') return templates
   
   try {
-    // Obtener todos los nutricionistas
-    const allUsers = JSON.parse(localStorage.getItem('zona_azul_users') || '[]')
-    const nutritionists = allUsers.filter((u: any) => u.role === 'nutricionista')
+    // Obtener todos los nutricionistas desde la API
+    const nutritionists = await api.getNutritionists()
     
-    // Obtener templates de cada nutricionista
-    nutritionists.forEach((nutritionist: any) => {
-      const userTemplates = getUserData<PlanTemplate[]>('zona_azul_plans', nutritionist.id)
+    // Obtener templates de cada nutricionista desde la API
+    for (const nutritionist of nutritionists) {
+      const userTemplates = await api.getPlanTemplates(nutritionist.id)
       if (userTemplates && Array.isArray(userTemplates)) {
-        userTemplates.forEach((template) => {
-          const nameKey = `${template.name.toLowerCase()}_${template.focus.toLowerCase()}`
+        userTemplates.forEach((template: any) => {
+          const formattedTemplate: PlanTemplate = {
+            id: template.id,
+            name: template.name,
+            focus: template.focus || '',
+            duration: template.duration || '',
+            audience: template.audience || '',
+            description: template.description || undefined,
+            calories: template.total_calories || undefined,
+          }
+          const nameKey = `${formattedTemplate.name.toLowerCase()}_${formattedTemplate.focus.toLowerCase()}`
           
           // Solo agregar si no existe por ID ni por nombre+focus
-          if (!seenIds.has(template.id) && !seenNames.has(nameKey)) {
-            templates.push(template)
-            seenIds.add(template.id)
+          if (!seenIds.has(formattedTemplate.id) && !seenNames.has(nameKey)) {
+            templates.push(formattedTemplate)
+            seenIds.add(formattedTemplate.id)
             seenNames.add(nameKey)
           }
         })
       }
-    })
+    }
     
     return templates
   } catch (error) {
@@ -108,54 +114,19 @@ export function getAllAvailableTemplates(): PlanTemplate[] {
   }
 }
 
-/**
- * Genera un plan semanal completo basado en un template
- * Usa el plan mockMealPlan como base y lo personaliza según el template
- */
-export function generatePlanFromTemplate(template: PlanTemplate, subscriberId: string): MealPlan {
-  // Usar mockMealPlan como base y personalizarlo
-  const plan: MealPlan = {
-    ...mockMealPlan,
-    id: `plan-${subscriberId}-${Date.now()}`,
-    name: template.name,
-    description: template.description || `Plan personalizado: ${template.focus}`,
-    createdBy: 'Sistema Zona Azul',
-    startDate: new Date().toISOString().split('T')[0],
-    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    totalCalories: template.calories || 2000,
-  }
-
-  // Ajustar calorías de los días si el template tiene un objetivo calórico diferente
-  if (template.calories && template.calories !== 2000) {
-    const adjustmentFactor = template.calories / 2000
-    plan.days = plan.days.map((day) => {
-      const adjustedMeals = day.meals.map((meal) => ({
-        ...meal,
-        calories: Math.round(meal.calories * adjustmentFactor),
-      }))
-      const newTotal = adjustedMeals.reduce((sum, meal) => sum + meal.calories, 0)
-      return {
-        ...day,
-        meals: adjustedMeals,
-        totalCalories: newTotal,
-      }
-    })
-  }
-
-  return plan
-}
 
 /**
- * Asigna un plan a un suscriptor
+ * Asigna un plan completo a un suscriptor
+ * Copia un plan ya creado (con días y comidas) al suscriptor
  */
-export function assignPlanToSubscriber(
+export async function assignPlanToSubscriber(
   subscriberId: string,
-  template: PlanTemplate,
+  planId: string, // ID del plan completo a copiar
   assignedBy?: string
-): boolean {
+): Promise<boolean> {
   try {
     // Verificar que el suscriptor existe
-    const subscribers = getSubscribers()
+    const subscribers = await getSubscribers()
     const subscriber = subscribers.find((s) => s.id === subscriberId)
     
     if (!subscriber) {
@@ -163,19 +134,28 @@ export function assignPlanToSubscriber(
       return false
     }
 
-    // Generar el plan desde el template
-    const plan = generatePlanFromTemplate(template, subscriberId)
+    // Calcular fechas (plan de 5 días: lunes a viernes únicamente)
+    const startDate = new Date()
+    const endDate = new Date()
+    endDate.setDate(endDate.getDate() + 4) // 5 días: lunes a viernes
     
-    // Guardar el plan para el suscriptor
-    setUserData('zona_azul_suscriptor_plan', plan, subscriberId)
+    // Copiar el plan completo (con días y comidas) al suscriptor
+    const copiedPlan = await api.copyPlanToUser(
+      planId,
+      subscriberId,
+      startDate.toISOString().split('T')[0],
+      endDate.toISOString().split('T')[0]
+    )
     
-    // Notificar actualización
-    window.dispatchEvent(new Event('zona_azul_plan_updated'))
+    if (!copiedPlan || !copiedPlan.id) {
+      console.error('Error copying plan to subscriber')
+      return false
+    }
     
     // Mostrar notificación si está disponible
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
       import('./notifications').then(({ NotificationHelpers }) => {
-        NotificationHelpers.planAssigned(template.name, '/suscriptor/plan', subscriberId)
+        NotificationHelpers.planAssigned(copiedPlan.name || 'Plan', '/suscriptor/plan', subscriberId)
       }).catch(() => {
         // Silenciar error si no se puede cargar
       })
@@ -189,13 +169,28 @@ export function assignPlanToSubscriber(
 }
 
 /**
- * Obtiene el plan actual de un suscriptor
+ * Obtiene el plan actual de un suscriptor desde la API
  */
-export function getSubscriberPlan(subscriberId: string): MealPlan | null {
+export async function getSubscriberPlan(subscriberId: string): Promise<MealPlan | null> {
   try {
     if (typeof window === 'undefined') return null
     
-    return getUserData<MealPlan>('zona_azul_suscriptor_plan', subscriberId)
+    const plan = await api.getPlan()
+    if (plan && plan.user_id === subscriberId) {
+      // Convertir plan de API a formato MealPlan
+      // TODO: Implementar conversión completa cuando la API devuelva días y comidas
+      return {
+        id: plan.id,
+        name: plan.name,
+        description: plan.description || '',
+        createdBy: plan.nutricionista_id || 'Sistema',
+        startDate: plan.start_date,
+        endDate: plan.end_date,
+        totalCalories: plan.total_calories || 2000,
+        days: [], // Se puede obtener de meal_plan_days si es necesario
+      } as MealPlan
+    }
+    return null
   } catch (error) {
     console.error('Error getting subscriber plan:', error)
     return null
@@ -204,9 +199,20 @@ export function getSubscriberPlan(subscriberId: string): MealPlan | null {
 
 /**
  * Verifica si un suscriptor tiene un plan asignado
+ * Nota: Solo verifica si existe un plan activo, no si tiene días completos
  */
-export function hasPlanAssigned(subscriberId: string): boolean {
-  const plan = getSubscriberPlan(subscriberId)
-  return plan !== null && plan.days && plan.days.length > 0
+export async function hasPlanAssigned(subscriberId: string): Promise<boolean> {
+  try {
+    if (typeof window === 'undefined') return false
+    
+    // Obtener el plan del suscriptor específico usando el parámetro user_id
+    const plan = await api.getPlan(subscriberId)
+    
+    // Si hay un plan activo para el suscriptor, entonces tiene plan asignado
+    return plan !== null
+  } catch (error) {
+    console.error('Error checking if subscriber has plan:', error)
+    return false
+  }
 }
 

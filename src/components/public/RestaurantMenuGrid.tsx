@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import RestaurantMenuItem from './RestaurantMenuItem'
+import { getMeals } from '../../lib/api'
 
 interface MenuItem {
   id: string
@@ -57,81 +58,46 @@ function menuItemToRecipe(item: MenuItem): Recipe {
 export default function RestaurantMenuGrid() {
   const [recipes, setRecipes] = useState<Recipe[]>([])
 
-  const loadMenuItems = () => {
+  const loadMenuItems = async () => {
     try {
-      const stored = localStorage.getItem('zona_azul_menu')
-      if (stored) {
-        const menuItems: MenuItem[] = JSON.parse(stored)
+      const meals = await getMeals()
+      if (meals && meals.length > 0) {
         // Filtrar solo los disponibles y convertir a Recipe
-        const availableItems = menuItems
-          .filter((item) => item.availability === 'Disponible')
-          .map(menuItemToRecipe)
+        const availableItems = meals
+          .filter((meal: any) => meal.available)
+          .map((meal: any) => {
+            // Convertir meal de API a MenuItem y luego a Recipe
+            const menuItem: MenuItem = {
+              id: meal.id,
+              name: meal.name,
+              category: meal.type === 'breakfast' ? 'Desayuno' : 
+                       meal.type === 'lunch' ? 'Plato principal' :
+                       meal.type === 'dinner' ? 'Cena' :
+                       meal.type === 'snack' ? 'Bebida funcional' : 'Plato principal',
+              price: meal.price || 0,
+              availability: meal.available ? 'Disponible' : 'No disponible',
+              calories: meal.calories || 0,
+              description: meal.description || '',
+            }
+            return menuItemToRecipe(menuItem)
+          })
         setRecipes(availableItems)
       } else {
-        // Si no hay datos en localStorage, usar datos por defecto
-        const defaultItems: MenuItem[] = [
-          {
-            id: 'item-1',
-            name: 'Bowl Vitalidad',
-            category: 'Plato principal',
-            price: 11.9,
-            availability: 'Disponible',
-            calories: 620,
-            description: 'Base de quinoa, garbanzos especiados, aguacate y salsa tahini.',
-          },
-          {
-            id: 'item-2',
-            name: 'Smoothie Azul',
-            category: 'Bebida funcional',
-            price: 4.5,
-            availability: 'Disponible',
-            calories: 180,
-            description: 'Blueberries, plátano, leche de almendra y espirulina.',
-          },
-          {
-            id: 'item-3',
-            name: 'Wrap Proteico',
-            category: 'On the go',
-            price: 9.2,
-            availability: 'Disponible',
-            calories: 540,
-            description: 'Tortilla integral con falafel, hummus y vegetales frescos.',
-          },
-        ]
-        const availableItems = defaultItems
-          .filter((item) => item.availability === 'Disponible')
-          .map(menuItemToRecipe)
-        setRecipes(availableItems)
+        setRecipes([])
       }
     } catch (error) {
       console.error('Error loading menu items:', error)
+      setRecipes([])
     }
   }
 
   useEffect(() => {
     loadMenuItems()
 
-    // Escuchar cambios en localStorage para actualizar en tiempo real
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'zona_azul_menu') {
-        loadMenuItems()
-      }
-    }
-
-    // Escuchar cambios locales (misma pestaña)
-    const handleCustomStorageChange = () => {
-      loadMenuItems()
-    }
-
-    window.addEventListener('storage', handleStorageChange)
-    window.addEventListener('zona_azul_menu_updated', handleCustomStorageChange)
-
-    // Polling cada 2 segundos para detectar cambios (fallback)
-    const interval = setInterval(loadMenuItems, 2000)
+    // Polling cada 30 segundos para actualizar
+    const interval = setInterval(loadMenuItems, 30000)
 
     return () => {
-      window.removeEventListener('storage', handleStorageChange)
-      window.removeEventListener('zona_azul_menu_updated', handleCustomStorageChange)
       clearInterval(interval)
     }
   }, [])

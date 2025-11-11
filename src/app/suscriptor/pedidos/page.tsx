@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
+import { getOrders } from '../../../lib/api'
 import { NotificationHelpers } from '../../../lib/notifications'
 
 interface AdminOrder {
@@ -28,90 +29,77 @@ interface Order {
   day?: string
 }
 
-// Mapear estados del admin a estados del suscriptor
-const mapAdminStatusToSubscriber = (adminStatus: string): string => {
-  const statusMap: Record<string, string> = {
-    'Preparando': 'Preparando',
-    'En camino': 'En camino',
-    'Entregado': 'Entregado',
-    'Cancelado': 'Cancelado',
-  }
-  return statusMap[adminStatus] || adminStatus
-}
-
-// Convertir pedido del admin a formato del suscriptor
-const convertAdminOrderToSubscriber = (adminOrder: AdminOrder): Order => {
-  // Calcular calorías aproximadas basadas en items (mock)
-  const caloriesMap: Record<string, number> = {
-    'Bowl Vitalidad': 520,
-    'Smoothie Verde': 280,
-    'Wrap Proteico': 540,
-    'Infusión Antioxidante': 50,
-    'Ensalada Omega': 350,
-    'Agua alcalina': 0,
-    'Pollo al horno con quinoa': 620,
-  }
-  
-  const totalCalories = adminOrder.items
-    ? adminOrder.items.reduce((sum, item) => sum + (caloriesMap[item] || 400), 0)
-    : 500
-
-  return {
-    id: adminOrder.id,
-    status: mapAdminStatusToSubscriber(adminOrder.status),
-    eta: adminOrder.eta,
-    totalCalories,
-    items: adminOrder.items || ['Plato del día'],
-    notes: adminOrder.status === 'Entregado' ? 'Recibido por el cliente' : 'Entrega sin contacto',
-    createdAt: new Date().toISOString(),
-    day: undefined, // Se puede calcular basado en la fecha si es necesario
-  }
-}
+// Las funciones de conversión ahora están en loadOrders()
 
 export default function SuscriptorPedidosPage() {
   const { userId } = useAuth()
   const [orders, setOrders] = useState<Order[]>([])
   const [previousOrders, setPreviousOrders] = useState<Order[]>([])
 
-  // Función para cargar pedidos desde admin
-  const loadOrders = () => {
+  // Función para cargar pedidos desde la API
+  const loadOrders = async () => {
     if (!userId) return
 
-    // Obtener pedidos del admin
-    const adminOrdersStr = localStorage.getItem('zona_azul_admin_orders')
-    if (adminOrdersStr) {
-      try {
-        const adminOrders: AdminOrder[] = JSON.parse(adminOrdersStr)
-        // Filtrar pedidos del suscriptor actual
-        const subscriberOrders = adminOrders
-          .filter((order) => order.customerId === userId)
-          .map(convertAdminOrderToSubscriber)
-
-        // Detectar cambios de estado en pedidos
-        if (previousOrders.length > 0 && document.hidden) {
-          subscriberOrders.forEach((currentOrder) => {
-            const previousOrder = previousOrders.find((prev) => prev.id === currentOrder.id)
-            if (previousOrder && previousOrder.status !== currentOrder.status) {
-              // Estado cambió, mostrar notificación
-              NotificationHelpers.orderStatusChanged(
-                currentOrder.id,
-                currentOrder.status,
-                '/suscriptor/pedidos',
-                userId
-              )
-            }
-          })
+    try {
+      const apiOrders = await getOrders()
+      // Filtrar pedidos del suscriptor actual
+      const myOrders = apiOrders.filter((order: any) => order.user_id === userId)
+      
+      // Convertir a formato del suscriptor
+      const subscriberOrders: Order[] = myOrders.map((apiOrder: any) => {
+        // Obtener items del pedido (por ahora placeholder)
+        const items = ['Plato del día'] // Se puede mejorar obteniendo de order_items
+        
+        // Calcular calorías (placeholder, se puede mejorar)
+        const totalCalories = 500 // Se puede calcular desde order_items
+        
+        return {
+          id: apiOrder.id,
+          status: mapApiStatusToSubscriber(apiOrder.status),
+          eta: apiOrder.estimated_delivery_time 
+            ? `${Math.round((new Date(apiOrder.estimated_delivery_time).getTime() - Date.now()) / (1000 * 60))} min`
+            : '—',
+          totalCalories,
+          items,
+          notes: apiOrder.status === 'entregado' ? 'Recibido por el cliente' : 'Entrega sin contacto',
+          createdAt: apiOrder.created_at,
         }
+      })
 
-        setPreviousOrders(subscriberOrders)
-        setOrders(subscriberOrders)
-      } catch (error) {
-        console.error('Error loading orders from admin:', error)
-        setOrders([])
+      // Detectar cambios de estado en pedidos
+      if (previousOrders.length > 0 && document.hidden) {
+        subscriberOrders.forEach((currentOrder) => {
+          const previousOrder = previousOrders.find((prev) => prev.id === currentOrder.id)
+          if (previousOrder && previousOrder.status !== currentOrder.status) {
+            // Estado cambió, mostrar notificación
+            NotificationHelpers.orderStatusChanged(
+              currentOrder.id,
+              currentOrder.status,
+              '/suscriptor/pedidos',
+              userId
+            )
+          }
+        })
       }
-    } else {
+
+      setPreviousOrders(subscriberOrders)
+      setOrders(subscriberOrders)
+    } catch (error) {
+      console.error('Error loading orders:', error)
       setOrders([])
     }
+  }
+  
+  // Mapear estados de API a estados del suscriptor
+  const mapApiStatusToSubscriber = (apiStatus: string): string => {
+    const statusMap: Record<string, string> = {
+      'pendiente': 'Preparando',
+      'preparando': 'Preparando',
+      'en_camino': 'En camino',
+      'entregado': 'Entregado',
+      'cancelado': 'Cancelado',
+    }
+    return statusMap[apiStatus] || apiStatus
   }
 
   useEffect(() => {
@@ -119,27 +107,10 @@ export default function SuscriptorPedidosPage() {
 
     loadOrders()
 
-    // Escuchar cambios en pedidos del admin
-    const handleAdminOrdersChange = () => {
-      loadOrders()
-    }
-
-    // Escuchar cambios en localStorage (otras pestañas)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'zona_azul_admin_orders') {
-        loadOrders()
-      }
-    }
-
-    window.addEventListener('zona_azul_admin_orders_updated', handleAdminOrdersChange)
-    window.addEventListener('storage', handleStorageChange)
-
-    // Polling cada 2 segundos como fallback
-    const interval = setInterval(loadOrders, 2000)
+    // Polling cada 5 segundos para actualizar pedidos
+    const interval = setInterval(loadOrders, 5000)
 
     return () => {
-      window.removeEventListener('zona_azul_admin_orders_updated', handleAdminOrdersChange)
-      window.removeEventListener('storage', handleStorageChange)
       clearInterval(interval)
     }
   }, [userId])

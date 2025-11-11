@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react'
 import Modal from '../../../components/ui/Modal'
 import { useAuth } from '../../../hooks/useAuth'
-import { getUserData, setUserData } from '../../../lib/storage'
+import * as api from '../../../lib/api'
 import { getSubscribers } from '../../../lib/subscribers'
-import { assignPlanToSubscriber, getAllAvailableTemplates, PlanTemplate, hasPlanAssigned } from '../../../lib/planAssignment'
+import { hasPlanAssigned } from '../../../lib/planAssignment'
 
 interface Client {
   id: string
@@ -17,30 +17,8 @@ interface Client {
   email: string
 }
 
-// Generar clientes iniciales basados en suscriptores reales
-function generateInitialClients(): Client[] {
-  const subscribers = getSubscribers()
-  const plans = ['Flexitariano', 'Pérdida de peso', 'Ganancia de masa', 'Plan Energía']
-  const progressValues = ['85%', '62%', '78%', '90%']
-  const notes = [
-    'Aumentar ingesta de omega 3',
-    'Registrar hidratación diaria',
-    'Refuerzo de proteína post entreno',
-    'Mantener ritmo actual',
-  ]
-
-  return subscribers.map((subscriber, index) => ({
-    id: subscriber.id,
-    name: subscriber.name,
-    plan: plans[index % plans.length] || 'Plan Personalizado',
-    progress: progressValues[index % progressValues.length] || '75%',
-    lastCheck: new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }),
-    notes: notes[index % notes.length] || 'Seguimiento regular',
-    email: subscriber.email,
-  }))
-}
-
-const initialClients = generateInitialClients()
+// Ya no se generan clientes iniciales automáticamente
+// Los clientes se asignan explícitamente desde el admin
 
 export default function NutricionistaClientesPage() {
   const { userId } = useAuth()
@@ -48,33 +26,44 @@ export default function NutricionistaClientesPage() {
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false)
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false)
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
-  const [availableTemplates, setAvailableTemplates] = useState<PlanTemplate[]>([])
-  const [selectedTemplate, setSelectedTemplate] = useState<string>('')
+  const [availablePlans, setAvailablePlans] = useState<any[]>([])
+  const [selectedPlanId, setSelectedPlanId] = useState<string>('')
   const [noteText, setNoteText] = useState('')
   const [planText, setPlanText] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
-  // Función para cargar clientes
-  const loadClients = () => {
+  // Función para cargar clientes desde la API
+  const loadClients = async () => {
     if (!userId) return
     
-    const stored = getUserData<Client[]>('zona_azul_clients', userId)
-    const subscribers = getSubscribers()
-    const validSubscriberIds = new Set(subscribers.map((s) => s.id))
-    
-    if (stored) {
-      // Solo mostrar clientes que tienen suscriptores válidos
-      // NO asignar automáticamente nuevos suscriptores
-      const validClients = stored.filter((c) => validSubscriberIds.has(c.id))
+    try {
+      // Obtener clientes asignados desde la API
+      const apiClients = await api.getNutricionistaClients(userId)
+      
+      // Obtener suscriptores desde la API
+      const subscribers = await getSubscribers()
+      const subscribersMap = new Map(subscribers.map((s) => [s.id, s]))
+      
+      // Convertir a formato Client
+      const validClients: Client[] = apiClients
+        .filter((ac: any) => subscribersMap.has(ac.client_id))
+        .map((ac: any) => {
+          const subscriber = subscribersMap.get(ac.client_id)!
+          return {
+            id: subscriber.id,
+            name: subscriber.name,
+            email: subscriber.email,
+            plan: '', // Se puede obtener del plan asignado si es necesario
+            progress: '0%', // Se puede calcular desde el progreso
+            lastCheck: new Date(ac.updated_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }),
+            notes: ac.notes || '',
+          }
+        })
+      
       setClients(validClients)
-      // Actualizar solo si hay cambios (eliminar clientes de suscriptores que ya no existen)
-      if (validClients.length !== stored.length) {
-        setUserData('zona_azul_clients', validClients, userId)
-      }
-    } else {
-      // Si no hay clientes asignados, empezar con lista vacía
-      // Los clientes se asignan explícitamente desde el admin o cuando el nutricionista los agrega
+    } catch (error) {
+      console.error('Error loading clients:', error)
       setClients([])
     }
   }
@@ -82,43 +71,22 @@ export default function NutricionistaClientesPage() {
   useEffect(() => {
     if (!userId) return
     
-    loadClients()
-    setAvailableTemplates(getAllAvailableTemplates())
-
-    // Escuchar cambios en localStorage para actualizar en tiempo real (otras pestañas)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key && e.key.startsWith('zona_azul_clients_user_')) {
-        loadClients()
-      }
-      if (e.key?.startsWith('zona_azul_plans_user_')) {
-        setAvailableTemplates(getAllAvailableTemplates())
-      }
+    const loadData = async () => {
+      await loadClients()
+      // Cargar planes completos sin asignar del nutricionista
+      const plans = await api.getMealPlansByNutricionista(userId)
+      setAvailablePlans(plans)
     }
+    loadData()
 
-    // Escuchar cambios locales (misma pestaña)
-    const handleCustomClientsChange = () => {
-      loadClients()
-    }
-    const handlePlansUpdate = () => {
-      setAvailableTemplates(getAllAvailableTemplates())
-    }
-
-    window.addEventListener('storage', handleStorageChange)
-    window.addEventListener('zona_azul_clients_updated', handleCustomClientsChange)
-    window.addEventListener('zona_azul_subscribers_updated', loadClients) // Escuchar nuevos suscriptores
-    window.addEventListener('zona_azul_plans_updated', handlePlansUpdate)
-
-    // Polling cada 2 segundos para detectar cambios (fallback)
-    const interval = setInterval(() => {
-      loadClients()
-      setAvailableTemplates(getAllAvailableTemplates())
-    }, 2000)
+    // Polling cada 5 segundos para actualizar desde la API
+    const interval = setInterval(async () => {
+      await loadClients()
+      const plans = await api.getMealPlansByNutricionista(userId)
+      setAvailablePlans(plans)
+    }, 5000)
 
     return () => {
-      window.removeEventListener('storage', handleStorageChange)
-      window.removeEventListener('zona_azul_clients_updated', handleCustomClientsChange)
-      window.removeEventListener('zona_azul_subscribers_updated', loadClients)
-      window.removeEventListener('zona_azul_plans_updated', handlePlansUpdate)
       clearInterval(interval)
     }
   }, [userId])
@@ -133,10 +101,6 @@ export default function NutricionistaClientesPage() {
     }
   }
 
-  // Notificar a otras pestañas/componentes que los clientes fueron actualizados
-  const notifyClientsUpdate = () => {
-    window.dispatchEvent(new Event('zona_azul_clients_updated'))
-  }
 
   const handleAddNote = (client: Client) => {
     setSelectedClient(client)
@@ -144,77 +108,101 @@ export default function NutricionistaClientesPage() {
     setIsNoteModalOpen(true)
   }
 
-  const handleEditPlan = (client: Client) => {
+  const handleEditPlan = async (client: Client) => {
     setSelectedClient(client)
     setPlanText(client.plan)
-    // Si ya tiene un plan asignado, intentar seleccionarlo
-    const currentPlan = hasPlanAssigned(client.id)
-    setSelectedTemplate('')
+    setSelectedPlanId('')
+    // Cargar planes disponibles
+    if (userId) {
+      const plans = await api.getMealPlansByNutricionista(userId)
+      setAvailablePlans(plans)
+    }
     setIsPlanModalOpen(true)
   }
 
-  const handleSubmitNote = (e: React.FormEvent) => {
+
+  const handleSubmitNote = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedClient) return
+    if (!selectedClient || !userId) return
 
-    const updated = clients.map((c) =>
-      c.id === selectedClient.id
-        ? {
-            ...c,
-            notes: noteText,
-            lastCheck: new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }),
-          }
-        : c
-    )
-
-    setClients(updated)
-    if (userId) {
-      setUserData('zona_azul_clients', updated, userId)
-      notifyClientsUpdate()
+    try {
+      // Actualizar nota en la base de datos
+      await api.assignClientToNutricionista(userId, selectedClient.id, noteText)
+      
+      // Actualizar estado local
+      const updated = clients.map((c) =>
+        c.id === selectedClient.id
+          ? {
+              ...c,
+              notes: noteText,
+              lastCheck: new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }),
+            }
+          : c
+      )
+      setClients(updated)
+      
+      setIsNoteModalOpen(false)
+      setSelectedClient(null)
+      showToast('Nota actualizada correctamente')
+    } catch (error) {
+      console.error('Error updating note:', error)
+      showToast('Error al actualizar la nota', true)
     }
-    setIsNoteModalOpen(false)
-    setSelectedClient(null)
-    showToast('Nota actualizada correctamente')
   }
 
-  const handleSubmitPlan = (e: React.FormEvent) => {
+  const handleSubmitPlan = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedClient) return
+    if (!selectedClient || !userId) return
 
-    // Si se seleccionó un template, asignar el plan real
-    if (selectedTemplate) {
-      const template = availableTemplates.find((t) => t.id === selectedTemplate)
-      if (template) {
-        const success = assignPlanToSubscriber(selectedClient.id, template, userId || 'Nutricionista')
-        if (success) {
-          // Actualizar también el nombre del plan en la lista de clientes
-          const updated = clients.map((c) =>
-            c.id === selectedClient.id
-              ? {
-                  ...c,
-                  plan: template.name,
-                  lastCheck: new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }),
-                }
-              : c
+    // Si se seleccionó un plan completo, copiarlo al cliente
+    if (selectedPlanId) {
+      const sourcePlan = availablePlans.find((p) => p.id === selectedPlanId)
+      if (sourcePlan) {
+        try {
+          // Calcular fechas (plan de 5 días: lunes a viernes)
+          const startDate = new Date()
+          const endDate = new Date()
+          endDate.setDate(endDate.getDate() + 4) // 5 días: lunes a viernes
+          
+          // Copiar el plan completo al cliente
+          const copiedPlan = await api.copyPlanToUser(
+            selectedPlanId,
+            selectedClient.id,
+            startDate.toISOString().split('T')[0],
+            endDate.toISOString().split('T')[0]
           )
-          setClients(updated)
-          if (userId) {
-            setUserData('zona_azul_clients', updated, userId)
-            notifyClientsUpdate()
+          
+          if (copiedPlan) {
+            // Actualizar estado local
+            const updated = clients.map((c) =>
+              c.id === selectedClient.id
+                ? {
+                    ...c,
+                    plan: sourcePlan.name || 'Plan asignado',
+                    lastCheck: new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }),
+                  }
+                : c
+            )
+            setClients(updated)
+            showToast(`Plan "${sourcePlan.name}" asignado correctamente al cliente`)
+            setIsPlanModalOpen(false)
+            setSelectedClient(null)
+            setSelectedPlanId('')
+            return
+          } else {
+            showToast('Error al copiar el plan al cliente', true)
+            return
           }
-          showToast(`Plan "${template.name}" asignado correctamente a ${selectedClient.name}`)
-          setIsPlanModalOpen(false)
-          setSelectedClient(null)
-          setSelectedTemplate('')
-          return
-        } else {
+        } catch (error) {
+          console.error('Error copying plan:', error)
           showToast('Error al asignar el plan', true)
           return
         }
       }
     }
 
-    // Si no se seleccionó template, solo actualizar el texto (compatibilidad)
+    // Si no se seleccionó plan, solo actualizar el texto (compatibilidad)
+    // Nota: Esto solo actualiza el estado local, no guarda en la base de datos
     const updated = clients.map((c) =>
       c.id === selectedClient.id
         ? {
@@ -226,23 +214,16 @@ export default function NutricionistaClientesPage() {
     )
 
     setClients(updated)
-    if (userId) {
-      setUserData('zona_azul_clients', updated, userId)
-      notifyClientsUpdate()
-    }
     setIsPlanModalOpen(false)
     setSelectedClient(null)
-    setSelectedTemplate('')
+    setSelectedPlanId('')
     showToast('Plan actualizado correctamente')
   }
 
   const handleUpdateProgress = (clientId: string, newProgress: string) => {
+    // Actualizar solo el estado local (el progreso real se guarda en la tabla progress)
     const updated = clients.map((c) => (c.id === clientId ? { ...c, progress: newProgress } : c))
     setClients(updated)
-    if (userId) {
-      setUserData('zona_azul_clients', updated, userId)
-      notifyClientsUpdate()
-    }
     showToast('Progreso actualizado')
   }
 
@@ -364,7 +345,7 @@ export default function NutricionistaClientesPage() {
         onClose={() => {
           setIsPlanModalOpen(false)
           setSelectedClient(null)
-          setSelectedTemplate('')
+          setSelectedPlanId('')
         }}
         title={`Asignar plan a ${selectedClient?.name || ''}`}
         size="md"
@@ -376,55 +357,58 @@ export default function NutricionistaClientesPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Selecciona un plan nutricional
+              Selecciona un plan completo (con comidas ya asignadas)
             </label>
-            {availableTemplates.length === 0 ? (
+            {availablePlans.length === 0 ? (
               <p className="text-sm text-gray-500 py-4">
-                No hay planes disponibles. Crea planes desde la sección "Planes" en tu dashboard.
+                No hay planes disponibles. Crea planes completos con comidas desde la sección "Planes" en tu dashboard.
               </p>
             ) : (
               <div className="space-y-2 max-h-64 overflow-y-auto">
-                {availableTemplates.map((template) => (
-                  <label
-                    key={template.id}
-                    className={`block p-3 border rounded-lg cursor-pointer transition ${
-                      selectedTemplate === template.id
-                        ? 'border-primary bg-primary/5'
-                        : 'border-gray-200 hover:border-primary/40'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="template"
-                      value={template.id}
-                      checked={selectedTemplate === template.id}
-                      onChange={(e) => setSelectedTemplate(e.target.value)}
-                      className="sr-only"
-                    />
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <p className="font-semibold text-gray-900">{template.name}</p>
-                        <p className="text-xs text-gray-600 mt-1">{template.focus}</p>
-                        <div className="flex gap-3 mt-2 text-xs text-gray-500">
-                          <span>Duración: {template.duration}</span>
-                          {template.calories && <span>• {template.calories} kcal/día</span>}
+                {availablePlans.map((plan) => {
+                  const totalMeals = plan.days?.reduce((sum: number, day: any) => sum + (day.meals?.length || 0), 0) || 0
+                  return (
+                    <label
+                      key={plan.id}
+                      className={`block p-3 border rounded-lg cursor-pointer transition ${
+                        selectedPlanId === plan.id
+                          ? 'border-primary bg-primary/5'
+                          : 'border-gray-200 hover:border-primary/40'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="plan"
+                        value={plan.id}
+                        checked={selectedPlanId === plan.id}
+                        onChange={(e) => setSelectedPlanId(e.target.value)}
+                        className="sr-only"
+                      />
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="font-semibold text-gray-900">{plan.name}</p>
+                          {plan.description && (
+                            <p className="text-xs text-gray-600 mt-1">{plan.description}</p>
+                          )}
+                          <div className="flex gap-3 mt-2 text-xs text-gray-500">
+                            <span>{plan.days?.length || 0} días</span>
+                            <span>• {totalMeals} comidas</span>
+                            {plan.totalCalories && <span>• {plan.totalCalories} kcal total</span>}
+                          </div>
                         </div>
-                        {template.description && (
-                          <p className="text-xs text-gray-500 mt-1">{template.description}</p>
+                        {selectedPlanId === plan.id && (
+                          <svg className="w-5 h-5 text-primary ml-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path
+                              fillRule="evenodd"
+                              d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
                         )}
                       </div>
-                      {selectedTemplate === template.id && (
-                        <svg className="w-5 h-5 text-primary ml-2" fill="currentColor" viewBox="0 0 20 20">
-                          <path
-                            fillRule="evenodd"
-                            d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                      )}
-                    </div>
-                  </label>
-                ))}
+                    </label>
+                  )
+                })}
               </div>
             )}
           </div>
@@ -454,14 +438,15 @@ export default function NutricionistaClientesPage() {
             </button>
             <button
               type="submit"
-              disabled={!selectedTemplate && !planText}
+              disabled={!selectedPlanId && !planText}
               className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {selectedTemplate ? 'Asignar plan completo' : 'Actualizar nombre'}
+              {selectedPlanId ? 'Asignar plan completo' : 'Actualizar nombre'}
             </button>
           </div>
         </form>
       </Modal>
+
     </div>
   )
 }

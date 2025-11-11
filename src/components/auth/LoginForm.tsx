@@ -40,24 +40,14 @@ export default function LoginForm() {
     setIsLoading(true)
 
     try {
-      // Obtener usuarios de localStorage para enviarlos al servidor
-      let storedUsers: any[] = []
-      try {
-        const stored = localStorage.getItem('zona_azul_users')
-        if (stored) {
-          storedUsers = JSON.parse(stored)
-        }
-      } catch (error) {
-        console.error('Error loading users from localStorage:', error)
-      }
-
+      // Usar solo la API, sin datos mock ni localStorage
       const response = await fetch('/api/auth/validate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({ email, password, storedUsers }),
+        body: JSON.stringify({ email, password }),
       })
 
       const data = await response.json()

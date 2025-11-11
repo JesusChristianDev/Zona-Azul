@@ -1,9 +1,8 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { mockProgress } from '../../../lib/mockProgress'
 import { useAuth } from '../../../hooks/useAuth'
-import { getUserData, setUserData } from '../../../lib/storage'
+import { getProgress, saveProgress } from '../../../lib/api'
 
 interface ProgressEntry {
   date: string
@@ -29,10 +28,25 @@ export default function SuscriptorProgresoPage() {
   useEffect(() => {
     if (!userId) return
     
-    const stored = getUserData<ProgressEntry[]>('zona_azul_progress', userId, [])
-    if (stored) {
-      setEntries(stored)
+    const loadProgress = async () => {
+      try {
+        const progressData = await getProgress()
+        // Convertir datos de API a formato ProgressEntry
+        const formattedEntries: ProgressEntry[] = progressData.map((p: any) => ({
+          date: p.date,
+          weight: p.weight,
+          hydration: p.water ? p.water / 1000 : undefined, // Convertir ml a litros
+          energy: p.calories,
+          notes: p.notes,
+        }))
+        setEntries(formattedEntries)
+      } catch (error) {
+        console.error('Error loading progress:', error)
+        setEntries([])
+      }
     }
+    
+    loadProgress()
   }, [userId])
 
   const showToast = (message: string, isError = false) => {
@@ -45,7 +59,7 @@ export default function SuscriptorProgresoPage() {
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
@@ -54,22 +68,43 @@ export default function SuscriptorProgresoPage() {
       return
     }
 
-    const newEntry: ProgressEntry = {
-      date: new Date().toISOString(),
-      weight: formData.weight ? parseFloat(formData.weight) : undefined,
-      hydration: formData.hydration ? parseFloat(formData.hydration) : undefined,
-      energy: formData.energy ? parseFloat(formData.energy) : undefined,
-      notes: formData.notes || undefined,
+    if (!userId) {
+      setError('Usuario no autenticado')
+      return
     }
 
-    const updated = [newEntry, ...entries]
-    setEntries(updated)
-    if (userId) {
-      setUserData('zona_azul_progress', updated, userId)
+    try {
+      const today = new Date().toISOString().split('T')[0]
+      
+      const saved = await saveProgress({
+        date: today,
+        weight: formData.weight ? parseFloat(formData.weight) : undefined,
+        water: formData.hydration ? parseFloat(formData.hydration) * 1000 : undefined, // Convertir litros a ml
+        calories: formData.energy ? parseFloat(formData.energy) : undefined,
+        notes: formData.notes || undefined,
+      })
+
+      if (saved) {
+        // Recargar progreso
+        const progressData = await getProgress()
+        const formattedEntries: ProgressEntry[] = progressData.map((p: any) => ({
+          date: p.date,
+          weight: p.weight,
+          hydration: p.water ? p.water / 1000 : undefined,
+          energy: p.calories,
+          notes: p.notes,
+        }))
+        setEntries(formattedEntries)
+        
+        setFormData({ weight: '', hydration: '', energy: '', notes: '' })
+        setIsFormOpen(false)
+        showToast('Progreso registrado correctamente')
+      } else {
+        setError('Error al guardar el progreso')
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error al guardar el progreso')
     }
-    setFormData({ weight: '', hydration: '', energy: '', notes: '' })
-    setIsFormOpen(false)
-    showToast('Progreso registrado correctamente')
   }
 
   // Calcular promedios y tendencias
@@ -82,32 +117,14 @@ export default function SuscriptorProgresoPage() {
       ? entries
           .filter((e) => e.hydration)
           .reduce((sum, e) => sum + (e.hydration || 0), 0) / entries.filter((e) => e.hydration).length
-      : (() => {
-          const mockValue = mockProgress.metrics.find((m) => m.label === 'Hidratación')?.value
-          if (typeof mockValue === 'number') return mockValue
-          if (typeof mockValue === 'string') {
-            // Extraer número del string (ej: "1,950 ml" -> 1.95)
-            const numStr = mockValue.replace(/[^\d.,]/g, '').replace(',', '.')
-            return parseFloat(numStr) || 0
-          }
-          return 0
-        })()
+      : 0
 
   const avgEnergy =
     entries.filter((e) => e.energy).length > 0
       ? entries
           .filter((e) => e.energy)
           .reduce((sum, e) => sum + (e.energy || 0), 0) / entries.filter((e) => e.energy).length
-      : (() => {
-          const mockValue = mockProgress.metrics.find((m) => m.label === 'Energía')?.value
-          if (typeof mockValue === 'number') return mockValue
-          if (typeof mockValue === 'string') {
-            // Extraer número del string (ej: "8/10" -> 8)
-            const numStr = mockValue.split('/')[0].trim()
-            return parseFloat(numStr) || 0
-          }
-          return 0
-        })()
+      : 0
 
   return (
     <div className="space-y-6">
@@ -151,12 +168,8 @@ export default function SuscriptorProgresoPage() {
           <p className="mt-3 text-3xl font-bold text-gray-900">
             {latestWeight ? `${latestWeight} kg` : '—'}
           </p>
-          <p className="mt-2 text-xs text-gray-500">
-            Meta semanal: {mockProgress.metrics.find((m) => m.label === 'Peso')?.goal || 'Mantener'}
-          </p>
-          <p className="mt-2 text-sm font-medium text-gray-600">
-            {mockProgress.metrics.find((m) => m.label === 'Peso')?.tip || 'Registra tu peso cada mañana'}
-          </p>
+          <p className="mt-2 text-xs text-gray-500">Meta semanal: Mantener o mejorar</p>
+          <p className="mt-2 text-sm font-medium text-gray-600">Registra tu peso cada mañana</p>
         </article>
 
         <article className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -165,10 +178,7 @@ export default function SuscriptorProgresoPage() {
             {latestHydration ? `${latestHydration}L` : avgHydration ? `${Math.round(avgHydration)}L` : '—'}
           </p>
           <p className="mt-2 text-xs text-gray-500">Promedio: {avgHydration ? Math.round(avgHydration) : 0}L</p>
-          <p className="mt-2 text-sm font-medium text-gray-600">
-            {mockProgress.metrics.find((m) => m.label === 'Hidratación')?.tip ||
-              'Bebe agua durante todo el día'}
-          </p>
+          <p className="mt-2 text-sm font-medium text-gray-600">Bebe agua durante todo el día</p>
         </article>
 
         <article className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -177,10 +187,7 @@ export default function SuscriptorProgresoPage() {
             {latestEnergy ? `${latestEnergy}/10` : avgEnergy ? `${Math.round(avgEnergy)}/10` : '—'}
           </p>
           <p className="mt-2 text-xs text-gray-500">Promedio: {Math.round(avgEnergy)}/10</p>
-          <p className="mt-2 text-sm font-medium text-gray-600">
-            {mockProgress.metrics.find((m) => m.label === 'Energía')?.tip ||
-              'Evalúa tu nivel de energía diario'}
-          </p>
+          <p className="mt-2 text-sm font-medium text-gray-600">Evalúa tu nivel de energía diario</p>
         </article>
       </section>
 

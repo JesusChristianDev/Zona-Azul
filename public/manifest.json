@@ -7,6 +7,7 @@
   "background_color": "#f5f8ff",
   "theme_color": "#1d4ed8",
   "orientation": "portrait-primary",
+  "scope": "/",
   "icons": [
     {
       "src": "/icon-192x192.png",
@@ -23,6 +24,23 @@
   ],
   "categories": ["health", "wellness", "food"],
   "lang": "es",
-  "dir": "ltr"
+  "dir": "ltr",
+  "prefer_related_applications": false,
+  "shortcuts": [
+    {
+      "name": "Reservar cita",
+      "short_name": "Citas",
+      "description": "Agenda tu consulta nutricional",
+      "url": "/booking",
+      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Menú",
+      "short_name": "Menú",
+      "description": "Ver nuestro menú",
+      "url": "/menu",
+      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+    }
+  ]
 }
 

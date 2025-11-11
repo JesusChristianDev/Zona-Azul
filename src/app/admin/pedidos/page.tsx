@@ -1,7 +1,9 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { getSubscribers } from '../../../lib/subscribers'
+import { getOrders } from '../../../lib/api'
+import { convertApiOrdersToFrontend, mapFrontendStatusToApi } from '../../../lib/orderHelpers'
+import { updateOrder } from '../../../lib/api'
 
 interface Order {
   id: string
@@ -18,50 +20,7 @@ interface Order {
   date?: string
 }
 
-// Generar pedidos iniciales basados en suscriptores reales
-function generateInitialOrders(): Order[] {
-  const subscribers = getSubscribers()
-  const statuses = ['Preparando', 'En camino', 'Entregado']
-  const etas = ['20 min', '45 min', '—']
-  const itemsOptions = [
-    ['Bowl Vitalidad', 'Smoothie Verde'],
-    ['Wrap Proteico', 'Infusión Antioxidante'],
-    ['Ensalada Omega', 'Agua alcalina'],
-    ['Pollo al horno con quinoa'],
-  ]
-  const totals = [16.4, 9.7, 12.5, 11.9]
-
-  // Generar fechas distribuidas en los últimos 7 días de manera estable
-  const now = new Date()
-  const baseDate = new Date(now)
-  baseDate.setHours(0, 0, 0, 0)
-
-  return subscribers.map((subscriber, index) => {
-    // Asignar fecha de manera estable basada en el índice
-    // Distribuir en los últimos 7 días (0 = hoy, 1 = ayer, etc.)
-    const daysAgo = index % 7
-    const orderDate = new Date(baseDate)
-    orderDate.setDate(orderDate.getDate() - daysAgo)
-    orderDate.setHours(12, 0, 0, 0) // Hora del mediodía para evitar problemas de zona horaria
-    
-    return {
-      id: `PED-0019${2 - index}`,
-      customerId: subscriber.id,
-      customer: subscriber.name,
-      customerEmail: subscriber.email,
-      role: 'Suscriptor',
-      status: statuses[index % statuses.length] || 'Preparando',
-      eta: etas[index % etas.length] || '30 min',
-      channel: 'App PWA',
-      items: itemsOptions[index % itemsOptions.length] || ['Plato del día'],
-      total: totals[index % totals.length] || 10.0,
-      createdAt: orderDate.toISOString(),
-      date: orderDate.toISOString().split('T')[0],
-    }
-  })
-}
-
-const initialOrders = generateInitialOrders()
+// Ya no se generan pedidos iniciales, se obtienen de la API
 
 export default function AdminPedidosPage() {
   const [orders, setOrders] = useState<Order[]>([])
@@ -70,76 +29,25 @@ export default function AdminPedidosPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
-  // Función para cargar pedidos
-  const loadOrders = () => {
-    const stored = localStorage.getItem('zona_azul_admin_orders')
-    const subscribers = getSubscribers()
-    const validSubscriberIds = new Set(subscribers.map((s) => s.id))
-    const currentOrders = generateInitialOrders()
-    
-    if (stored) {
-      const parsed = JSON.parse(stored)
-      // Filtrar pedidos que tienen suscriptores válidos
-      let validOrders = parsed.filter((o: Order) => validSubscriberIds.has(o.customerId))
-      
-      // Asegurar que todos los pedidos tengan fechas (migración para pedidos antiguos)
-      const now = new Date()
-      const baseDate = new Date(now)
-      baseDate.setHours(0, 0, 0, 0)
-      
-      validOrders = validOrders.map((order: Order, index: number) => {
-        if (!order.createdAt && !order.date) {
-          // Asignar fecha estable basada en el índice del pedido
-          const daysAgo = index % 7
-          const orderDate = new Date(baseDate)
-          orderDate.setDate(orderDate.getDate() - daysAgo)
-          return {
-            ...order,
-            createdAt: orderDate.toISOString(),
-            date: orderDate.toISOString().split('T')[0],
-          }
-        }
-        return order
-      })
-      
-      // NO crear pedidos automáticamente para nuevos suscriptores
-      // Los pedidos solo se crearán cuando se asigne un plan o se generen manualmente
-      setOrders(validOrders)
-      localStorage.setItem('zona_azul_admin_orders', JSON.stringify(validOrders))
-    } else {
-      // Solo crear pedidos iniciales si ya existen suscriptores con planes asignados
-      // Para nuevos suscriptores, no crear pedidos automáticamente
+  // Función para cargar pedidos desde la API
+  const loadOrders = async () => {
+    try {
+      const apiOrders = await getOrders()
+      const frontendOrders = await convertApiOrdersToFrontend(apiOrders)
+      setOrders(frontendOrders)
+    } catch (error) {
+      console.error('Error loading orders:', error)
       setOrders([])
-      localStorage.setItem('zona_azul_admin_orders', JSON.stringify([]))
     }
   }
 
   useEffect(() => {
     loadOrders()
 
-    // Escuchar cambios en localStorage para actualizar en tiempo real (otras pestañas)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'zona_azul_admin_orders') {
-        loadOrders()
-      }
-    }
-
-    // Escuchar cambios locales (misma pestaña)
-    const handleCustomOrdersChange = () => {
-      loadOrders()
-    }
-
-    window.addEventListener('storage', handleStorageChange)
-    window.addEventListener('zona_azul_admin_orders_updated', handleCustomOrdersChange)
-    window.addEventListener('zona_azul_subscribers_updated', loadOrders) // Escuchar nuevos suscriptores
-
-    // Polling cada 2 segundos para detectar cambios (fallback)
-    const interval = setInterval(loadOrders, 2000)
+    // Polling cada 5 segundos para actualizar pedidos
+    const interval = setInterval(loadOrders, 5000)
 
     return () => {
-      window.removeEventListener('storage', handleStorageChange)
-      window.removeEventListener('zona_azul_admin_orders_updated', handleCustomOrdersChange)
-      window.removeEventListener('zona_azul_subscribers_updated', loadOrders)
       clearInterval(interval)
     }
   }, [])
@@ -154,61 +62,43 @@ export default function AdminPedidosPage() {
     }
   }
 
-  // Notificar a otras pestañas/componentes que los pedidos fueron actualizados
-  const notifyOrdersUpdate = () => {
-    window.dispatchEvent(new Event('zona_azul_admin_orders_updated'))
-  }
-
   const handleViewDetail = (order: Order) => {
     setSelectedOrder(order)
     setIsDetailModalOpen(true)
   }
 
-  const handleChangeStatus = (orderId: string, newStatus: string) => {
-    const updated = orders.map((o) => {
-      if (o.id === orderId) {
-        const updatedOrder = { ...o, status: newStatus }
+  const handleChangeStatus = async (orderId: string, newStatus: string) => {
+    try {
+      const apiStatus = mapFrontendStatusToApi(newStatus)
+      const updateData: any = { status: apiStatus }
+      
+      // Si se marca como entregado, actualizar tiempo de entrega
+      if (newStatus === 'Entregado') {
+        updateData.actual_delivery_time = new Date().toISOString()
+      }
+      
+      const updated = await updateOrder(orderId, updateData)
+      
+      if (updated) {
+        // Recargar pedidos
+        await loadOrders()
+        showToast(`Estado actualizado a: ${newStatus}`)
         
-        // Si se marca como "Entregado" y no tiene fecha o la fecha es antigua, asignar fecha de hoy
-        if (newStatus === 'Entregado') {
-          const now = new Date()
-          const today = new Date(now)
-          today.setHours(12, 0, 0, 0) // Hora del mediodía para evitar problemas de zona horaria
-          
-          // Verificar si tiene fecha y si es de hoy o más reciente
-          let hasValidDate = false
-          if ((o as any).createdAt) {
-            const orderDate = new Date((o as any).createdAt)
-            orderDate.setHours(0, 0, 0, 0)
-            const todayDate = new Date(now)
-            todayDate.setHours(0, 0, 0, 0)
-            hasValidDate = orderDate.getTime() === todayDate.getTime()
-          } else if ((o as any).date) {
-            const orderDate = new Date((o as any).date)
-            orderDate.setHours(0, 0, 0, 0)
-            const todayDate = new Date(now)
-            todayDate.setHours(0, 0, 0, 0)
-            hasValidDate = orderDate.getTime() === todayDate.getTime()
-          }
-          
-          // Si no tiene fecha válida de hoy, asignar fecha de hoy
-          if (!hasValidDate) {
-            (updatedOrder as any).createdAt = today.toISOString()
-            ;(updatedOrder as any).date = today.toISOString().split('T')[0]
+        // Actualizar selectedOrder si es el mismo
+        if (selectedOrder?.id === orderId) {
+          const apiOrders = await getOrders()
+          const frontendOrders = await convertApiOrdersToFrontend(apiOrders)
+          const updatedOrder = frontendOrders.find((o) => o.id === orderId)
+          if (updatedOrder) {
+            setSelectedOrder(updatedOrder)
           }
         }
-        
-        return updatedOrder
+      } else {
+        showToast('Error al actualizar el estado', true)
       }
-      return o
-    })
-    
-    setOrders(updated)
-    localStorage.setItem('zona_azul_admin_orders', JSON.stringify(updated))
-    notifyOrdersUpdate()
-    showToast(`Estado actualizado a: ${newStatus}`)
-    if (selectedOrder?.id === orderId) {
-      setSelectedOrder(updated.find((o) => o.id === orderId) || null)
+    } catch (error: any) {
+      console.error('Error updating order status:', error)
+      showToast(error.message || 'Error al actualizar el estado', true)
     }
   }
 

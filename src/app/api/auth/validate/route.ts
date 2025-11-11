@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { validateCredentials, mockUsers, User } from '../../../../lib/mockUsers'
+import { getUserByEmail } from '../../../../lib/db'
+import bcrypt from 'bcryptjs'
 
 // Forzar renderizado dinámico porque usa cookies
 export const dynamic = 'force-dynamic'
@@ -7,7 +8,7 @@ export const dynamic = 'force-dynamic'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { email, password, storedUsers } = body
+    const { email, password } = body
 
     if (!email || !password) {
       return NextResponse.json(
@@ -16,28 +17,31 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Combinar mockUsers con usuarios almacenados del cliente
-    let allUsers: User[] = [...mockUsers]
-    if (storedUsers && Array.isArray(storedUsers)) {
-      // Combinar usuarios, evitando duplicados por ID
-      const usersMap = new Map<string, User>()
-      mockUsers.forEach((u) => usersMap.set(u.id, u))
-      storedUsers.forEach((u: User) => {
-        if (u.email && u.password && u.role) {
-          usersMap.set(u.id, u)
-        }
-      })
-      allUsers = Array.from(usersMap.values())
-    }
+    // Obtener usuario de Supabase (solo datos reales)
+    const dbUser = await getUserByEmail(email)
 
-    // Buscar usuario por email
-    const user = allUsers.find((u) => u.email.toLowerCase() === email.toLowerCase())
-
-    if (!user || user.password !== password) {
+    if (!dbUser) {
       return NextResponse.json(
         { error: 'Credenciales inválidas' },
         { status: 401 }
       )
+    }
+
+    // Verificar contraseña con bcrypt (solo datos reales)
+    const isPasswordValid = await bcrypt.compare(password, dbUser.password_hash)
+
+    if (!isPasswordValid) {
+      return NextResponse.json(
+        { error: 'Credenciales inválidas' },
+        { status: 401 }
+      )
+    }
+
+    const user = {
+      id: dbUser.id,
+      email: dbUser.email,
+      name: dbUser.name,
+      role: dbUser.role,
     }
 
     // Generar token de sesión
@@ -46,12 +50,7 @@ export async function POST(request: NextRequest) {
     // Establecer cookies
     const response = NextResponse.json({
       success: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-      },
+      user,
     })
 
     // Configurar cookies con opciones de seguridad

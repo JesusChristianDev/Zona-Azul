@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../hooks/useAuth'
-import { getUserData } from '../../lib/storage'
+import * as api from '../../lib/api'
 import { getSubscribers } from '../../lib/subscribers'
+import { getAppointments } from '../../lib/api'
 import InteractiveGreeting from '../../components/ui/InteractiveGreeting'
 
 export default function NutricionistaPage() {
@@ -16,56 +17,57 @@ export default function NutricionistaPage() {
   const [upcomingAppointments, setUpcomingAppointments] = useState<any[]>([])
 
   useEffect(() => {
-    const loadStats = () => {
+    const loadStats = async () => {
       if (!userId) return
 
-      // Obtener clientes del nutricionista
-      const clients = getUserData('zona_azul_clients', userId, [])
-      const activeClients = clients ? clients.length : 0
+      // Obtener clientes del nutricionista desde la API
+      const clients = await api.getNutricionistaClients(userId)
+      const activeClients = clients.length
 
-      // Contar planes en revisión (clientes con planes asignados)
-      const subscribers = getSubscribers()
+      // Contar planes en revisión (clientes con planes asignados) desde la API
+      const subscribers = await getSubscribers()
       let plansInReview = 0
-      subscribers.forEach((subscriber) => {
-        const plan = localStorage.getItem(`zona_azul_suscriptor_plan_user_${subscriber.id}`)
-        if (plan) {
-          try {
-            const planData = JSON.parse(plan)
-            if (planData && planData.days && planData.days.length > 0) {
-              plansInReview++
-            }
-          } catch (e) {
-            // Plan inválido
+      for (const subscriber of subscribers) {
+        try {
+          const plan = await api.getPlan()
+          // Verificar si el plan es del suscriptor actual
+          if (plan && plan.user_id === subscriber.id && plan.days && plan.days.length > 0) {
+            plansInReview++
           }
+        } catch (e) {
+          // Plan no encontrado o error
         }
-      })
+      }
 
       // Calcular delta de clientes (comparar con semana anterior - mock por ahora)
       const deltaClients = activeClients > 0 ? `Total de clientes asignados` : 'Sin clientes asignados'
 
-      // Cargar citas pendientes y próximas
+      // Cargar citas pendientes y próximas desde la API
       let pendingAppointments = 0
       const appointments: any[] = []
       try {
-        const appointmentsStr = localStorage.getItem('demo_appointments')
-        if (appointmentsStr) {
-          const allAppointments = JSON.parse(appointmentsStr)
-          // Filtrar citas asignadas a este nutricionista o sin asignar
-          const myAppointments = allAppointments.filter(
-            (apt: any) => !apt.nutritionistId || apt.nutritionistId === userId
-          )
-          pendingAppointments = myAppointments.filter(
-            (apt: any) => !apt.status || apt.status === 'pendiente' || apt.status === 'nueva'
-          ).length
-          
-          // Obtener próximas citas confirmadas (máximo 3)
-          const confirmed = myAppointments
-            .filter((apt: any) => apt.status === 'confirmada')
-            .slice(0, 3)
-          appointments.push(...confirmed)
-        }
+        const apiAppointments = await getAppointments()
+        // Filtrar citas asignadas a este nutricionista o sin asignar
+        const myAppointments = apiAppointments.filter(
+          (apt: any) => !apt.nutricionista_id || apt.nutricionista_id === userId
+        )
+        pendingAppointments = myAppointments.filter(
+          (apt: any) => !apt.status || apt.status === 'pendiente' || apt.status === 'nueva'
+        ).length
+        
+        // Obtener próximas citas confirmadas (máximo 3)
+        const confirmed = myAppointments
+          .filter((apt: any) => apt.status === 'confirmada')
+          .map((apt: any) => ({
+            id: apt.id,
+            name: apt.name || 'Cliente',
+            email: apt.email || '',
+            slot: apt.date_time || '',
+          }))
+          .slice(0, 3)
+        appointments.push(...confirmed)
       } catch (e) {
-        // Error al leer citas
+        console.error('Error loading appointments:', e)
       }
 
       setUpcomingAppointments(appointments)
@@ -79,21 +81,10 @@ export default function NutricionistaPage() {
 
     loadStats()
 
-    // Escuchar cambios
-    const handleClientsUpdate = () => loadStats()
-    window.addEventListener('zona_azul_clients_updated', handleClientsUpdate)
-    window.addEventListener('zona_azul_subscribers_updated', handleClientsUpdate)
-    window.addEventListener('zona_azul_plan_updated', handleClientsUpdate)
-    window.addEventListener('zona_azul_appointments_updated', handleClientsUpdate)
-
-    // Polling cada 3 segundos como fallback
-    const interval = setInterval(loadStats, 3000)
+    // Polling cada 5 segundos para actualizar desde la API
+    const interval = setInterval(loadStats, 5000)
 
     return () => {
-      window.removeEventListener('zona_azul_clients_updated', handleClientsUpdate)
-      window.removeEventListener('zona_azul_subscribers_updated', handleClientsUpdate)
-      window.removeEventListener('zona_azul_plan_updated', handleClientsUpdate)
-      window.removeEventListener('zona_azul_appointments_updated', handleClientsUpdate)
       clearInterval(interval)
     }
   }, [userId])

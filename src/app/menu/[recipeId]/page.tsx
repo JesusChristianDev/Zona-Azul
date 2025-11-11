@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { getMealById } from '../../../lib/api'
 
 interface MenuItem {
   id: string
@@ -59,74 +60,38 @@ export default function RecipeDetail() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const loadRecipe = () => {
-      try {
-        const stored = localStorage.getItem('zona_azul_menu')
-        if (stored) {
-          const menuItems: MenuItem[] = JSON.parse(stored)
-          const menuItem = menuItems.find((item) => item.id === recipeId)
-          if (menuItem) {
-            setRecipe(menuItemToRecipe(menuItem))
-            setLoading(false)
-            return
-          }
-        }
-
-        // Si no se encuentra, usar datos por defecto
-        const defaultItems: MenuItem[] = [
-          {
-            id: 'item-1',
-            name: 'Bowl Vitalidad',
-            category: 'Plato principal',
-            price: 11.9,
-            availability: 'Disponible',
-            calories: 620,
-            description: 'Base de quinoa, garbanzos especiados, aguacate y salsa tahini.',
-          },
-          {
-            id: 'item-2',
-            name: 'Smoothie Azul',
-            category: 'Bebida funcional',
-            price: 4.5,
-            availability: 'Disponible',
-            calories: 180,
-            description: 'Blueberries, plátano, leche de almendra y espirulina.',
-          },
-          {
-            id: 'item-3',
-            name: 'Wrap Proteico',
-            category: 'On the go',
-            price: 9.2,
-            availability: 'Disponible',
-            calories: 540,
-            description: 'Tortilla integral con falafel, hummus y vegetales frescos.',
-          },
-        ]
-        const defaultItem = defaultItems.find((item) => item.id === recipeId)
-        if (defaultItem) {
-          setRecipe(menuItemToRecipe(defaultItem))
-        }
+    const loadRecipe = async () => {
+      if (!recipeId) {
         setLoading(false)
+        return
+      }
+
+      try {
+        const meal = await getMealById(recipeId)
+        if (meal) {
+          // Convertir meal de API a MenuItem y luego a Recipe
+          const menuItem: MenuItem = {
+            id: meal.id,
+            name: meal.name,
+            category: meal.type === 'breakfast' ? 'Desayuno' : 
+                     meal.type === 'lunch' ? 'Plato principal' :
+                     meal.type === 'dinner' ? 'Cena' :
+                     meal.type === 'snack' ? 'Bebida funcional' : 'Plato principal',
+            price: meal.price || 0,
+            availability: meal.available ? 'Disponible' : 'No disponible',
+            calories: meal.calories || 0,
+            description: meal.description || '',
+          }
+          setRecipe(menuItemToRecipe(menuItem))
+        }
       } catch (error) {
         console.error('Error loading recipe:', error)
+      } finally {
         setLoading(false)
       }
     }
 
     loadRecipe()
-
-    // Escuchar cambios en el menú
-    const handleMenuUpdate = () => {
-      loadRecipe()
-    }
-
-    window.addEventListener('zona_azul_menu_updated', handleMenuUpdate)
-    const interval = setInterval(loadRecipe, 2000)
-
-    return () => {
-      window.removeEventListener('zona_azul_menu_updated', handleMenuUpdate)
-      clearInterval(interval)
-    }
   }, [recipeId])
 
   if (loading) {

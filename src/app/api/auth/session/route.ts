@@ -37,8 +37,13 @@ export async function GET(request: NextRequest) {
       userEmail,
       sessionToken,
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error checking session:', error)
+    console.error('Error details:', {
+      message: error?.message,
+      stack: error?.stack,
+      name: error?.name,
+    })
     return NextResponse.json(
       { authenticated: false, role: 'invitado', userId: null, userName: null, userEmail: null },
       { status: 500 }

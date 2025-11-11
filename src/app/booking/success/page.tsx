@@ -16,16 +16,33 @@ export default function BookingSuccess() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    try {
-      const appointments = JSON.parse(localStorage.getItem('demo_appointments') || '[]')
-      if (appointments.length > 0) {
-        setLast(appointments[appointments.length - 1])
+    const loadLastAppointment = async () => {
+      try {
+        const { getAppointments } = await import('../../lib/api')
+        const appointments = await getAppointments()
+        if (appointments && appointments.length > 0) {
+          // Ordenar por fecha y obtener el más reciente
+          const sorted = appointments.sort((a: any, b: any) => 
+            new Date(b.created_at || b.date_time).getTime() - new Date(a.created_at || a.date_time).getTime()
+          )
+          const lastAppointment = sorted[0]
+          setLast({
+            id: lastAppointment.id,
+            name: lastAppointment.user_name || 'Usuario',
+            email: lastAppointment.user_email || '',
+            phone: lastAppointment.user_phone,
+            slot: new Date(lastAppointment.date_time).toLocaleString('es-ES'),
+            created_at: lastAppointment.created_at,
+          })
+        }
+      } catch (error) {
+        console.error('Error reading appointments:', error)
+      } finally {
+        setLoading(false)
       }
-    } catch (error) {
-      console.error('Error reading appointments:', error)
-    } finally {
-      setLoading(false)
     }
+    
+    loadLastAppointment()
   }, [])
 
   if (loading) {

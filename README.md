@@ -1,38 +1,48 @@
-# Zona Azul — Demo PWA de Bienestar Integral
+# Zona Azul — PWA de Bienestar Integral
 
-Next.js 14 + Tailwind CSS + App Router. Esta demo convierte la experiencia **HealthyBox** en la plataforma **Zona Azul**, alineada con el esquema definido en `Zona_Azul_Cursor_Agent.txt`: PWA instalada, branding completo y dashboards modulados por rol.
+Plataforma web progresiva (PWA) para gestión nutricional con Next.js 14, Tailwind CSS y Supabase.
 
-## Rutas clave
+## 🚀 Inicio Rápido
 
-- `/`: Selección de rol (invitado) con accesos rápidos a los dashboards demo.
-- `/login`: Panel de accesos rápidos para cada rol (mock).
-- `/booking` / `/booking/success`: Flujo de agendado con persistencia `localStorage`.
-- `/menu` / `/menu/[recipeId]`: Carta pública basada en `src/lib/mockData.ts`.
-- `/activate`: Activación de cuenta mock.
-- Dashboards protegidos:
-  - `/admin`, `/admin/menu`, `/admin/usuarios`, `/admin/pedidos`
-  - `/suscriptor`, `/suscriptor/plan`, `/suscriptor/pedidos`, `/suscriptor/progreso`
-  - `/nutricionista`, `/nutricionista/clientes`, `/nutricionista/planes`
-  - `/repartidor`, `/repartidor/pedidos`, `/repartidor/historial`
-
-Los accesos demo se gestionan vía `useAuth`, con roles persistidos en `localStorage` y sincronización multi-tab.
-
-## Documentación estratégica
-
-- `Zona_Azul_Cursor_Agent.txt`: requerimientos originales.
-- `documentacion/plan_estrategico_zona_azul.md`: branding, modelo de negocio, experiencia, expansión y roadmap listos para ejecución.
-
-## Puesta en marcha
-
-```powershell
+```bash
 npm install
 npm run dev
 ```
 
-Visita [http://localhost:3000](http://localhost:3000) y selecciona un rol o utiliza `/login` para acceder directamente.
+Visita [http://localhost:3000](http://localhost:3000)
 
-## Notas
+## 📱 Características PWA
 
-- Todo el contenido es mock con fines demostrativos; no hay backend productivo.
-- La PWA expone manifest, service worker actualizado (`public/sw.js`) e iconos alineados con la identidad Zona Azul.
-- Recuerda limpiar caches desde DevTools tras cambios del service worker (versión `zona-azul-cache-v2`).
+- ✅ Service Worker optimizado con estrategias de caché inteligentes
+- ✅ Funciona offline con caché de recursos estáticos
+- ✅ Notificaciones push
+- ✅ Instalable en dispositivos móviles y desktop
+- ✅ Atajos rápidos (shortcuts) en el menú de la app
+
+## 🏗️ Arquitectura
+
+- **Frontend**: Next.js 14 (App Router), React, Tailwind CSS
+- **Backend**: Next.js API Routes
+- **Base de datos**: Supabase (PostgreSQL)
+- **Autenticación**: Cookies basadas en sesión
+- **PWA**: Service Worker con caché optimizado
+
+## 📂 Estructura Principal
+
+- `/src/app`: Rutas y páginas de la aplicación
+- `/src/components`: Componentes reutilizables
+- `/src/lib`: Utilidades y funciones de base de datos
+- `/public`: Assets estáticos y manifest PWA
+- `/supabase`: Scripts SQL y esquema de base de datos
+
+## 🔧 Configuración
+
+1. Configura las variables de entorno en `.env.local`
+2. Ejecuta el script SQL en `supabase/schema.sql` en tu proyecto Supabase
+3. Configura Google Calendar OAuth (opcional) para citas
+
+## 📝 Notas
+
+- La aplicación está completamente migrada a Supabase (sin localStorage)
+- El service worker usa estrategias de caché optimizadas para mejor rendimiento
+- Las API routes están protegidas con control de acceso basado en roles

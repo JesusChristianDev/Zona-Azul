@@ -24,32 +24,48 @@ interface UserSettings {
 }
 
 /**
- * Obtiene las preferencias de notificaciones del usuario
+ * Obtiene las preferencias de notificaciones del usuario desde la API
  */
-function getUserNotificationSettings(userId: string | null): UserSettings['notifications'] | null {
+async function getUserNotificationSettings(userId: string | null): Promise<UserSettings['notifications'] | null> {
   if (typeof window === 'undefined' || !userId) return null
 
   try {
-    const stored = localStorage.getItem(`zona_azul_settings_user_${userId}`)
-    if (stored) {
-      const settings = JSON.parse(stored)
-      return settings.notifications || null
+    const { getUserSettings } = await import('./api')
+    const settings = await getUserSettings()
+    
+    if (settings) {
+      return {
+        enabled: settings.notifications_enabled ?? true,
+        newMessages: settings.notifications_new_messages ?? true,
+        orderUpdates: settings.notifications_order_updates ?? true,
+        planAssignments: settings.notifications_plan_assignments ?? true,
+        appointments: settings.notifications_appointments ?? true,
+        newOrders: settings.notifications_new_orders ?? true,
+      }
     }
   } catch (error) {
     console.error('Error loading notification settings:', error)
   }
 
-  return null
+  // Valores por defecto si no hay configuraciones
+  return {
+    enabled: true,
+    newMessages: true,
+    orderUpdates: true,
+    planAssignments: true,
+    appointments: true,
+    newOrders: true,
+  }
 }
 
 /**
  * Verifica si una notificación específica está habilitada
  */
-function isNotificationEnabled(
+async function isNotificationEnabled(
   userId: string | null,
   notificationType: 'newMessages' | 'orderUpdates' | 'planAssignments' | 'appointments' | 'newOrders'
-): boolean {
-  const settings = getUserNotificationSettings(userId)
+): Promise<boolean> {
+  const settings = await getUserNotificationSettings(userId)
   if (!settings) return true // Por defecto, habilitado
 
   // Si las notificaciones generales están deshabilitadas, no mostrar ninguna
@@ -96,7 +112,7 @@ export async function showAppNotification(data: NotificationData): Promise<boole
 export const NotificationHelpers = {
   // Notificación de nuevo mensaje
   newMessage: async (senderName: string, messagePreview: string, url: string = '/', userId: string | null = null) => {
-    if (!isNotificationEnabled(userId, 'newMessages')) return false
+    if (!(await isNotificationEnabled(userId, 'newMessages'))) return false
 
     return showAppNotification({
       title: `Nuevo mensaje de ${senderName}`,
@@ -109,7 +125,7 @@ export const NotificationHelpers = {
 
   // Notificación de cambio de estado de pedido
   orderStatusChanged: async (orderId: string, newStatus: string, url: string = '/suscriptor/pedidos', userId: string | null = null) => {
-    if (!isNotificationEnabled(userId, 'orderUpdates')) return false
+    if (!(await isNotificationEnabled(userId, 'orderUpdates'))) return false
 
     const statusMessages: Record<string, string> = {
       'Preparando': 'Tu pedido está siendo preparado',
@@ -129,7 +145,7 @@ export const NotificationHelpers = {
 
   // Notificación de nuevo pedido asignado (para repartidor)
   newOrderAssigned: async (customerName: string, url: string = '/repartidor/pedidos', userId: string | null = null) => {
-    if (!isNotificationEnabled(userId, 'newOrders')) return false
+    if (!(await isNotificationEnabled(userId, 'newOrders'))) return false
 
     return showAppNotification({
       title: 'Nuevo pedido asignado',
@@ -142,7 +158,7 @@ export const NotificationHelpers = {
 
   // Notificación de nueva cita (para nutricionista)
   newAppointment: async (clientName: string, date: string, url: string = '/nutricionista/citas', userId: string | null = null) => {
-    if (!isNotificationEnabled(userId, 'appointments')) return false
+    if (!(await isNotificationEnabled(userId, 'appointments'))) return false
 
     return showAppNotification({
       title: 'Nueva cita solicitada',
@@ -155,7 +171,7 @@ export const NotificationHelpers = {
 
   // Notificación de plan asignado (para suscriptor)
   planAssigned: async (planName: string, url: string = '/suscriptor/plan', userId: string | null = null) => {
-    if (!isNotificationEnabled(userId, 'planAssignments')) return false
+    if (!(await isNotificationEnabled(userId, 'planAssignments'))) return false
 
     return showAppNotification({
       title: '¡Plan asignado!',

@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Modal from '../../../components/ui/Modal'
-import { User, mockUsers } from '../../../lib/mockUsers'
-import { assignPlanToSubscriber, getAllAvailableTemplates, PlanTemplate, hasPlanAssigned } from '../../../lib/planAssignment'
+import { User } from '../../../lib/types'
+import { assignPlanToSubscriber, hasPlanAssigned } from '../../../lib/planAssignment'
+import { useUsers, useOrders } from '../../../hooks/useApi'
+import * as api from '../../../lib/api'
 import { getSubscribers } from '../../../lib/subscribers'
-import { getUserData, setUserData } from '../../../lib/storage'
 
 interface TeamMember extends User {
   clients: number
@@ -13,6 +14,8 @@ interface TeamMember extends User {
 }
 
 export default function AdminUsuariosPage() {
+  const { users: apiUsers, loading: usersLoading, error: usersError, refetch: refetchUsers } = useUsers()
+  const { orders: apiOrders } = useOrders()
   const [activeTab, setActiveTab] = useState<'team' | 'clients'>('team')
   const [users, setUsers] = useState<TeamMember[]>([])
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
@@ -20,10 +23,13 @@ export default function AdminUsuariosPage() {
   const [isAssignPlanModalOpen, setIsAssignPlanModalOpen] = useState(false)
   const [isAssignClientsModalOpen, setIsAssignClientsModalOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<TeamMember | null>(null)
-  const [availableTemplates, setAvailableTemplates] = useState<PlanTemplate[]>([])
-  const [selectedTemplate, setSelectedTemplate] = useState<string>('')
+  const [availablePlans, setAvailablePlans] = useState<any[]>([])
+  const [selectedPlanId, setSelectedPlanId] = useState<string>('')
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([])
   const [isCreatingFromClientsTab, setIsCreatingFromClientsTab] = useState(false)
+  const [availableSubscribers, setAvailableSubscribers] = useState<User[]>([])
+  const [subscribersLoading, setSubscribersLoading] = useState(false)
+  const [subscriberToNutricionista, setSubscriberToNutricionista] = useState<Map<string, { nutricionistaId: string; nutricionistaName: string }>>(new Map())
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -34,146 +40,144 @@ export default function AdminUsuariosPage() {
   })
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [usersWithPlans, setUsersWithPlans] = useState<Set<string>>(new Set())
+  const [userSubscriptions, setUserSubscriptions] = useState<Map<string, 'active' | 'inactive' | 'expired'>>(new Map())
+  const recentlyDeletedPlansRef = useRef<Set<string>>(new Set()) // Para evitar que el polling recargue planes recién eliminados
 
-  // Función para contar clientes asignados reales
-  const countAssignedClients = (userId: string, role: string): number => {
+  // Función para contar clientes asignados reales desde la API
+  const countAssignedClients = async (userId: string, role: string): Promise<number> => {
     if (role === 'nutricionista') {
-      // Contar clientes asignados al nutricionista
       try {
-        const stored = localStorage.getItem(`zona_azul_clients_user_${userId}`)
-        if (stored) {
-          const clients = JSON.parse(stored)
-          return Array.isArray(clients) ? clients.length : 0
-        }
+        const clients = await api.getNutricionistaClients(userId)
+        return clients.length
       } catch (error) {
-        console.error('Error counting nutricionista clients:', error)
+        console.error('Error counting clients:', error)
+        return 0
       }
-      return 0
     } else if (role === 'repartidor') {
-      // Contar suscriptores únicos con pedidos activos (no cancelados)
+      // Contar pedidos activos del repartidor desde la API
       try {
-        const ordersStr = localStorage.getItem('zona_azul_admin_orders')
-        if (ordersStr) {
-          const orders = JSON.parse(ordersStr)
-          const activeOrders = orders.filter(
-            (order: any) => order.status !== 'Cancelado' && order.status !== 'Entregado'
-          )
-          const uniqueCustomerIds = new Set(activeOrders.map((order: any) => order.customerId))
-          return uniqueCustomerIds.size
-        }
+        const orders = await api.getOrders()
+        const repartidorOrders = orders.filter(
+          (order: any) => order.repartidor_id === userId &&
+          order.status !== 'cancelado' && order.status !== 'entregado'
+        )
+        const uniqueCustomerIds = new Set(repartidorOrders.map((order: any) => order.user_id))
+        return uniqueCustomerIds.size
       } catch (error) {
         console.error('Error counting repartidor clients:', error)
+        return 0
       }
-      return 0
     }
     return 0
   }
 
-  // Función para cargar usuarios
-  const loadUsers = () => {
-    const stored = localStorage.getItem('zona_azul_users')
-    if (stored) {
-      const parsed = JSON.parse(stored)
-      // Asegurar que los nuevos usuarios de mockUsers también estén incluidos
-      const existingIds = new Set(parsed.map((u: TeamMember) => u.id))
-      const newUsers = mockUsers
-        .filter((u) => !existingIds.has(u.id))
-        .map((user) => ({
-          ...user,
-          clients: countAssignedClients(user.id, user.role),
-          status: 'Activa',
-        }))
-      
-      if (newUsers.length > 0) {
-        const updated = [...parsed, ...newUsers]
-        // Recalcular clientes asignados para todos los usuarios
-        const updatedWithRealClients = updated.map((user) => ({
-          ...user,
-          clients: countAssignedClients(user.id, user.role),
-        }))
-        setUsers(updatedWithRealClients)
-        localStorage.setItem('zona_azul_users', JSON.stringify(updatedWithRealClients))
-        // Notificar que hay nuevos suscriptores para que otros roles se actualicen
-        window.dispatchEvent(new Event('zona_azul_subscribers_updated'))
-      } else {
-        // Recalcular clientes asignados para todos los usuarios
-        const updatedWithRealClients = parsed.map((user: TeamMember) => ({
-          ...user,
-          clients: countAssignedClients(user.id, user.role),
-        }))
-        setUsers(updatedWithRealClients)
-      }
-    } else {
-      // Convertir mockUsers a TeamMember con datos reales
-      const initialUsers: TeamMember[] = mockUsers.map((user) => ({
-        ...user,
-        clients: countAssignedClients(user.id, user.role),
-        status: 'Activa',
-      }))
-      setUsers(initialUsers)
-      localStorage.setItem('zona_azul_users', JSON.stringify(initialUsers))
-    }
-  }
-
-  // Cargar usuarios y templates
+  // Convertir usuarios de API a TeamMember con conteo de clientes
   useEffect(() => {
-    loadUsers()
-    setAvailableTemplates(getAllAvailableTemplates())
-
-    // Escuchar cambios en localStorage para actualizar en tiempo real (otras pestañas)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'zona_azul_users') {
-        loadUsers()
+    const loadUsersWithClients = async () => {
+      if (apiUsers && apiUsers.length > 0) {
+        const usersWithClientsPromises = apiUsers.map(async (user: any) => {
+          const clientsCount = await countAssignedClients(user.id, user.role)
+          return {
+            id: user.id,
+            email: user.email,
+            password: '', // No incluir password en el frontend
+            role: user.role,
+            name: user.name,
+            createdAt: user.created_at,
+            clients: clientsCount,
+            status: 'Activa',
+          } as TeamMember
+        })
+        const usersWithClients = await Promise.all(usersWithClientsPromises)
+        setUsers(usersWithClients)
+      } else if (!usersLoading) {
+        setUsers([])
       }
-      // Actualizar cuando cambian las asignaciones de clientes
-      if (e.key?.startsWith('zona_azul_clients_user_')) {
-        loadUsers()
-      }
-      // Actualizar cuando cambian los pedidos (afecta a repartidores)
-      if (e.key === 'zona_azul_admin_orders') {
-        loadUsers()
-      }
-      // Recargar templates si cambian los planes de nutricionistas
-      if (e.key?.startsWith('zona_azul_plans_user_')) {
-        setAvailableTemplates(getAllAvailableTemplates())
-      }
     }
+    loadUsersWithClients()
+  }, [apiUsers, usersLoading, apiOrders])
 
-    // Escuchar cambios locales (misma pestaña)
-    const handleCustomUsersChange = () => {
-      loadUsers()
+  // Cargar planes completos disponibles (sin asignar) de todos los nutricionistas
+  useEffect(() => {
+    const loadAvailablePlans = async () => {
+      try {
+        // Obtener todos los nutricionistas
+        const nutritionists = await api.getNutritionists()
+        
+        // Obtener planes sin asignar de cada nutricionista
+        const allPlans: any[] = []
+        for (const nutritionist of nutritionists) {
+          const plans = await api.getMealPlansByNutricionista(nutritionist.id)
+          allPlans.push(...plans)
+        }
+        
+        setAvailablePlans(allPlans)
+      } catch (error) {
+        console.error('Error loading available plans:', error)
+        setAvailablePlans([])
+      }
     }
-    const handleClientsUpdate = () => {
-      loadUsers()
-    }
-    const handleOrdersUpdate = () => {
-      loadUsers()
-    }
-    const handlePlansUpdate = () => {
-      setAvailableTemplates(getAllAvailableTemplates())
-    }
+    
+    loadAvailablePlans()
 
-    window.addEventListener('storage', handleStorageChange)
-    window.addEventListener('zona_azul_users_updated', handleCustomUsersChange)
-    window.addEventListener('zona_azul_clients_updated', handleClientsUpdate)
-    window.addEventListener('zona_azul_admin_orders_updated', handleOrdersUpdate)
-    window.addEventListener('zona_azul_plans_updated', handlePlansUpdate)
-
-    // Polling cada 2 segundos para detectar cambios (fallback)
-    const interval = setInterval(() => {
-      loadUsers()
-      setAvailableTemplates(getAllAvailableTemplates())
-    }, 2000)
+    // Polling cada 30 segundos para actualizar planes
+    const interval = setInterval(loadAvailablePlans, 30000)
 
     return () => {
-      window.removeEventListener('storage', handleStorageChange)
-      window.removeEventListener('zona_azul_users_updated', handleCustomUsersChange)
-      window.removeEventListener('zona_azul_clients_updated', handleClientsUpdate)
-      window.removeEventListener('zona_azul_admin_orders_updated', handleOrdersUpdate)
-      window.removeEventListener('zona_azul_plans_updated', handlePlansUpdate)
       clearInterval(interval)
     }
   }, [])
+
+  // Cargar información de planes asignados y suscripciones para suscriptores
+  useEffect(() => {
+    const loadPlansAndSubscriptionsInfo = async () => {
+      if (!apiUsers || apiUsers.length === 0) return
+      
+      const subscribers = apiUsers.filter((u: any) => u.role === 'suscriptor')
+      if (subscribers.length === 0) return
+
+      try {
+        const plansPromises = subscribers.map(async (subscriber: any) => {
+          try {
+            // Si el plan fue eliminado recientemente, no verificar
+            if (recentlyDeletedPlansRef.current.has(subscriber.id)) {
+              return null
+            }
+            const hasPlan = await hasPlanAssigned(subscriber.id)
+            return hasPlan ? subscriber.id : null
+          } catch (error) {
+            console.error(`Error checking plan for subscriber ${subscriber.id}:`, error)
+            return null
+          }
+        })
+        
+        const usersWithPlansArray = await Promise.all(plansPromises)
+        const usersWithPlansSet = new Set(usersWithPlansArray.filter(Boolean) as string[])
+        setUsersWithPlans(usersWithPlansSet)
+        
+        // Todos los suscriptores tienen suscripción activa por defecto
+        // Solo se muestra inactiva si el usuario fue eliminado
+        const subscriptionsMap = new Map<string, 'active' | 'inactive' | 'expired'>()
+        for (const subscriber of subscribers) {
+          subscriptionsMap.set(subscriber.id, 'active')
+        }
+        
+        setUserSubscriptions(subscriptionsMap)
+      } catch (error) {
+        console.error('Error loading plans and subscriptions info:', error)
+      }
+    }
+    
+    loadPlansAndSubscriptionsInfo()
+    
+    // Polling cada 60 segundos para actualizar información
+    const interval = setInterval(loadPlansAndSubscriptionsInfo, 60000)
+    
+    return () => {
+      clearInterval(interval)
+    }
+  }, [apiUsers])
 
   const showToast = (message: string, isError = false) => {
     if (isError) {
@@ -185,10 +189,6 @@ export default function AdminUsuariosPage() {
     }
   }
 
-  // Notificar a otras pestañas/componentes que los usuarios fueron actualizados
-  const notifyUsersUpdate = () => {
-    window.dispatchEvent(new Event('zona_azul_users_updated'))
-  }
 
   const handleCreate = () => {
     setFormData({
@@ -218,13 +218,16 @@ export default function AdminUsuariosPage() {
     setIsEditModalOpen(true)
   }
 
-  const handleDelete = (userId: string) => {
-    if (confirm('¿Estás seguro de eliminar este usuario?')) {
-      const userToDelete = users.find((u) => u.id === userId)
-      const updated = users.filter((u) => u.id !== userId)
-      setUsers(updated)
-      localStorage.setItem('zona_azul_users', JSON.stringify(updated))
-      notifyUsersUpdate()
+  const handleDelete = async (userId: string) => {
+    if (!confirm('¿Estás seguro de eliminar este usuario?')) {
+      return
+    }
+
+    const userToDelete = users.find((u) => u.id === userId)
+
+    try {
+      await api.deleteUser(userId)
+      await refetchUsers() // Recargar usuarios
       
       // Si se eliminó un suscriptor, notificar a otros roles para limpiar sus datos
       if (userToDelete?.role === 'suscriptor') {
@@ -232,6 +235,8 @@ export default function AdminUsuariosPage() {
       }
       
       showToast('Usuario eliminado correctamente')
+    } catch (err: any) {
+      showToast(err.message || 'Error al eliminar usuario', true)
     }
   }
 
@@ -241,166 +246,268 @@ export default function AdminUsuariosPage() {
       return
     }
     setSelectedUser(user)
-    setSelectedTemplate('')
+    setSelectedPlanId('')
     setError(null)
     setIsAssignPlanModalOpen(true)
   }
 
-  const handleAssignClients = (nutricionista: TeamMember) => {
+  const handleAssignClients = async (nutricionista: TeamMember) => {
     if (nutricionista.role !== 'nutricionista') {
       showToast('Solo se pueden asignar clientes a nutricionistas', true)
       return
     }
     setSelectedUser(nutricionista)
+    setSubscribersLoading(true)
     
-    // Cargar clientes actualmente asignados al nutricionista
-    const currentClients = getUserData<any[]>('zona_azul_clients', nutricionista.id, [])
-    setSelectedClientIds(currentClients.map((c: any) => c.id))
+    // Cargar suscriptores disponibles
+    try {
+      const subscribers = await getSubscribers()
+      setAvailableSubscribers(subscribers)
+    } catch (error) {
+      console.error('Error loading subscribers:', error)
+      setAvailableSubscribers([])
+    } finally {
+      setSubscribersLoading(false)
+    }
+    
+    // Cargar clientes actualmente asignados al nutricionista desde la API
+    try {
+      const currentClients = await api.getNutricionistaClients(nutricionista.id)
+      setSelectedClientIds(currentClients.map((c: any) => c.client_id))
+    } catch (error) {
+      console.error('Error loading clients:', error)
+      setSelectedClientIds([])
+    }
+    
+    // Cargar asignaciones de todos los nutricionistas para mostrar qué clientes están asignados a otros
+    const loadNutricionistaAssignments = async () => {
+      try {
+        const allUsers = await api.getUsers()
+        const allNutricionistas = allUsers.filter((u: any) => u.role === 'nutricionista')
+        const assignmentMap = new Map<string, { nutricionistaId: string; nutricionistaName: string }>()
+        
+        for (const nutri of allNutricionistas) {
+          try {
+            const clients = await api.getNutricionistaClients(nutri.id)
+            clients.forEach((client: any) => {
+              if (client.client_id) {
+                assignmentMap.set(client.client_id, {
+                  nutricionistaId: nutri.id,
+                  nutricionistaName: nutri.name,
+                })
+              }
+            })
+          } catch (error) {
+            console.error(`Error checking clients for nutricionista ${nutri.id}:`, error)
+          }
+        }
+        
+        setSubscriberToNutricionista(assignmentMap)
+      } catch (error) {
+        console.error('Error loading nutricionista assignments:', error)
+        setSubscriberToNutricionista(new Map())
+      }
+    }
+    
+    loadNutricionistaAssignments()
     
     setError(null)
     setIsAssignClientsModalOpen(true)
   }
 
-  const handleSubmitAssignClients = (e: React.FormEvent) => {
+  const handleSubmitAssignClients = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedUser || selectedUser.role !== 'nutricionista') return
 
-    const subscribers = getSubscribers()
-    const selectedClients = subscribers
-      .filter((s) => selectedClientIds.includes(s.id))
-      .map((subscriber) => ({
-        id: subscriber.id,
-        name: subscriber.name,
-        email: subscriber.email,
-        plan: '',
-        progress: '0%',
-        lastCheck: new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }),
-        notes: '',
-      }))
-
-    // Obtener todos los nutricionistas para desasignar de otros
-    const stored = localStorage.getItem('zona_azul_users')
-    let allUsers: User[] = []
-    if (stored) {
-      try {
-        allUsers = JSON.parse(stored)
-      } catch (e) {
-        // Error al parsear
-      }
-    }
-    
-    // Combinar usuarios de mockUsers y localStorage
-    const usersMap = new Map<string, User>()
-    mockUsers.forEach((u) => usersMap.set(u.id, u))
-    allUsers.forEach((u) => {
-      if (u.email && u.password && u.role) {
-        usersMap.set(u.id, u)
-      }
-    })
-    
-    const allNutricionistas = Array.from(usersMap.values()).filter((u) => u.role === 'nutricionista')
-    
-    // Remover estos clientes de otros nutricionistas (reasignación)
-    allNutricionistas.forEach((nutri) => {
-      if (nutri.id === selectedUser.id) return // No modificar el nutricionista actual
+    try {
+      // Obtener todos los nutricionistas para desasignar de otros
+      const allUsers = await api.getUsers()
+      const allNutricionistas = allUsers.filter((u: any) => u.role === 'nutricionista')
       
-      try {
-        const stored = localStorage.getItem(`zona_azul_clients_user_${nutri.id}`)
-        if (stored) {
-          const clients = JSON.parse(stored)
-          if (Array.isArray(clients)) {
-            // Filtrar los clientes que ahora están asignados al nutricionista actual
-            const remainingClients = clients.filter((client: any) => !selectedClientIds.includes(client.id))
-            
-            // Guardar la lista actualizada
-            setUserData('zona_azul_clients', remainingClients, nutri.id)
-          }
+      // Remover estos clientes de otros nutricionistas (reasignación)
+      for (const nutri of allNutricionistas) {
+        if (nutri.id === selectedUser.id) continue // No modificar el nutricionista actual
+        
+        // Obtener clientes actuales del nutricionista
+        const currentClients = await api.getNutricionistaClients(nutri.id)
+        
+        // Filtrar los clientes que ahora están asignados al nutricionista actual
+        const clientsToRemove = currentClients.filter((client: any) => 
+          selectedClientIds.includes(client.client_id)
+        )
+        
+        // Remover cada cliente
+        for (const client of clientsToRemove) {
+          await api.removeClientFromNutricionista(nutri.id, client.client_id)
         }
-      } catch (error) {
-        console.error(`Error updating clients for nutricionista ${nutri.id}:`, error)
       }
-    })
 
-    // Guardar clientes asignados al nutricionista actual
-    setUserData('zona_azul_clients', selectedClients, selectedUser.id)
-    
-    // Notificar actualización
-    window.dispatchEvent(new Event('zona_azul_clients_updated'))
-    
-    // Recargar usuarios para actualizar el contador
-    loadUsers()
-    
-    setIsAssignClientsModalOpen(false)
-    setSelectedUser(null)
-    setSelectedClientIds([])
-    showToast(`Clientes asignados correctamente a ${selectedUser.name}`)
+      // Asignar clientes al nutricionista actual
+      for (const clientId of selectedClientIds) {
+        await api.assignClientToNutricionista(selectedUser.id, clientId)
+      }
+      
+      // Recargar usuarios para actualizar el contador
+      await refetchUsers()
+      
+      setIsAssignClientsModalOpen(false)
+      setSelectedUser(null)
+      setSelectedClientIds([])
+      showToast(`Clientes asignados correctamente a ${selectedUser.name}`)
+    } catch (error: any) {
+      console.error('Error assigning clients:', error)
+      showToast('Error al asignar clientes', true)
+    }
   }
 
-  const handleSubmitAssignPlan = (e: React.FormEvent) => {
+  const handleSubmitAssignPlan = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedUser || !selectedTemplate) {
+    if (!selectedUser || !selectedPlanId) {
       setError('Por favor selecciona un plan')
       return
     }
 
-    const template = availableTemplates.find((t) => t.id === selectedTemplate)
-    if (!template) {
+    const plan = availablePlans.find((p) => p.id === selectedPlanId)
+    if (!plan) {
       setError('Plan no encontrado')
       return
     }
 
-    const success = assignPlanToSubscriber(selectedUser.id, template, 'Admin')
+    // assignPlanToSubscriber espera un planId (string)
+    const success = await assignPlanToSubscriber(selectedUser.id, selectedPlanId, 'Admin')
     if (success) {
-      showToast(`Plan "${template.name}" asignado correctamente a ${selectedUser.name}`)
+      // Actualizar el estado de planes asignados
+      setUsersWithPlans(prev => new Set([...prev, selectedUser.id]))
+      showToast(`Plan "${plan.name}" asignado correctamente a ${selectedUser.name}`)
       setIsAssignPlanModalOpen(false)
       setSelectedUser(null)
-      setSelectedTemplate('')
+      setSelectedPlanId('')
     } else {
       showToast('Error al asignar el plan', true)
     }
   }
 
-  const handleSubmitCreate = (e: React.FormEvent) => {
+  const handleSubmitCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
-    // Validar email único
-    if (users.some((u) => u.email.toLowerCase() === formData.email.toLowerCase())) {
-      setError('Este email ya está registrado')
+    if (!formData.name || !formData.email || !formData.password) {
+      setError('Por favor completa todos los campos requeridos')
       return
     }
 
-    // Si se está creando desde la pestaña de clientes, forzar rol suscriptor y clients = 0
+    // Si se está creando desde la pestaña de clientes, forzar rol suscriptor
     const finalRole = isCreatingFromClientsTab ? 'suscriptor' : formData.role
-    const finalClients = isCreatingFromClientsTab ? 0 : formData.clients
 
-    const newUser: TeamMember = {
-      id: `user-${Date.now()}`,
-      name: formData.name,
-      email: formData.email,
-      password: formData.password,
-      role: finalRole as User['role'],
-      createdAt: new Date().toISOString(),
-      clients: finalClients,
-      status: formData.status,
-    }
+    try {
+      await api.createUser({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        role: finalRole,
+      })
 
-    const updated = [...users, newUser]
-    setUsers(updated)
-    localStorage.setItem('zona_azul_users', JSON.stringify(updated))
-    notifyUsersUpdate()
-    
-    // Si se creó un nuevo suscriptor, notificar a otros roles
-    if (newUser.role === 'suscriptor') {
-      window.dispatchEvent(new Event('zona_azul_subscribers_updated'))
+      await refetchUsers() // Recargar usuarios
+      
+      // Si se creó un nuevo suscriptor, notificar a otros roles
+      if (finalRole === 'suscriptor') {
+        window.dispatchEvent(new Event('zona_azul_subscribers_updated'))
+      }
+      
+      setIsCreateModalOpen(false)
+      setIsCreatingFromClientsTab(false)
+      showToast(isCreatingFromClientsTab ? 'Cliente creado correctamente' : 'Usuario creado correctamente')
+    } catch (err: any) {
+      setError(err.message || 'Error al crear usuario')
+      showToast(err.message || 'Error al crear usuario', true)
     }
-    
-    setIsCreateModalOpen(false)
-    setIsCreatingFromClientsTab(false)
-    showToast(isCreatingFromClientsTab ? 'Cliente creado correctamente' : 'Usuario creado correctamente')
   }
 
-  const handleSubmitEdit = (e: React.FormEvent) => {
+  const handleRemovePlan = async (userId: string, userName: string) => {
+    if (!confirm(`¿Estás seguro de quitar el plan asignado a ${userName}?`)) {
+      return
+    }
+
+    try {
+      // Verificar primero si realmente tiene un plan antes de intentar eliminarlo
+      const currentPlan = await api.getPlan(userId)
+      if (!currentPlan || !currentPlan.id) {
+        showToast('El usuario no tiene un plan asignado', true)
+        // Actualizar estado local de todas formas
+        setUsersWithPlans(prev => {
+          const updated = new Set(prev)
+          updated.delete(userId)
+          return updated
+        })
+        return
+      }
+
+      const success = await api.deleteUserPlan(userId)
+      
+      if (!success) {
+        showToast('Error al quitar el plan', true)
+        return
+      }
+      
+      // Marcar como eliminado recientemente para evitar que el polling lo recargue
+      recentlyDeletedPlansRef.current.add(userId)
+      
+      // Actualizar estado local inmediatamente - remover de usersWithPlans
+      setUsersWithPlans(prev => {
+        const updated = new Set(prev)
+        updated.delete(userId)
+        return updated
+      })
+      
+      showToast(`Plan de ${userName} eliminado correctamente`)
+      
+      // Remover de recentlyDeletedPlansRef después de 10 segundos
+      setTimeout(() => {
+        recentlyDeletedPlansRef.current.delete(userId)
+      }, 10000)
+      
+      // Verificar después de un delay que el plan fue eliminado
+      setTimeout(async () => {
+        try {
+          // Verificar directamente si el usuario todavía tiene plan
+          const planAfterDelete = await api.getPlan(userId)
+          if (planAfterDelete && planAfterDelete.id) {
+            console.warn(`Plan todavía existe para usuario ${userId} después de eliminarlo`)
+            // Si todavía existe, recargar todos los planes
+            const subscribers = apiUsers?.filter((u: any) => u.role === 'suscriptor') || []
+            const plansSet = new Set<string>()
+            
+            for (const subscriber of subscribers) {
+              try {
+                const plan = await api.getPlan(subscriber.id)
+                if (plan && plan.id) {
+                  plansSet.add(subscriber.id)
+                }
+              } catch (error) {
+                console.error('Error checking plan for subscriber:', subscriber.id, error)
+              }
+            }
+            
+            setUsersWithPlans(plansSet)
+          } else {
+            // Confirmar que el usuario ya no tiene plan
+            setUsersWithPlans(prev => {
+              const updated = new Set(prev)
+              updated.delete(userId)
+              return updated
+            })
+          }
+        } catch (error) {
+          console.error('Error verifying plan deletion:', error)
+        }
+      }, 1500)
+    } catch (err: any) {
+      console.error('Error removing plan:', err)
+      showToast(err.message || 'Error al quitar el plan', true)
+    }
+  }
+
+  const handleSubmitEdit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
@@ -416,27 +523,27 @@ export default function AdminUsuariosPage() {
       return
     }
 
-    const updated = users.map((u) =>
-      u.id === selectedUser.id
-        ? {
-            ...u,
-            name: formData.name,
-            email: formData.email,
-            role: formData.role,
-            // Recalcular clientes asignados basado en el rol (no usar formData.clients)
-            clients: countAssignedClients(selectedUser.id, formData.role),
-            status: formData.status,
-            ...(formData.password && { password: formData.password }),
-          }
-        : u
-    )
+    try {
+      const updateData: any = {
+        name: formData.name,
+        email: formData.email,
+        role: formData.role,
+      }
 
-    setUsers(updated)
-    localStorage.setItem('zona_azul_users', JSON.stringify(updated))
-    notifyUsersUpdate()
-    setIsEditModalOpen(false)
-    setSelectedUser(null)
-    showToast('Usuario actualizado correctamente')
+      if (formData.password) {
+        updateData.password = formData.password
+      }
+
+      await api.updateUser(selectedUser.id, updateData)
+      await refetchUsers() // Recargar usuarios
+
+      setIsEditModalOpen(false)
+      setSelectedUser(null)
+      showToast('Usuario actualizado correctamente')
+    } catch (err: any) {
+      setError(err.message || 'Error al actualizar usuario')
+      showToast(err.message || 'Error al actualizar usuario', true)
+    }
   }
 
   return (
@@ -449,6 +556,16 @@ export default function AdminUsuariosPage() {
       {success && (
         <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-green-700 text-sm">
           {success}
+        </div>
+      )}
+
+      {usersLoading && (
+        <div className="text-center py-8 text-gray-500">Cargando usuarios...</div>
+      )}
+
+      {usersError && (
+        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm">
+          Error al cargar usuarios: {usersError}
         </div>
       )}
 
@@ -546,9 +663,6 @@ export default function AdminUsuariosPage() {
                         </span>
                       </p>
                     </div>
-                    <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                      {member.status}
-                    </span>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-500">
                     <span>Clientes asignados: {member.clients}</span>
@@ -635,21 +749,38 @@ export default function AdminUsuariosPage() {
                       <p className="text-sm font-semibold text-gray-900">{member.name}</p>
                       <p className="text-xs text-gray-500">{member.email} · Suscriptor</p>
                     </div>
-                    <span className="rounded-full bg-accent/10 px-3 py-1 text-xs font-semibold text-accent">
-                      {member.status}
-                    </span>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        userSubscriptions.get(member.id) === 'active'
+                          ? 'bg-green-100 text-green-700'
+                          : userSubscriptions.get(member.id) === 'expired'
+                          ? 'bg-red-100 text-red-700'
+                          : 'bg-gray-100 text-gray-700'
+                      }`}>
+                        Suscripción: {userSubscriptions.get(member.id) === 'active' ? 'Activa' : 
+                                     userSubscriptions.get(member.id) === 'expired' ? 'Expirada' : 'Inactiva'}
+                      </span>
+                    </div>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs">
-                    <span className={`font-medium ${hasPlanAssigned(member.id) ? 'text-green-600' : 'text-gray-500'}`}>
-                      Plan: {hasPlanAssigned(member.id) ? '✓ Asignado' : 'No asignado'}
+                    <span className={`font-medium ${usersWithPlans.has(member.id) ? 'text-green-600' : 'text-gray-500'}`}>
+                      Plan: {usersWithPlans.has(member.id) ? '✓ Asignado' : 'No asignado'}
                     </span>
                     <div className="flex gap-2 flex-wrap">
                       <button
                         onClick={() => handleAssignPlan(member)}
                         className="rounded-full border border-primary px-3 py-1 font-medium text-primary hover:bg-primary hover:text-white transition text-xs"
                       >
-                        {hasPlanAssigned(member.id) ? 'Cambiar plan' : 'Asignar plan'}
+                        {usersWithPlans.has(member.id) ? 'Cambiar plan' : 'Asignar plan'}
                       </button>
+                      {usersWithPlans.has(member.id) && (
+                        <button
+                          onClick={() => handleRemovePlan(member.id, member.name)}
+                          className="rounded-full border border-red-300 px-3 py-1 font-medium text-red-600 hover:bg-red-50 transition text-xs"
+                        >
+                          Quitar plan
+                        </button>
+                      )}
                       <button
                         onClick={() => handleEdit(member)}
                         className="rounded-full border border-gray-200 px-3 py-1 font-medium text-gray-600 hover:border-accent hover:text-accent transition text-xs"
@@ -806,7 +937,7 @@ export default function AdminUsuariosPage() {
         onClose={() => {
           setIsAssignPlanModalOpen(false)
           setSelectedUser(null)
-          setSelectedTemplate('')
+          setSelectedPlanId('')
         }}
         title={`Asignar plan a ${selectedUser?.name || ''}`}
         size="md"
@@ -820,42 +951,41 @@ export default function AdminUsuariosPage() {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Selecciona un plan nutricional
             </label>
-            {availableTemplates.length === 0 ? (
+            {availablePlans.length === 0 ? (
               <p className="text-sm text-gray-500 py-4">
                 No hay planes disponibles. Los nutricionistas pueden crear planes desde su dashboard.
               </p>
             ) : (
               <div className="space-y-2 max-h-64 overflow-y-auto">
-                {availableTemplates.map((template) => (
+                {availablePlans.map((plan) => (
                   <label
-                    key={template.id}
+                    key={plan.id}
                     className={`block p-3 border rounded-lg cursor-pointer transition ${
-                      selectedTemplate === template.id
+                      selectedPlanId === plan.id
                         ? 'border-primary bg-primary/5'
                         : 'border-gray-200 hover:border-primary/40'
                     }`}
                   >
                     <input
                       type="radio"
-                      name="template"
-                      value={template.id}
-                      checked={selectedTemplate === template.id}
-                      onChange={(e) => setSelectedTemplate(e.target.value)}
+                      name="plan"
+                      value={plan.id}
+                      checked={selectedPlanId === plan.id}
+                      onChange={(e) => setSelectedPlanId(e.target.value)}
                       className="sr-only"
                     />
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <p className="font-semibold text-gray-900">{template.name}</p>
-                        <p className="text-xs text-gray-600 mt-1">{template.focus}</p>
-                        <div className="flex gap-3 mt-2 text-xs text-gray-500">
-                          <span>Duración: {template.duration}</span>
-                          {template.calories && <span>• {template.calories} kcal/día</span>}
-                        </div>
-                        {template.description && (
-                          <p className="text-xs text-gray-500 mt-1">{template.description}</p>
+                        <p className="font-semibold text-gray-900">{plan.name}</p>
+                        {plan.description && (
+                          <p className="text-xs text-gray-600 mt-1">{plan.description}</p>
                         )}
+                        <div className="flex gap-3 mt-2 text-xs text-gray-500">
+                          {plan.total_calories && <span>• {plan.total_calories} kcal/día</span>}
+                          {plan.days && <span>• {plan.days.length} días</span>}
+                        </div>
                       </div>
-                      {selectedTemplate === template.id && (
+                      {selectedPlanId === plan.id && (
                         <svg className="w-5 h-5 text-primary ml-2" fill="currentColor" viewBox="0 0 20 20">
                           <path
                             fillRule="evenodd"
@@ -877,7 +1007,7 @@ export default function AdminUsuariosPage() {
               onClick={() => {
                 setIsAssignPlanModalOpen(false)
                 setSelectedUser(null)
-                setSelectedTemplate('')
+                setSelectedPlanId('')
               }}
               className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
             >
@@ -885,7 +1015,7 @@ export default function AdminUsuariosPage() {
             </button>
             <button
               type="submit"
-              disabled={!selectedTemplate || availableTemplates.length === 0}
+              disabled={!selectedPlanId || availablePlans.length === 0}
               className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Asignar plan
@@ -1008,121 +1138,66 @@ export default function AdminUsuariosPage() {
             <label className="block text-sm font-medium text-gray-700 mb-3">
               Selecciona los clientes (suscriptores) a asignar
             </label>
-            {(() => {
-              // Obtener todos los suscriptores
-              const allSubscribers = getSubscribers()
-              
-              // Obtener todos los nutricionistas
-              const stored = localStorage.getItem('zona_azul_users')
-              let allUsers: User[] = []
-              if (stored) {
-                try {
-                  allUsers = JSON.parse(stored)
-                } catch (e) {
-                  // Error al parsear
-                }
-              }
-              
-              // Combinar usuarios de mockUsers y localStorage
-              const usersMap = new Map<string, User>()
-              mockUsers.forEach((u) => usersMap.set(u.id, u))
-              allUsers.forEach((u) => {
-                if (u.email && u.password && u.role) {
-                  usersMap.set(u.id, u)
-                }
-              })
-              
-              const allNutricionistas = Array.from(usersMap.values()).filter((u) => u.role === 'nutricionista')
-              
-              // Crear un mapa de suscriptor -> nutricionista asignado
-              const subscriberToNutricionista = new Map<string, { nutricionistaId: string; nutricionistaName: string }>()
-              
-              allNutricionistas.forEach((nutri) => {
-                try {
-                  const stored = localStorage.getItem(`zona_azul_clients_user_${nutri.id}`)
-                  if (stored) {
-                    const clients = JSON.parse(stored)
-                    if (Array.isArray(clients)) {
-                      clients.forEach((client: any) => {
-                        if (client.id) {
-                          subscriberToNutricionista.set(client.id, {
-                            nutricionistaId: nutri.id,
-                            nutricionistaName: nutri.name,
-                          })
-                        }
-                      })
-                    }
-                  }
-                } catch (error) {
-                  console.error(`Error checking clients for nutricionista ${nutri.id}:`, error)
-                }
-              })
-              
-              // El admin puede ver TODOS los suscriptores, incluso los asignados a otros nutricionistas
-              // para poder reasignarlos
-              if (allSubscribers.length === 0) {
-                return (
-                  <p className="text-sm text-gray-500 py-4">
-                    No hay suscriptores disponibles. Crea suscriptores desde la pestaña "Clientes".
-                  </p>
-                )
-              }
-              
-              return (
-                <div className="space-y-2 max-h-96 overflow-y-auto border border-gray-200 rounded-lg p-3">
-                  {allSubscribers.map((subscriber) => {
-                    // Verificar si este suscriptor está asignado al nutricionista actual
-                    const isAssignedToCurrent = selectedClientIds.includes(subscriber.id)
-                    
-                    // Verificar si está asignado a otro nutricionista
-                    const assignedToOther = subscriberToNutricionista.get(subscriber.id)
-                    const isAssignedToOther = assignedToOther && assignedToOther.nutricionistaId !== selectedUser?.id
-                    
-                    return (
-                      <label
-                        key={subscriber.id}
-                        className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition ${
-                          isAssignedToCurrent
-                            ? 'bg-primary/10 border-2 border-primary'
-                            : isAssignedToOther
-                            ? 'bg-yellow-50 border-2 border-yellow-300 hover:bg-yellow-100'
-                            : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isAssignedToCurrent}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedClientIds([...selectedClientIds, subscriber.id])
-                            } else {
-                              setSelectedClientIds(selectedClientIds.filter((id) => id !== subscriber.id))
-                            }
-                          }}
-                          className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-                        />
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-gray-900">{subscriber.name}</p>
-                            {isAssignedToOther && (
-                              <span className="text-xs px-2 py-0.5 bg-yellow-200 text-yellow-800 rounded-full">
-                                Asignado a {assignedToOther.nutricionistaName}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-gray-500">{subscriber.email}</p>
+            {subscribersLoading ? (
+              <p className="text-sm text-gray-500 py-4">Cargando suscriptores...</p>
+            ) : availableSubscribers.length === 0 ? (
+              <p className="text-sm text-gray-500 py-4">
+                No hay suscriptores disponibles. Crea suscriptores desde la pestaña "Clientes".
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-96 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                {availableSubscribers.map((subscriber) => {
+                  // Verificar si este suscriptor está asignado al nutricionista actual
+                  const isAssignedToCurrent = selectedClientIds.includes(subscriber.id)
+                  
+                  // Verificar si está asignado a otro nutricionista
+                  const assignedToOther = subscriberToNutricionista.get(subscriber.id)
+                  const isAssignedToOther = assignedToOther && assignedToOther.nutricionistaId !== selectedUser?.id
+                  
+                  return (
+                    <label
+                      key={subscriber.id}
+                      className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition ${
+                        isAssignedToCurrent
+                          ? 'bg-primary/10 border-2 border-primary'
+                          : isAssignedToOther
+                          ? 'bg-yellow-50 border-2 border-yellow-300 hover:bg-yellow-100'
+                          : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isAssignedToCurrent}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedClientIds([...selectedClientIds, subscriber.id])
+                          } else {
+                            setSelectedClientIds(selectedClientIds.filter((id) => id !== subscriber.id))
+                          }
+                        }}
+                        className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-gray-900">{subscriber.name}</p>
                           {isAssignedToOther && (
-                            <p className="text-xs text-yellow-700 mt-1">
-                              ⚠️ Al seleccionarlo, será reasignado a este nutricionista
-                            </p>
+                            <span className="text-xs px-2 py-0.5 bg-yellow-200 text-yellow-800 rounded-full">
+                              Asignado a {assignedToOther.nutricionistaName}
+                            </span>
                           )}
                         </div>
-                      </label>
-                    )
-                  })}
-                </div>
-              )
-            })()}
+                        <p className="text-xs text-gray-500">{subscriber.email}</p>
+                        {isAssignedToOther && (
+                          <p className="text-xs text-yellow-700 mt-1">
+                            ⚠️ Al seleccionarlo, será reasignado a este nutricionista
+                          </p>
+                        )}
+                      </div>
+                    </label>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
           <div className="flex gap-3 pt-4 border-t">

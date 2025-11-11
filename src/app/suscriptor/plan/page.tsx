@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import Modal from '../../../components/ui/Modal'
-import { mockMealPlan, MealPlanDay } from '../../../lib/mockPlan'
+import { MealPlanDay } from '../../../lib/types'
 import { useAuth } from '../../../hooks/useAuth'
-import { getUserData, setUserData } from '../../../lib/storage'
+import { getPlan, getMeals, replaceMealInPlanDay } from '../../../lib/api'
 
 interface SuggestedMeal {
   id: string
@@ -102,15 +102,21 @@ const defaultSuggestedMeals: SuggestedMeal[] = [
   },
 ]
 
-// Verificar si es Viernes, Sábado o Domingo
+// Verificar si se puede modificar el plan
+// El sábado se actualiza el menú de la semana siguiente
+// Se puede modificar SOLO sábado y domingo de la misma semana
+// Lunes a viernes NO se puede modificar
+// Una vez que es sábado de nuevo, se actualiza el plan y el ciclo se repite
 const canModifyPlan = (): boolean => {
-  const day = new Date().getDay() // 0 = Domingo, 5 = Viernes, 6 = Sábado
-  return day === 0 || day === 5 || day === 6
+  const day = new Date().getDay() // 0 = Domingo, 1 = Lunes, ..., 5 = Viernes, 6 = Sábado
+  // Solo se puede modificar sábado (6) y domingo (0)
+  return day === 6 || day === 0
 }
 
 export default function SuscriptorPlanPage() {
   const { userId } = useAuth()
   const [planDays, setPlanDays] = useState<MealPlanDay[]>([])
+  const [planId, setPlanId] = useState<string | null>(null)
   const [suggestedMeals, setSuggestedMeals] = useState<SuggestedMeal[]>(defaultSuggestedMeals)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [selectedDay, setSelectedDay] = useState<MealPlanDay | null>(null)
@@ -120,73 +126,56 @@ export default function SuscriptorPlanPage() {
   const [canModify, setCanModify] = useState(false)
 
   useEffect(() => {
-    setCanModify(canModifyPlan())
-
-    // Cargar plan desde localStorage personalizado por usuario
-    const loadPlan = () => {
+    const loadData = async () => {
       if (!userId) return
-      
-      const plan = getUserData('zona_azul_suscriptor_plan', userId, null)
-      if (plan && plan.days && plan.days.length > 0) {
-        setPlanDays(plan.days)
-      } else {
-        // Si no hay plan, no asignar uno por defecto
-        // El usuario debe esperar a que el nutricionista le asigne un plan
-        setPlanDays([])
-      }
-    }
 
-    // Cargar opciones sugeridas
-    const loadSuggestedMeals = () => {
-      const storedMeals = localStorage.getItem('zona_azul_suggested_meals')
-      if (storedMeals) {
-        try {
-          const meals = JSON.parse(storedMeals)
-          setSuggestedMeals(meals)
-        } catch (error) {
-          console.error('Error loading suggested meals:', error)
+      setCanModify(canModifyPlan())
+
+      try {
+        // Cargar plan desde API
+        const apiPlan = await getPlan()
+        
+        if (apiPlan && apiPlan.days && apiPlan.days.length > 0) {
+          setPlanDays(apiPlan.days)
+          setPlanId(apiPlan.id)
+        } else {
+          setPlanDays([])
+          setPlanId(null)
+        }
+
+        // Cargar comidas disponibles desde API para sugerencias
+        const meals = await getMeals()
+        if (meals && meals.length > 0) {
+          // Convertir meals de API a formato SuggestedMeal
+          const suggested: SuggestedMeal[] = meals
+            .filter((m: any) => m.available)
+            .map((m: any) => ({
+              id: m.id || `meal-${m.name}`,
+              name: m.name,
+              calories: m.calories,
+              description: m.description || '',
+              category: m.type || 'lunch',
+            }))
+          setSuggestedMeals(suggested.length > 0 ? suggested : defaultSuggestedMeals)
+        } else {
           setSuggestedMeals(defaultSuggestedMeals)
         }
-      } else {
+      } catch (error) {
+        console.error('Error loading plan data:', error)
+        setPlanDays([])
         setSuggestedMeals(defaultSuggestedMeals)
       }
     }
 
-    // Cargar datos iniciales solo si hay userId
-    if (userId) {
-      loadPlan()
-    }
-    loadSuggestedMeals()
+    loadData()
 
-    // Escuchar actualizaciones del plan desde el nutricionista
-    const handlePlanUpdate = () => {
-      if (userId) {
-        loadPlan()
-      }
-    }
-
-    // Escuchar actualizaciones de opciones sugeridas
-    const handleMealsUpdate = () => {
-      loadSuggestedMeals()
-    }
-
-    window.addEventListener('zona_azul_plan_updated', handlePlanUpdate)
-    window.addEventListener('zona_azul_suggested_meals_updated', handleMealsUpdate)
-
-    // Polling menos frecuente solo como fallback (cada 10 segundos)
-    const interval = setInterval(() => {
-      if (userId) {
-        loadPlan()
-      }
-      loadSuggestedMeals()
-    }, 10000)
+    // Polling cada 30 segundos para actualizar
+    const interval = setInterval(loadData, 30000)
 
     return () => {
-      window.removeEventListener('zona_azul_plan_updated', handlePlanUpdate)
-      window.removeEventListener('zona_azul_suggested_meals_updated', handleMealsUpdate)
       clearInterval(interval)
     }
-  }, [userId]) // Depende de userId para recargar cuando cambie
+  }, [userId])
 
   const showToast = (message: string, isError = false) => {
     if (isError) {
@@ -200,7 +189,7 @@ export default function SuscriptorPlanPage() {
 
   const handleReplaceMeal = (day: MealPlanDay, mealIndex: number) => {
     if (!canModify) {
-      showToast('Solo puedes modificar tu plan de Viernes a Domingo', true)
+      showToast('Solo puedes modificar tu plan sábado y domingo. Lunes a viernes no se puede modificar.', true)
       return
     }
     setSelectedDay(day)
@@ -208,44 +197,64 @@ export default function SuscriptorPlanPage() {
     setIsEditModalOpen(true)
   }
 
-  const handleConfirmReplacement = (newMeal: SuggestedMeal) => {
-    if (!selectedDay || selectedMealIndex === -1) return
-
-    const updatedDays = planDays.map((day) => {
-      if (day.day === selectedDay.day) {
-        const updatedMeals = [...day.meals]
-        updatedMeals[selectedMealIndex] = {
-          name: newMeal.name,
-          calories: newMeal.calories,
-          description: newMeal.description,
-        }
-        const newTotalCalories = updatedMeals.reduce((sum, meal) => sum + meal.calories, 0)
-        return {
-          ...day,
-          meals: updatedMeals,
-          totalCalories: newTotalCalories,
-        }
-      }
-      return day
-    })
-
-    setPlanDays(updatedDays)
-
-    // Guardar en localStorage personalizado por usuario
-    if (userId) {
-      const storedPlan = getUserData('zona_azul_suscriptor_plan', userId, null)
-      if (storedPlan) {
-        storedPlan.days = updatedDays
-        setUserData('zona_azul_suscriptor_plan', storedPlan, userId)
-        window.dispatchEvent(new Event('zona_azul_plan_updated'))
-      }
+  const handleConfirmReplacement = async (newMeal: SuggestedMeal) => {
+    if (!selectedDay || selectedMealIndex === -1 || !planId || !selectedDay.id) {
+      showToast('Error: Faltan datos para reemplazar la comida', true)
+      return
     }
 
-    setIsEditModalOpen(false)
-    setSelectedDay(null)
-    setSelectedMealIndex(-1)
-    showToast('Plato reemplazado correctamente')
+    const oldMeal = selectedDay.meals[selectedMealIndex]
+    if (!oldMeal || !oldMeal.id) {
+      showToast('Error: No se pudo identificar la comida a reemplazar', true)
+      return
+    }
+
+    try {
+      // Reemplazar la comida en la base de datos
+      const success = await replaceMealInPlanDay(
+        planId,
+        selectedDay.id,
+        oldMeal.id,
+        newMeal.id,
+        selectedMealIndex + 1 // order_index es 1-based
+      )
+
+      if (!success) {
+        showToast('Error al reemplazar la comida en el plan', true)
+        return
+      }
+
+      // Actualizar estado local
+      const updatedDays = planDays.map((day) => {
+        if (day.day === selectedDay.day) {
+          const updatedMeals = [...day.meals]
+          updatedMeals[selectedMealIndex] = {
+            ...updatedMeals[selectedMealIndex],
+            name: newMeal.name,
+            calories: newMeal.calories,
+            description: newMeal.description,
+          }
+          const newTotalCalories = updatedMeals.reduce((sum, meal) => sum + meal.calories, 0)
+          return {
+            ...day,
+            meals: updatedMeals,
+            totalCalories: newTotalCalories,
+          }
+        }
+        return day
+      })
+
+      setPlanDays(updatedDays)
+      setIsEditModalOpen(false)
+      setSelectedDay(null)
+      setSelectedMealIndex(-1)
+      showToast('Plato reemplazado correctamente')
+    } catch (error) {
+      console.error('Error replacing meal:', error)
+      showToast('Error al reemplazar la comida. Por favor, intenta de nuevo.', true)
+    }
   }
+
 
   if (planDays.length === 0) {
     return (
@@ -303,48 +312,63 @@ export default function SuscriptorPlanPage() {
         </div>
         <h2 className="text-2xl font-bold text-gray-900">Plan semanal personalizado</h2>
         <p className="mt-2 text-sm text-gray-600">
-          Plan semanal con el que trabajaremos esta semana. Puedes modificar platos de Viernes a Domingo para ajustar la semana siguiente.
+          Plan semanal de <strong>lunes a viernes</strong>. El sábado se actualiza el menú de la semana siguiente. Puedes revisar y modificar platos <strong>solo sábado y domingo</strong>. Lunes a viernes no se puede modificar. Una vez que sea sábado de nuevo, se actualiza el plan y el ciclo se repite.
         </p>
         {canModify ? (
           <p className="mt-3 text-xs text-primary font-medium">
-            ✓ Puedes modificar tu plan ahora (Viernes a Domingo)
+            ✓ Puedes modificar tu plan ahora (sábado o domingo)
           </p>
         ) : (
           <p className="mt-3 text-xs text-gray-500">
-            Modificación disponible de Viernes a Domingo para ajustar la semana siguiente.
+            Modificación disponible solo sábado y domingo. Lunes a viernes no se puede modificar.
           </p>
         )}
       </header>
 
       <div className="grid gap-4 md:grid-cols-2">
-        {planDays.map((day) => (
-          <article key={day.day} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-900">{day.day}</h3>
-            <p className="mt-1 text-sm text-primary font-medium">
-              Objetivo calórico: {day.totalCalories.toLocaleString()} kcal
-            </p>
-            <ul className="mt-4 space-y-3 text-sm text-gray-600">
-              {day.meals.map((meal, index) => (
-                <li key={`${meal.name}-${index}`} className="rounded-xl bg-slate-50 p-3 border border-gray-100">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-semibold text-gray-800">{meal.name}</span>
-                    <span className="text-xs text-primary font-medium">{meal.calories} kcal</span>
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500">{meal.description}</p>
-                  {canModify && (
-                    <button
-                      onClick={() => handleReplaceMeal(day, index)}
-                      className="mt-2 text-xs text-primary hover:underline font-medium"
-                      type="button"
-                    >
-                      Cambiar por otra opción →
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </article>
-        ))}
+        {planDays.length > 0 ? (
+          planDays.map((day) => {
+            const meals = day.meals || []
+            return (
+              <article key={day.day} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                <h3 className="text-lg font-semibold text-gray-900">{day.day}</h3>
+                <p className="mt-1 text-sm text-primary font-medium">
+                  Objetivo calórico: {(day.totalCalories || 0).toLocaleString()} kcal
+                </p>
+                {meals.length === 0 ? (
+                  <p className="mt-4 text-sm text-gray-500 italic">
+                    No hay comidas asignadas para este día aún.
+                  </p>
+                ) : (
+                  <ul className="mt-4 space-y-3 text-sm text-gray-600">
+                    {meals.map((meal, index) => (
+                      <li key={`${meal.name}-${index}`} className="rounded-xl bg-slate-50 p-3 border border-gray-100">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-semibold text-gray-800">{meal.name}</span>
+                          <span className="text-xs text-primary font-medium">{meal.calories} kcal</span>
+                        </div>
+                        <p className="mt-1 text-xs text-gray-500">{meal.description}</p>
+                        {canModify && (
+                          <button
+                            onClick={() => handleReplaceMeal(day, index)}
+                            className="mt-2 text-xs text-primary hover:underline font-medium"
+                            type="button"
+                          >
+                            Cambiar por otra opción →
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </article>
+            )
+          })
+        ) : (
+          <div className="col-span-2 p-8 text-center text-gray-500">
+            <p>Cargando plan...</p>
+          </div>
+        )}
       </div>
 
       {/* Modal Reemplazar Plato */}

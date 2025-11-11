@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
 import Modal from '../../../components/ui/Modal'
 import { NotificationHelpers } from '../../../lib/notifications'
+import { getAppointments, updateAppointment, getCalendarAuthUrl, getNutritionistSchedule, updateNutritionistSchedule } from '../../../lib/api'
 
 interface Appointment {
   id: string
@@ -32,47 +33,187 @@ export default function NutricionistaCitasPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [calendarConnected, setCalendarConnected] = useState(false)
+  const [checkingCalendar, setCheckingCalendar] = useState(true)
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false)
+  const [schedule, setSchedule] = useState<any>(null)
+  const [savingSchedule, setSavingSchedule] = useState(false)
 
-  // Función para cargar citas
-  const loadAppointments = () => {
+  // Verificar si el calendario está conectado
+  const checkCalendarConnection = async () => {
+    if (!userId) return
+
     try {
-      const stored = localStorage.getItem('demo_appointments')
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        // Filtrar citas asignadas a este nutricionista o sin asignar
-        const filtered = parsed.filter((apt: Appointment) => 
-          !apt.nutritionistId || apt.nutritionistId === userId
-        )
-        // Ordenar por fecha de creación (más recientes primero)
-        const sorted = filtered.sort((a: Appointment, b: Appointment) => {
-          const dateA = a.created_at ? new Date(a.created_at).getTime() : 0
-          const dateB = b.created_at ? new Date(b.created_at).getTime() : 0
-          return dateB - dateA
-        })
-
-        // Detectar nuevas citas pendientes
-        if (previousAppointments.length > 0 && document.hidden) {
-          const newAppointments = sorted.filter(
-            (current: Appointment) =>
-              (current.status === 'pendiente' || !current.status) &&
-              !previousAppointments.some((prev) => prev.id === current.id)
-          )
-
-          newAppointments.forEach((apt: Appointment) => {
-            NotificationHelpers.newAppointment(
-              apt.name,
-              apt.slot,
-              '/nutricionista/citas',
-              userId
-            )
-          })
-        }
-
-        setPreviousAppointments(sorted)
-        setAppointments(sorted)
-      } else {
-        setAppointments([])
+      const response = await fetch('/api/calendar/status', {
+        credentials: 'include',
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setCalendarConnected(data.connected || false)
       }
+    } catch (error) {
+      console.error('Error checking calendar connection:', error)
+    } finally {
+      setCheckingCalendar(false)
+    }
+  }
+
+  const handleConnectCalendar = async () => {
+    try {
+      console.log('Iniciando conexión de calendario...')
+      const authUrl = await getCalendarAuthUrl()
+      console.log('URL de autorización obtenida:', authUrl ? 'Sí' : 'No')
+
+      if (authUrl) {
+        console.log('Redirigiendo a Google OAuth...')
+        window.location.href = authUrl
+      } else {
+        console.error('No se obtuvo URL de autorización')
+        showToast('Error al obtener URL de autorización', true)
+      }
+    } catch (error: any) {
+      console.error('Error connecting calendar:', error)
+      const errorMessage = error?.message || 'Error desconocido al conectar calendario'
+      showToast(`Error: ${errorMessage}`, true)
+    }
+  }
+
+  // Cargar horarios del nutricionista
+  const loadSchedule = async () => {
+    if (!userId) return
+
+    try {
+      const nutritionistSchedule = await getNutritionistSchedule()
+      // Si no hay horarios configurados, usar valores por defecto
+      if (!nutritionistSchedule) {
+        setSchedule({
+          monday_start_hour: 9,
+          monday_end_hour: 18,
+          monday_enabled: true,
+          tuesday_start_hour: 9,
+          tuesday_end_hour: 18,
+          tuesday_enabled: true,
+          wednesday_start_hour: 9,
+          wednesday_end_hour: 18,
+          wednesday_enabled: true,
+          thursday_start_hour: 9,
+          thursday_end_hour: 18,
+          thursday_enabled: true,
+          friday_start_hour: 9,
+          friday_end_hour: 18,
+          friday_enabled: true,
+          saturday_start_hour: null,
+          saturday_end_hour: null,
+          saturday_enabled: false,
+          sunday_start_hour: null,
+          sunday_end_hour: null,
+          sunday_enabled: false,
+          slot_duration_minutes: 60,
+        })
+      } else {
+        setSchedule(nutritionistSchedule)
+      }
+    } catch (error) {
+      console.error('Error loading schedule:', error)
+      // Usar valores por defecto en caso de error
+      setSchedule({
+        monday_start_hour: 9,
+        monday_end_hour: 18,
+        monday_enabled: true,
+        tuesday_start_hour: 9,
+        tuesday_end_hour: 18,
+        tuesday_enabled: true,
+        wednesday_start_hour: 9,
+        wednesday_end_hour: 18,
+        wednesday_enabled: true,
+        thursday_start_hour: 9,
+        thursday_end_hour: 18,
+        thursday_enabled: true,
+        friday_start_hour: 9,
+        friday_end_hour: 18,
+        friday_enabled: true,
+        saturday_start_hour: null,
+        saturday_end_hour: null,
+        saturday_enabled: false,
+        sunday_start_hour: null,
+        sunday_end_hour: null,
+        sunday_enabled: false,
+        slot_duration_minutes: 60,
+      })
+    }
+  }
+
+  // Guardar horarios
+  const handleSaveSchedule = async () => {
+    if (!userId || !schedule) return
+
+    setSavingSchedule(true)
+    try {
+      const updated = await updateNutritionistSchedule(schedule)
+      if (updated) {
+        setSchedule(updated)
+        setIsScheduleModalOpen(false)
+        showToast('Horarios guardados correctamente')
+      } else {
+        showToast('Error al guardar horarios', true)
+      }
+    } catch (error: any) {
+      console.error('Error saving schedule:', error)
+      showToast(error?.message || 'Error al guardar horarios', true)
+    } finally {
+      setSavingSchedule(false)
+    }
+  }
+
+  // Función para cargar citas desde la API
+  const loadAppointments = async () => {
+    if (!userId) return
+
+    try {
+      const apiAppointments = await getAppointments()
+
+      // Filtrar citas asignadas a este nutricionista o sin asignar
+      const filtered = apiAppointments
+        .filter((apt: any) => !apt.nutricionista_id || apt.nutricionista_id === userId)
+        .map((apt: any) => ({
+          id: apt.id,
+          name: apt.name || 'Cliente',
+          email: apt.email || '',
+          phone: apt.phone || undefined,
+          slot: apt.date_time || '',
+          created_at: apt.created_at,
+          status: apt.status || 'pendiente',
+          notes: apt.notes || undefined,
+          nutritionistId: apt.nutricionista_id || undefined,
+        } as Appointment))
+
+      // Ordenar por fecha de creación (más recientes primero)
+      const sorted = filtered.sort((a: Appointment, b: Appointment) => {
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0
+        return dateB - dateA
+      })
+
+      // Detectar nuevas citas pendientes
+      if (previousAppointments.length > 0 && document.hidden) {
+        const newAppointments = sorted.filter(
+          (current: Appointment) =>
+            (current.status === 'pendiente' || !current.status) &&
+            !previousAppointments.some((prev) => prev.id === current.id)
+        )
+
+        newAppointments.forEach((apt: Appointment) => {
+          NotificationHelpers.newAppointment(
+            apt.name,
+            apt.slot,
+            '/nutricionista/citas',
+            userId
+          )
+        })
+      }
+
+      setPreviousAppointments(sorted)
+      setAppointments(sorted)
     } catch (error) {
       console.error('Error loading appointments:', error)
       setAppointments([])
@@ -81,12 +222,23 @@ export default function NutricionistaCitasPage() {
 
   useEffect(() => {
     loadAppointments()
+    checkCalendarConnection()
+    loadSchedule()
 
-    // Escuchar cambios en localStorage (otras pestañas)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'demo_appointments') {
-        loadAppointments()
-      }
+    // Verificar si hay mensajes de éxito/error en la URL (del callback de OAuth)
+    const urlParams = new URLSearchParams(window.location.search)
+    const successParam = urlParams.get('success')
+    const errorParam = urlParams.get('error')
+
+    if (successParam === 'calendar_connected') {
+      showToast('Calendario de Google conectado correctamente')
+      setCalendarConnected(true)
+      // Limpiar URL
+      window.history.replaceState({}, '', window.location.pathname)
+    } else if (errorParam) {
+      showToast(`Error al conectar calendario: ${errorParam}`, true)
+      // Limpiar URL
+      window.history.replaceState({}, '', window.location.pathname)
     }
 
     // Escuchar cambios locales (misma pestaña)
@@ -94,14 +246,12 @@ export default function NutricionistaCitasPage() {
       loadAppointments()
     }
 
-    window.addEventListener('storage', handleStorageChange)
     window.addEventListener('zona_azul_appointments_updated', handleAppointmentsUpdate)
 
-    // Polling cada 2 segundos para detectar cambios (fallback)
-    const interval = setInterval(loadAppointments, 2000)
+    // Polling cada 10 segundos para actualizar
+    const interval = setInterval(loadAppointments, 10000)
 
     return () => {
-      window.removeEventListener('storage', handleStorageChange)
       window.removeEventListener('zona_azul_appointments_updated', handleAppointmentsUpdate)
       clearInterval(interval)
     }
@@ -156,39 +306,67 @@ export default function NutricionistaCitasPage() {
     setIsDetailModalOpen(true)
   }
 
-  const handleChangeStatus = (appointmentId: string, newStatus: 'confirmada' | 'cancelada' | 'completada') => {
-    const updated = appointments.map((apt) => {
-      if (apt.id === appointmentId) {
-        const updatedApt = { ...apt, status: newStatus }
-        // Si se confirma, asignar al nutricionista actual
-        if (newStatus === 'confirmada' && !apt.nutritionistId) {
-          updatedApt.nutritionistId = userId
-        }
-        return updatedApt
+  const handleChangeStatus = async (appointmentId: string, newStatus: 'confirmada' | 'cancelada' | 'completada') => {
+    if (!userId) return
+
+    try {
+      // Mapear estados del frontend a estados de API
+      const apiStatusMap: Record<string, string> = {
+        'confirmada': 'confirmada',
+        'cancelada': 'cancelada',
+        'completada': 'completada',
       }
-      return apt
-    })
-    setAppointments(updated)
-    localStorage.setItem('demo_appointments', JSON.stringify(updated))
-    notifyAppointmentsUpdate()
-    showToast(`Cita ${newStatus === 'confirmada' ? 'confirmada' : newStatus === 'completada' ? 'marcada como completada' : 'cancelada'} correctamente`)
-    if (selectedAppointment?.id === appointmentId) {
-      setSelectedAppointment({ ...selectedAppointment, status: newStatus })
+      const apiStatus = apiStatusMap[newStatus] || 'pendiente'
+
+      const updateData: any = { status: apiStatus }
+
+      // Si se confirma, asignar al nutricionista actual
+      if (newStatus === 'confirmada') {
+        updateData.nutricionista_id = userId
+      }
+
+      const updated = await updateAppointment(appointmentId, updateData)
+
+      if (updated) {
+        // Recargar citas
+        await loadAppointments()
+        showToast(`Cita ${newStatus === 'confirmada' ? 'confirmada' : newStatus === 'completada' ? 'marcada como completada' : 'cancelada'} correctamente`)
+
+        // Actualizar selectedAppointment si es el mismo
+        if (selectedAppointment?.id === appointmentId) {
+          const updatedApt = appointments.find((apt) => apt.id === appointmentId)
+          if (updatedApt) {
+            setSelectedAppointment({ ...updatedApt, status: newStatus })
+          }
+        }
+      } else {
+        showToast('Error al actualizar la cita', true)
+      }
+    } catch (error: any) {
+      console.error('Error updating appointment:', error)
+      showToast(error.message || 'Error al actualizar la cita', true)
     }
   }
 
-  const handleSaveNotes = () => {
+  const handleSaveNotes = async () => {
     if (!selectedAppointment) return
 
-    const updated = appointments.map((apt) =>
-      apt.id === selectedAppointment.id ? { ...apt, notes } : apt
-    )
-    setAppointments(updated)
-    localStorage.setItem('demo_appointments', JSON.stringify(updated))
-    notifyAppointmentsUpdate()
-    setSelectedAppointment({ ...selectedAppointment, notes })
-    setIsNotesModalOpen(false)
-    showToast('Notas guardadas correctamente')
+    try {
+      const updated = await updateAppointment(selectedAppointment.id, { notes })
+
+      if (updated) {
+        // Recargar citas
+        await loadAppointments()
+        setSelectedAppointment({ ...selectedAppointment, notes })
+        setIsNotesModalOpen(false)
+        showToast('Notas guardadas correctamente')
+      } else {
+        showToast('Error al guardar las notas', true)
+      }
+    } catch (error: any) {
+      console.error('Error saving notes:', error)
+      showToast(error.message || 'Error al guardar las notas', true)
+    }
   }
 
   const getStatusColor = (status?: string) => {
@@ -244,10 +422,45 @@ export default function NutricionistaCitasPage() {
       )}
 
       <header className="rounded-2xl border border-accent/30 bg-white p-6 shadow-sm">
-        <h2 className="text-2xl font-bold text-gray-900">Gestión de citas</h2>
-        <p className="mt-2 text-sm text-gray-600">
-          Administra tus citas nutricionales. Confirma, programa y realiza seguimiento de tus consultas.
-        </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Gestión de citas</h2>
+            <p className="mt-2 text-sm text-gray-600">
+              Administra tus citas nutricionales. Confirma, programa y realiza seguimiento de tus consultas.
+            </p>
+          </div>
+          {!checkingCalendar && (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setIsScheduleModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent/90 transition text-sm font-medium"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Configurar Horarios
+              </button>
+              {calendarConnected ? (
+                <div className="flex items-center gap-2 text-sm text-green-600">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Calendario conectado</span>
+                </div>
+              ) : (
+                <button
+                  onClick={handleConnectCalendar}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition text-sm font-medium"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Conectar Google Calendar
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </header>
 
       {/* Resumen */}
@@ -291,11 +504,10 @@ export default function NutricionistaCitasPage() {
               <button
                 key={status}
                 onClick={() => setFilter(status)}
-                className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
-                  filter === status
-                    ? 'bg-primary text-white shadow-md'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
+                className={`rounded-full px-4 py-2 text-xs font-semibold transition ${filter === status
+                  ? 'bg-primary text-white shadow-md'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
               >
                 {status === 'todas' ? 'Todas' : status.charAt(0).toUpperCase() + status.slice(1)}
               </button>
@@ -334,8 +546,8 @@ export default function NutricionistaCitasPage() {
               {searchTerm
                 ? 'No se encontraron citas con ese criterio de búsqueda.'
                 : filter !== 'todas'
-                ? `No hay citas ${filter === 'pendiente' ? 'pendientes' : filter}.`
-                : 'No hay citas registradas aún.'}
+                  ? `No hay citas ${filter === 'pendiente' ? 'pendientes' : filter}.`
+                  : 'No hay citas registradas aún.'}
             </p>
           </div>
         ) : (
@@ -593,6 +805,130 @@ export default function NutricionistaCitasPage() {
             </button>
           </div>
         </div>
+      </Modal>
+
+      {/* Modal Configurar Horarios */}
+      <Modal
+        isOpen={isScheduleModalOpen}
+        onClose={() => setIsScheduleModalOpen(false)}
+        title="Configurar Horarios de Trabajo"
+        size="lg"
+      >
+        {schedule && (
+          <div className="space-y-6">
+            <p className="text-sm text-gray-600">
+              Configura tus horarios de disponibilidad. Los usuarios solo podrán agendar citas en estos horarios.
+            </p>
+
+            {/* Duración de las citas */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Duración de las citas (minutos)
+              </label>
+              <input
+                type="number"
+                min="15"
+                max="240"
+                step="15"
+                value={schedule.slot_duration_minutes || 60}
+                onChange={(e) => setSchedule({ ...schedule, slot_duration_minutes: parseInt(e.target.value) || 60 })}
+                className="w-full rounded-lg border border-gray-200 px-4 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition"
+              />
+            </div>
+
+            {/* Horarios por día */}
+            <div className="space-y-4">
+              {[
+                { key: 'monday', label: 'Lunes' },
+                { key: 'tuesday', label: 'Martes' },
+                { key: 'wednesday', label: 'Miércoles' },
+                { key: 'thursday', label: 'Jueves' },
+                { key: 'friday', label: 'Viernes' },
+                { key: 'saturday', label: 'Sábado' },
+                { key: 'sunday', label: 'Domingo' },
+              ].map((day) => {
+                const enabled = schedule[`${day.key}_enabled`] as boolean
+                const startHour = schedule[`${day.key}_start_hour`] as number | null
+                const endHour = schedule[`${day.key}_end_hour`] as number | null
+
+                return (
+                  <div key={day.key} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={enabled}
+                          onChange={(e) => {
+                            setSchedule({
+                              ...schedule,
+                              [`${day.key}_enabled`]: e.target.checked,
+                              [`${day.key}_start_hour`]: e.target.checked ? (startHour || 9) : null,
+                              [`${day.key}_end_hour`]: e.target.checked ? (endHour || 18) : null,
+                            })
+                          }}
+                          className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                        />
+                        <span>{day.label}</span>
+                      </label>
+                    </div>
+                    {enabled && (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Hora inicio</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="23"
+                            value={startHour || 9}
+                            onChange={(e) => {
+                              const hour = parseInt(e.target.value) || 0
+                              if (hour >= 0 && hour <= 23) {
+                                setSchedule({ ...schedule, [`${day.key}_start_hour`]: hour })
+                              }
+                            }}
+                            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Hora fin</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="23"
+                            value={endHour || 18}
+                            onChange={(e) => {
+                              const hour = parseInt(e.target.value) || 0
+                              if (hour >= 0 && hour <= 23) {
+                                setSchedule({ ...schedule, [`${day.key}_end_hour`]: hour })
+                              }
+                            }}
+                            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="flex gap-3 pt-4 border-t">
+              <button
+                onClick={() => setIsScheduleModalOpen(false)}
+                className="flex-1 px-4 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveSchedule}
+                disabled={savingSchedule}
+                className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {savingSchedule ? 'Guardando...' : 'Guardar horarios'}
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   )

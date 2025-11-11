@@ -1,9 +1,14 @@
 "use client"
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import AvailableSlots from './AvailableSlots'
+import { getNutritionists } from '../../lib/api'
 
-export default function BookingForm() {
+interface BookingFormProps {
+  nutricionistaId?: string
+}
+
+export default function BookingForm({ nutricionistaId: propNutricionistaId }: BookingFormProps = {}) {
   const router = useRouter()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -11,6 +16,24 @@ export default function BookingForm() {
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [nutricionistaId, setNutricionistaId] = useState<string | undefined>(propNutricionistaId)
+
+  // Si no se proporciona un nutricionista, obtener el primero disponible
+  useEffect(() => {
+    if (!nutricionistaId) {
+      const loadFirstNutricionista = async () => {
+        try {
+          const nutritionists = await getNutritionists()
+          if (nutritionists && nutritionists.length > 0) {
+            setNutricionistaId(nutritionists[0].id)
+          }
+        } catch (error) {
+          console.error('Error loading nutritionists:', error)
+        }
+      }
+      loadFirstNutricionista()
+    }
+  }, [nutricionistaId])
 
   function validateForm(): boolean {
     if (!name.trim()) {
@@ -43,7 +66,13 @@ export default function BookingForm() {
     setIsSubmitting(true)
     setError(null)
 
-    const payload = { name: name.trim(), email: email.trim(), phone: phone.trim(), slot: selectedSlot }
+    const payload = { 
+      name: name.trim(), 
+      email: email.trim(), 
+      phone: phone.trim(), 
+      date_time: selectedSlot, // selectedSlot ahora es ISO string
+      nutricionista_id: nutricionistaId || null
+    }
 
     try {
       const res = await fetch('/api/appointments/request', {
@@ -54,15 +83,6 @@ export default function BookingForm() {
       
       if (res.ok) {
         const data = await res.json()
-        // Guardar también en localStorage para sincronización
-        try {
-          const existing = JSON.parse(localStorage.getItem('demo_appointments') || '[]')
-          const appointment = { ...data.appointment, status: 'pendiente' }
-          existing.push(appointment)
-          localStorage.setItem('demo_appointments', JSON.stringify(existing))
-        } catch (e) {
-          // Ignorar errores de localStorage
-        }
         // Notificar que se creó una nueva cita
         window.dispatchEvent(new Event('zona_azul_appointments_updated'))
         showToast('Solicitud enviada ✔️')
@@ -73,21 +93,9 @@ export default function BookingForm() {
       const errorData = await res.json().catch(() => ({}))
       throw new Error(errorData.error || `Error ${res.status}: ${res.statusText}`)
     } catch (err: any) {
-      // Fallback a localStorage
-      try {
-        const existing = JSON.parse(localStorage.getItem('demo_appointments') || '[]')
-        const newAppointment = { id: `m-${Date.now()}`, ...payload, created_at: new Date().toISOString(), status: 'pendiente' }
-        existing.push(newAppointment)
-        localStorage.setItem('demo_appointments', JSON.stringify(existing))
-        // Notificar que se creó una nueva cita
-        window.dispatchEvent(new Event('zona_azul_appointments_updated'))
-        showToast('Solicitud guardada localmente ✔️')
-        setTimeout(() => router.push('/booking/success'), 900)
-      } catch (storageErr) {
-        console.error('Error saving to localStorage:', storageErr)
-        setError('Error al guardar la solicitud. Por favor, inténtalo de nuevo.')
-        setIsSubmitting(false)
-      }
+      console.error('Error creating appointment:', err)
+      setError(err.message || 'Error al guardar la solicitud. Por favor, inténtalo de nuevo.')
+      setIsSubmitting(false)
     }
   }
 
@@ -110,9 +118,9 @@ export default function BookingForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-8">
+    <form onSubmit={handleSubmit} className="space-y-8">
       {error && (
-        <div className="p-4 bg-red-50 border-l-4 border-red-500 text-red-700 rounded-lg flex items-start gap-3">
+        <div className="p-4 bg-red-50/80 border border-red-200 text-red-700 rounded-xl flex items-start gap-3 backdrop-blur-sm">
           <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -123,7 +131,7 @@ export default function BookingForm() {
       {/* Información personal */}
       <div className="space-y-6">
         <div>
-          <label htmlFor="name" className="block text-sm font-semibold text-gray-900 mb-2">
+          <label htmlFor="name" className="block text-sm font-semibold text-gray-900 mb-2.5">
             Nombre completo <span className="text-red-500">*</span>
           </label>
           <input
@@ -135,14 +143,14 @@ export default function BookingForm() {
               setName(e.target.value)
               setError(null)
             }}
-            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
+            className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-gray-900 placeholder-gray-400 bg-gray-50/50 hover:bg-white"
             placeholder="Ingresa tu nombre completo"
           />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           <div>
-            <label htmlFor="email" className="block text-sm font-semibold text-gray-900 mb-2">
+            <label htmlFor="email" className="block text-sm font-semibold text-gray-900 mb-2.5">
               Email <span className="text-red-500">*</span>
             </label>
             <input
@@ -154,12 +162,12 @@ export default function BookingForm() {
                 setEmail(e.target.value)
                 setError(null)
               }}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
+              className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-gray-900 placeholder-gray-400 bg-gray-50/50 hover:bg-white"
               placeholder="ejemplo@email.com"
             />
           </div>
           <div>
-            <label htmlFor="phone" className="block text-sm font-semibold text-gray-900 mb-2">
+            <label htmlFor="phone" className="block text-sm font-semibold text-gray-900 mb-2.5">
               Teléfono <span className="text-gray-400 text-xs font-normal">(opcional)</span>
             </label>
             <input
@@ -167,7 +175,7 @@ export default function BookingForm() {
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
+              className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-gray-900 placeholder-gray-400 bg-gray-50/50 hover:bg-white"
               placeholder="+34 600 000 000"
             />
           </div>
@@ -175,8 +183,8 @@ export default function BookingForm() {
       </div>
 
       {/* Selección de horario */}
-      <div className="pt-6 border-t border-gray-200">
-        <div className="mb-4">
+      <div className="pt-8 border-t border-gray-100">
+        <div className="mb-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Selecciona un horario disponible</h3>
           <p className="text-sm text-gray-600">Elige el momento que mejor se adapte a tu agenda</p>
         </div>
@@ -185,16 +193,17 @@ export default function BookingForm() {
             setSelectedSlot(id)
             setError(null)
           }} 
-          selectedSlot={selectedSlot} 
+          selectedSlot={selectedSlot}
+          nutricionistaId={nutricionistaId}
         />
       </div>
 
       {/* Botón de envío */}
-      <div className="pt-6 border-t border-gray-200">
+      <div className="pt-8 border-t border-gray-100">
         <button
           type="submit"
           disabled={!selectedSlot || isSubmitting}
-          className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-primary to-accent text-white font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:from-primary/90 hover:to-accent/90 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-base sm:text-lg flex items-center justify-center gap-2 min-w-[200px]"
+          className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-primary via-primary/95 to-accent text-white font-semibold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:from-primary/90 hover:via-primary/85 hover:to-accent/90 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-base sm:text-lg flex items-center justify-center gap-2 min-w-[220px]"
         >
           {isSubmitting ? (
             <>
@@ -213,7 +222,7 @@ export default function BookingForm() {
             </>
           )}
         </button>
-        <p className="mt-3 text-xs text-gray-500">
+        <p className="mt-4 text-xs text-gray-500 leading-relaxed">
           Al enviar, aceptas que nos pongamos en contacto contigo para confirmar tu cita.
         </p>
       </div>

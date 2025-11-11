@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useRouter } from 'next/navigation'
-import { getUserData, setUserData } from '../../lib/storage'
+import * as api from '../../lib/api'
 import { useNotifications } from '../../hooks/useNotifications'
 
 interface UserSettings {
@@ -73,10 +73,34 @@ export default function AjustesComponent({ role }: AjustesComponentProps) {
 
     // Cargar ajustes del usuario solo si tenemos userId y el rol coincide
     if (userId && (!userRole || userRole === role)) {
-      const loadSettings = () => {
-        const stored = getUserData<UserSettings>('zona_azul_settings', userId, defaultSettings)
-        setSettings(stored || defaultSettings)
-        setLoading(false)
+      const loadSettings = async () => {
+        try {
+          const dbSettings = await api.getUserSettings()
+          if (dbSettings) {
+            setSettings({
+              notifications: {
+                enabled: dbSettings.notifications_enabled ?? true,
+                newMessages: dbSettings.notifications_new_messages ?? true,
+                orderUpdates: dbSettings.notifications_order_updates ?? true,
+                planAssignments: dbSettings.notifications_plan_assignments ?? true,
+                appointments: dbSettings.notifications_appointments ?? true,
+                newOrders: dbSettings.notifications_new_orders ?? true,
+              },
+              preferences: {
+                language: dbSettings.preferences_language || 'es',
+                theme: (dbSettings.preferences_theme as 'light' | 'dark' | 'auto') || 'light',
+                emailNotifications: dbSettings.preferences_email_notifications ?? false,
+              },
+            })
+          } else {
+            setSettings(defaultSettings)
+          }
+        } catch (error) {
+          console.error('Error loading settings:', error)
+          setSettings(defaultSettings)
+        } finally {
+          setLoading(false)
+        }
       }
 
       loadSettings()
@@ -101,13 +125,20 @@ export default function AjustesComponent({ role }: AjustesComponentProps) {
         }
       }
 
-      // Guardar ajustes
-      setUserData('zona_azul_settings', settings, userId)
-      setSuccess('Ajustes guardados correctamente')
+      // Guardar ajustes en la base de datos
+      await api.updateUserSettings({
+        notifications_enabled: settings.notifications.enabled,
+        notifications_new_messages: settings.notifications.newMessages,
+        notifications_order_updates: settings.notifications.orderUpdates,
+        notifications_plan_assignments: settings.notifications.planAssignments,
+        notifications_appointments: settings.notifications.appointments,
+        notifications_new_orders: settings.notifications.newOrders,
+        preferences_language: settings.preferences.language,
+        preferences_theme: settings.preferences.theme,
+        preferences_email_notifications: settings.preferences.emailNotifications,
+      })
       
-      // Notificar actualización
-      window.dispatchEvent(new Event('zona_azul_settings_updated'))
-
+      setSuccess('Ajustes guardados correctamente')
       setTimeout(() => setSuccess(null), 3000)
     } catch (error) {
       console.error('Error saving settings:', error)

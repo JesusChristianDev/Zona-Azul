@@ -2,14 +2,17 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../../hooks/useAuth'
-import { mockUsers, User } from '../../lib/mockUsers'
+import { User } from '../../lib/types'
 import { NotificationHelpers } from '../../lib/notifications'
+import { getMessages, sendMessage, getUsers, getUserById, getAvailableContacts, updateMessage } from '../../lib/api'
+import * as api from '../../lib/api'
 
 interface Message {
   id: string
   from: string
   fromName: string
   fromId: string
+  fromRole?: 'admin' | 'nutricionista' | 'repartidor' | 'suscriptor'
   to: string
   toName: string
   toId: string
@@ -41,78 +44,42 @@ interface Delivery {
 }
 
 // Funciones helper para suscriptores
-function hasOrderIncidents(subscriberId: string): { hasIncident: boolean; repartidorId: string | null } {
-  const repartidores = mockUsers.filter((u) => u.role === 'repartidor')
-  for (const repartidor of repartidores) {
-    try {
-      const stored = localStorage.getItem(`zona_azul_deliveries_user_${repartidor.id}`)
-      if (stored) {
-        const deliveries: Delivery[] = JSON.parse(stored)
-        const incident = deliveries.find(
-          (delivery) => delivery.customerId === subscriberId && delivery.status === 'incidencia'
-        )
-        if (incident) {
-          return { hasIncident: true, repartidorId: repartidor.id }
+async function hasOrderIncidents(subscriberId: string): Promise<{ hasIncident: boolean; repartidorId: string | null }> {
+  try {
+    // Obtener todos los pedidos del suscriptor
+    const orders = await api.getOrders()
+    const subscriberOrders = orders.filter((order: any) => order.user_id === subscriberId)
+    
+    // Verificar si alguno tiene incidencias
+    for (const order of subscriberOrders) {
+      const incidents = await api.getOrderIncidents(order.id)
+      if (incidents && incidents.length > 0) {
+        const reportedIncident = incidents.find((inc: any) => inc.status === 'reported')
+        if (reportedIncident) {
+          return { hasIncident: true, repartidorId: reportedIncident.repartidor_id }
         }
       }
-    } catch (error) {
-      console.error(`Error checking deliveries:`, error)
     }
+  } catch (error) {
+    console.error('Error checking order incidents:', error)
   }
   return { hasIncident: false, repartidorId: null }
 }
 
-function getAssignedNutricionista(subscriberId: string): User | null {
-  // Obtener todos los usuarios (mock + localStorage)
-  const stored = localStorage.getItem('zona_azul_users')
-  let allUsers: User[] = []
-  
-  if (stored) {
-    try {
-      allUsers = JSON.parse(stored)
-    } catch (e) {
-      // Error al parsear
+async function getAssignedNutricionista(subscriberId: string): Promise<User | null> {
+  try {
+    // Obtener asignación desde la API
+    const assignment = await api.getNutricionistaByClientId(subscriberId)
+    if (assignment && assignment.nutricionista_id) {
+      // Obtener información del nutricionista específico
+      const nutricionista = await getUserById(assignment.nutricionista_id)
+      return nutricionista as User || null
     }
+    return null
+  } catch (error) {
+    console.error('Error getting assigned nutricionista:', error)
+    return null
   }
-  
-  // Combinar nutricionistas, priorizando los de localStorage sobre mockUsers
-  // Usar un Map para evitar duplicados por ID
-  const nutricionistasMap = new Map<string, User>()
-  
-  // Primero agregar los de localStorage (tienen prioridad)
-  allUsers
-    .filter((u) => u.role === 'nutricionista')
-    .forEach((nutri) => nutricionistasMap.set(nutri.id, nutri))
-  
-  // Luego agregar los de mockUsers solo si no existen ya
-  mockUsers
-    .filter((u) => u.role === 'nutricionista')
-    .forEach((nutri) => {
-      if (!nutricionistasMap.has(nutri.id)) {
-        nutricionistasMap.set(nutri.id, nutri)
-      }
-    })
-  
-  const allNutricionistas = Array.from(nutricionistasMap.values())
-  
-  // Buscar en los clientes de cada nutricionista
-  for (const nutricionista of allNutricionistas) {
-    try {
-      const stored = localStorage.getItem(`zona_azul_clients_user_${nutricionista.id}`)
-      if (stored) {
-        const clients = JSON.parse(stored)
-        if (Array.isArray(clients) && clients.some((client: any) => client.id === subscriberId)) {
-          return nutricionista
-        }
-      }
-    } catch (error) {
-      console.error(`Error checking clients for nutricionista ${nutricionista.id}:`, error)
-    }
-  }
-  
-  // Si no se encuentra, NO devolver un nutricionista por defecto
-  // Devolver null para que no se muestre información incorrecta
-  return null
 }
 
 export default function MessagesWidget() {
@@ -127,6 +94,7 @@ export default function MessagesWidget() {
   const [unreadTotal, setUnreadTotal] = useState(0)
   const [showArchived, setShowArchived] = useState(false)
   const [hoveredConversation, setHoveredConversation] = useState<string | null>(null)
+  const [availableContacts, setAvailableContacts] = useState<User[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Scroll al final de los mensajes
@@ -140,172 +108,107 @@ export default function MessagesWidget() {
     }
   }, [selectedConversation])
 
-  // Función para obtener contactos disponibles para suscriptores
-  const getAvailableContactsForSubscriber = (): User[] => {
-    if (role !== 'suscriptor' || !userId) return []
-
-    const contacts: User[] = []
-    const admin = mockUsers.find((u) => u.role === 'admin')
-    if (admin) contacts.push(admin)
-
-    const nutricionista = getAssignedNutricionista(userId)
-    if (nutricionista) contacts.push(nutricionista)
-
-    const incidentInfo = hasOrderIncidents(userId)
-    if (incidentInfo.hasIncident && incidentInfo.repartidorId) {
-      const repartidor = mockUsers.find((u) => u.id === incidentInfo.repartidorId)
-      if (repartidor) contacts.push(repartidor)
-    }
-
-    return contacts
-  }
-
   // Función para obtener contactos disponibles para todos los roles
-  const getAvailableContacts = (): User[] => {
+  const getAvailableContactsList = async (): Promise<User[]> => {
     if (!userId || !role) return []
 
-    // Para suscriptores, usar la lógica específica
-    if (role === 'suscriptor') {
-      return getAvailableContactsForSubscriber()
-    }
-
-    // Obtener usuarios de localStorage también
-    let allUsersFromStorage: User[] = []
     try {
-      const stored = localStorage.getItem('zona_azul_users')
-      if (stored) {
-        allUsersFromStorage = JSON.parse(stored)
-      }
+      // Usar la nueva ruta de API que devuelve contactos según el rol
+      const contacts = await getAvailableContacts()
+      return contacts.map((u: any) => u as User).filter((u) => u.id !== userId)
     } catch (error) {
-      console.error('Error loading users from storage:', error)
-    }
-    
-    // Combinar mockUsers y usuarios de localStorage, eliminando duplicados
-    const allUsersMap = new Map<string, User>()
-    mockUsers.forEach((u) => allUsersMap.set(u.id, u))
-    allUsersFromStorage.forEach((u) => allUsersMap.set(u.id, u))
-    
-    const allUsers = Array.from(allUsersMap.values()).filter((u) => u.id !== userId)
-    
-    if (role === 'admin') {
-      // Admin puede contactar a todos
-      return allUsers
-    } else if (role === 'nutricionista') {
-      // Nutricionista puede contactar a sus clientes, admin y otros nutricionistas
-      const clients: User[] = []
+      console.error('Error getting available contacts:', error)
+      // Fallback: intentar obtener contactos de forma manual si la API falla
       try {
-        const stored = localStorage.getItem(`zona_azul_clients_user_${userId}`)
-        if (stored) {
-          const clientList = JSON.parse(stored)
-          clientList.forEach((client: any) => {
-            const clientUser = mockUsers.find((u) => u.id === client.id)
-            if (clientUser) clients.push(clientUser)
-          })
+        if (role === 'admin') {
+          const allUsers = await getUsers()
+          return allUsers.map((u: any) => u as User).filter((u) => u.id !== userId)
         }
-      } catch (error) {
-        console.error('Error loading clients:', error)
+      } catch (fallbackError) {
+        console.error('Error in fallback:', fallbackError)
       }
-      
-      const otherContacts = allUsers.filter(
-        (u) => u.role === 'admin' || u.role === 'nutricionista' || u.role === 'repartidor'
-      )
-      
-      return [...clients, ...otherContacts]
-    } else if (role === 'repartidor') {
-      // Repartidor puede contactar a admin y suscriptores con pedidos asignados
-      const assignedSubscribers: User[] = []
-      try {
-        const stored = localStorage.getItem('zona_azul_admin_orders')
-        if (stored) {
-          const orders = JSON.parse(stored)
-          const subscriberIds = new Set(orders.map((o: any) => o.customerId))
-          subscriberIds.forEach((subscriberId: string) => {
-            const subscriber = mockUsers.find((u) => u.id === subscriberId && u.role === 'suscriptor')
-            if (subscriber) assignedSubscribers.push(subscriber)
-          })
-        }
-      } catch (error) {
-        console.error('Error loading assigned subscribers:', error)
-      }
-      
-      const admin = allUsers.find((u) => u.role === 'admin')
-      const otherRepartidores = allUsers.filter((u) => u.role === 'repartidor')
-      
-      return admin ? [admin, ...assignedSubscribers, ...otherRepartidores] : [...assignedSubscribers, ...otherRepartidores]
+      return []
     }
-
-    return []
   }
 
-  // Función para obtener chats archivados/eliminados del usuario
-  const getUserChatStatus = () => {
+  // Función para obtener chats archivados/eliminados del usuario desde la API
+  const getUserChatStatus = async (): Promise<{ archived: Set<string>; deleted: Set<string> }> => {
     if (!userId) return { archived: new Set<string>(), deleted: new Set<string>() }
     try {
-      const stored = localStorage.getItem(`zona_azul_chat_status_user_${userId}`)
-      if (stored) {
-        const status = JSON.parse(stored)
-        return {
-          archived: new Set<string>(status.archived || []),
-          deleted: new Set<string>(status.deleted || []),
+      const preferences = await api.getChatPreferences()
+      const archived = new Set<string>()
+      const deleted = new Set<string>()
+      
+      preferences.forEach((pref: any) => {
+        if (pref.is_archived) {
+          archived.add(pref.contact_id)
         }
-      }
+        if (pref.is_deleted) {
+          deleted.add(pref.contact_id)
+        }
+      })
+      
+      return { archived, deleted }
     } catch (error) {
       console.error('Error loading chat status:', error)
+      return { archived: new Set<string>(), deleted: new Set<string>() }
     }
-    return { archived: new Set<string>(), deleted: new Set<string>() }
   }
 
-  // Función para guardar estado de chats
-  const saveUserChatStatus = (archived: Set<string>, deleted: Set<string>) => {
+  // Función para guardar estado de chats en la API
+  const saveUserChatStatus = async (archived: Set<string>, deleted: Set<string>) => {
     if (!userId) return
     try {
-      localStorage.setItem(
-        `zona_azul_chat_status_user_${userId}`,
-        JSON.stringify({
-          archived: Array.from(archived),
-          deleted: Array.from(deleted),
+      // Obtener todas las preferencias actuales
+      const preferences = await api.getChatPreferences()
+      const preferenceMap = new Map(preferences.map((p: any) => [p.contact_id, p]))
+      
+      // Actualizar cada preferencia
+      const allContactIds = new Set([...archived, ...deleted])
+      for (const contactId of allContactIds) {
+        await api.updateChatPreference(contactId, {
+          is_archived: archived.has(contactId),
+          is_deleted: deleted.has(contactId),
         })
-      )
+      }
     } catch (error) {
       console.error('Error saving chat status:', error)
     }
   }
 
-  // Función para cargar conversaciones
-  const loadConversations = () => {
-    if (!userId || !role) return
+  // Función para cargar conversaciones desde la API
+  const loadConversations = async (): Promise<Conversation[]> => {
+    if (!userId || !role) {
+      return []
+    }
 
     try {
-      const stored = localStorage.getItem('zona_azul_messages')
-      if (!stored) {
-        setConversations([])
-        setUnreadTotal(0)
-        return
-      }
-
-      const allMessages: Message[] = JSON.parse(stored)
-      const chatStatus = getUserChatStatus()
+      const apiMessages = await getMessages()
       
-      // Filtrar mensajes relevantes según el rol
-      let relevantMessages: Message[] = []
+      // Convertir mensajes de API a formato Message
+      const allMessages: Message[] = apiMessages.map((msg: any) => ({
+        id: msg.id,
+        from: msg.from_email || '',
+        fromName: msg.from_name || '',
+        fromId: msg.from_id,
+        fromRole: msg.from_role || (msg.from_id === userId ? role : 'suscriptor'),
+        to: msg.to_email || '',
+        toName: msg.to_name || '',
+        toId: msg.to_id,
+        toRole: msg.to_role as 'admin' | 'nutricionista' | 'repartidor' | 'suscriptor',
+        subject: msg.subject || 'Mensaje',
+        message: msg.message || '',
+        read: msg.read || false,
+        createdAt: msg.created_at,
+        reply: msg.reply || undefined,
+      }))
       
-      if (role === 'admin') {
-        relevantMessages = allMessages.filter(
-          (msg) => msg.toRole === 'admin' || msg.toId === userId || msg.fromId === userId
-        )
-      } else if (role === 'nutricionista') {
-        relevantMessages = allMessages.filter(
-          (msg) => (msg.toRole === 'nutricionista' && msg.toId === userId) || msg.fromId === userId
-        )
-      } else if (role === 'repartidor') {
-        relevantMessages = allMessages.filter(
-          (msg) => (msg.toRole === 'repartidor' && msg.toId === userId) || msg.fromId === userId
-        )
-      } else if (role === 'suscriptor') {
-        relevantMessages = allMessages.filter(
-          (msg) => msg.fromId === userId || msg.toId === userId
-        )
-      }
+      const chatStatus = await getUserChatStatus()
+      
+      // Filtrar mensajes relevantes: todos los mensajes donde el usuario es remitente o destinatario
+      const relevantMessages = allMessages.filter(
+        (msg) => msg.fromId === userId || msg.toId === userId
+      )
 
       // Filtrar mensajes de chats eliminados
       const filteredMessages = relevantMessages.filter((msg) => {
@@ -319,15 +222,15 @@ export default function MessagesWidget() {
       filteredMessages.forEach((msg) => {
         const contactId = msg.fromId === userId ? msg.toId : msg.fromId
         const isArchived = chatStatus.archived.has(contactId)
+        const isDeleted = chatStatus.deleted.has(contactId)
 
-        // Si estamos mostrando archivados, solo mostrar los archivados
-        // Si no, solo mostrar los no archivados
-        if (showArchived && !isArchived) return
+        if (showArchived && !isArchived && !isDeleted) return
         if (!showArchived && isArchived) return
         
         const contactName = msg.fromId === userId ? msg.toName : msg.fromName
         const contactEmail = msg.fromId === userId ? msg.to : msg.from
-        const contactRole = msg.fromId === userId ? msg.toRole : (mockUsers.find((u) => u.id === msg.fromId)?.role || 'suscriptor')
+        // Obtener el rol del contacto desde el mensaje
+        const contactRole = msg.fromId === userId ? msg.toRole : (msg.fromRole || 'suscriptor')
 
         if (!conversationsMap.has(contactId)) {
           conversationsMap.set(contactId, {
@@ -340,6 +243,7 @@ export default function MessagesWidget() {
             unreadCount: 0,
             messages: [],
             archived: isArchived,
+            deleted: isDeleted,
           })
         }
 
@@ -399,10 +303,13 @@ export default function MessagesWidget() {
           }
         }
       }
+      
+      return conversationsArray
     } catch (error) {
       console.error('Error loading conversations:', error)
       setConversations([])
       setUnreadTotal(0)
+      return []
     }
   }
 
@@ -413,7 +320,7 @@ export default function MessagesWidget() {
     let isProcessing = false // Flag para prevenir bucles infinitos
     let lastUpdateTime = 0 // Timestamp del último update para throttling
 
-    const checkForNewMessages = () => {
+    const checkForNewMessages = async () => {
       // Prevenir ejecuciones simultáneas
       if (isProcessing) return
       
@@ -425,36 +332,49 @@ export default function MessagesWidget() {
       isProcessing = true
 
       try {
-        const stored = localStorage.getItem('zona_azul_messages')
-        if (stored) {
-          try {
-            const allMessages: Message[] = JSON.parse(stored)
-            // Detectar nuevos mensajes recibidos
-            const newMessages = allMessages.filter(
-              (msg) =>
-                msg.toId === userId &&
-                !msg.read &&
-                !previousMessages.some((prev) => prev.id === msg.id)
+        // Obtener mensajes desde la API
+        const allApiMessages = await getMessages()
+        const allMessages: Message[] = allApiMessages.map((msg: any) => ({
+          id: msg.id,
+          from: msg.from_email || '',
+          fromName: msg.from_name || '',
+          fromId: msg.from_id,
+          fromRole: msg.from_role || (msg.from_id === userId ? role : 'suscriptor'),
+          to: msg.to_email || '',
+          toName: msg.to_name || '',
+          toId: msg.to_id,
+          toRole: msg.to_role as 'admin' | 'nutricionista' | 'repartidor' | 'suscriptor',
+          subject: msg.subject || 'Mensaje',
+          message: msg.message || '',
+          read: msg.read || false,
+          createdAt: msg.created_at,
+          reply: msg.reply || undefined,
+        }))
+        
+        // Detectar nuevos mensajes recibidos
+        const newMessages = allMessages.filter(
+          (msg) =>
+            msg.toId === userId &&
+            !msg.read &&
+            !previousMessages.some((prev) => prev.id === msg.id)
+        )
+
+        // Mostrar notificación para nuevos mensajes no leídos
+        if (newMessages.length > 0 && document.hidden) {
+          // Solo mostrar notificación si la ventana no está visible
+          newMessages.forEach((msg) => {
+            NotificationHelpers.newMessage(
+              msg.fromName,
+              msg.message.substring(0, 50) + (msg.message.length > 50 ? '...' : ''),
+              '/',
+              userId
             )
-
-            // Mostrar notificación para nuevos mensajes no leídos
-            if (newMessages.length > 0 && document.hidden) {
-              // Solo mostrar notificación si la ventana no está visible
-              newMessages.forEach((msg) => {
-                NotificationHelpers.newMessage(
-                  msg.fromName,
-                  msg.message.substring(0, 50) + (msg.message.length > 50 ? '...' : ''),
-                  '/',
-                  userId
-                )
-              })
-            }
-
-            previousMessages = allMessages
-          } catch (error) {
-            console.error('Error loading messages:', error)
-          }
+          })
         }
+
+        previousMessages = allMessages
+      } catch (error) {
+        console.error('Error loading messages:', error)
       } finally {
         isProcessing = false
       }
@@ -469,148 +389,208 @@ export default function MessagesWidget() {
       setTimeout(() => {
         if (!isProcessing) {
           checkForNewMessages()
-          // Solo recargar conversaciones si no hay una seleccionada
-          if (!selectedConversation) {
-            loadConversations()
-          }
-        }
-      }, 200)
-    }
-    
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'zona_azul_messages' || e.key?.startsWith('zona_azul_chat_status_user_')) {
-        // Usar setTimeout para evitar bucles infinitos
-        setTimeout(() => {
-          if (!isProcessing) {
-            checkForNewMessages()
-            // Solo recargar conversaciones si no hay una seleccionada
-            if (!selectedConversation) {
-              loadConversations()
-            }
-          }
-        }, 200)
-      }
-    }
-
-    window.addEventListener('zona_azul_messages_updated', handleMessagesUpdate)
-    window.addEventListener('storage', handleStorageChange)
-    const interval = setInterval(() => {
-      if (!isProcessing) {
-        checkForNewMessages()
-        // Solo recargar conversaciones si no hay una seleccionada
-        if (!selectedConversation) {
+          // Siempre recargar conversaciones para mostrar nuevos mensajes
           loadConversations()
         }
+      }, 200)
       }
-    }, 3000) // Aumentar intervalo a 3 segundos para reducir carga
+    
+            window.addEventListener('zona_azul_messages_updated', handleMessagesUpdate)
+            const interval = setInterval(() => {
+              if (!isProcessing) {
+                checkForNewMessages()
+                // Recargar conversaciones periódicamente para mantener actualizado
+                loadConversations()
+              }
+            }, 3000) // Aumentar intervalo a 3 segundos para reducir carga
 
-    return () => {
-      window.removeEventListener('zona_azul_messages_updated', handleMessagesUpdate)
-      window.removeEventListener('storage', handleStorageChange)
-      clearInterval(interval)
-      isProcessing = false
-    }
+            return () => {
+              window.removeEventListener('zona_azul_messages_updated', handleMessagesUpdate)
+              clearInterval(interval)
+              isProcessing = false
+            }
   }, [userId, role, showArchived]) // Agregar showArchived como dependencia
 
   // Marcar mensajes como leídos al abrir conversación
   useEffect(() => {
-    if (selectedConversation && userId) {
-      const stored = localStorage.getItem('zona_azul_messages')
-      if (stored) {
-        const allMessages: Message[] = JSON.parse(stored)
-        const hasUnread = allMessages.some(
-          (msg) => msg.toId === userId && msg.fromId === selectedConversation.contactId && !msg.read
+    const markAsRead = async () => {
+      if (!selectedConversation || !userId) return
+
+      try {
+        const apiMessages = await getMessages()
+        const unreadMessages = apiMessages.filter(
+          (msg: any) => 
+            msg.to_id === userId && 
+            msg.from_id === selectedConversation.contactId && 
+            !msg.read
         )
         
-        // Solo actualizar si hay mensajes no leídos para evitar bucles
-        if (hasUnread) {
-          const updated = allMessages.map((msg) =>
-            msg.toId === userId && msg.fromId === selectedConversation.contactId && !msg.read
-              ? { ...msg, read: true }
-              : msg
+        // Marcar todos los mensajes no leídos como leídos
+        if (unreadMessages.length > 0) {
+          await Promise.all(
+            unreadMessages.map((msg: any) => 
+              updateMessage(msg.id, { read: true })
+            )
           )
-          localStorage.setItem('zona_azul_messages', JSON.stringify(updated))
           
-          // Usar setTimeout para evitar disparar eventos inmediatamente
-          setTimeout(() => {
-            window.dispatchEvent(new Event('zona_azul_messages_updated'))
-            // Recargar conversaciones sin actualizar selectedConversation
-            loadConversations()
-          }, 50)
+          // Recargar conversaciones
+          await loadConversations()
         }
+      } catch (error) {
+        console.error('Error marking messages as read:', error)
       }
     }
-  }, [selectedConversation?.contactId, userId]) // Solo usar contactId para evitar re-renders innecesarios
 
-  const handleSendMessage = (e: React.FormEvent) => {
+    markAsRead()
+  }, [selectedConversation?.contactId, userId])
+
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!userId || !userName || !userEmail) return
+    if (!userId || !userName || !userEmail) {
+      console.error('Missing user data')
+      return
+    }
 
-    const recipient = selectedRecipient || (selectedConversation ? mockUsers.find((u) => u.id === selectedConversation.contactId) : null)
-    if (!recipient) return
-
-    if (!newMessageText.trim()) return
-
-    const newMessage: Message = {
-      id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      from: userEmail,
-      fromName: userName,
-      fromId: userId,
-      to: recipient.email,
-      toName: recipient.name || recipient.email,
-      toId: recipient.id,
-      toRole: recipient.role as 'admin' | 'nutricionista' | 'repartidor' | 'suscriptor',
-      subject: newMessageSubject.trim() || 'Mensaje',
-      message: newMessageText.trim(),
-      read: false,
-      createdAt: new Date().toISOString(),
+    if (!newMessageText.trim()) {
+      console.error('Message text is empty')
+      return
     }
 
     try {
-      const stored = localStorage.getItem('zona_azul_messages')
-      const allMessages: Message[] = stored ? JSON.parse(stored) : []
-      allMessages.push(newMessage)
-      localStorage.setItem('zona_azul_messages', JSON.stringify(allMessages))
-      window.dispatchEvent(new Event('zona_azul_messages_updated'))
-      
-      // Actualizar conversaciones y seleccionar la nueva
-      setTimeout(() => {
-        if (!selectedConversation) {
-          // Buscar la conversación recién creada
-          const stored = localStorage.getItem('zona_azul_messages')
-          if (stored) {
-            const allMessages: Message[] = JSON.parse(stored)
-            const convMessages = allMessages.filter(
-              (msg) => (msg.fromId === userId && msg.toId === recipient.id) || (msg.toId === userId && msg.fromId === recipient.id)
-            )
-            if (convMessages.length > 0) {
-              const newConv: Conversation = {
-                contactId: recipient.id,
-                contactName: recipient.name || recipient.email,
-                contactRole: recipient.role,
-                contactEmail: recipient.email,
-                lastMessage: newMessage.message,
-                lastMessageTime: newMessage.createdAt,
-                unreadCount: 0,
-                messages: convMessages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
-              }
-              setSelectedConversation(newConv)
-              // Cargar conversaciones después de establecer la selección
-              setTimeout(() => loadConversations(), 50)
-            }
-          }
-        } else {
-          // Si ya hay una conversación seleccionada, solo recargar
-          loadConversations()
+      // Obtener el destinatario
+      let recipient = selectedRecipient
+      if (!recipient && selectedConversation) {
+        // Intentar obtener el usuario específico
+        try {
+          recipient = await getUserById(selectedConversation.contactId) as User
+        } catch (error) {
+          console.error('Error getting recipient:', error)
+          // Fallback: buscar en contactos disponibles
+          const contacts = await getAvailableContactsList()
+          recipient = contacts.find((u: any) => u.id === selectedConversation.contactId) as User
         }
-      }, 100)
+      }
       
+      if (!recipient) {
+        console.error('No recipient selected')
+        alert('Por favor, selecciona un destinatario')
+        return
+      }
+
+      const messageText = newMessageText.trim()
+      const messageSubject = newMessageSubject.trim() || 'Mensaje'
+
+      // Enviar mensaje a través de la API
+      const sentMessage = await sendMessage({
+        to_user_id: recipient.id,
+        subject: messageSubject,
+        message: messageText,
+      })
+
+      if (!sentMessage) {
+        alert('Error al enviar el mensaje. Por favor, intenta de nuevo.')
+        return
+      }
+
+      // Limpiar campos
       setNewMessageText('')
       setNewMessageSubject('')
-      setIsComposing(false)
-      setSelectedRecipient(null)
-    } catch (error) {
+      
+      // Si el destinatario está marcado como eliminado, restaurarlo automáticamente
+      const chatStatus = await getUserChatStatus()
+      if (chatStatus.deleted.has(recipient.id)) {
+        await api.updateChatPreference(recipient.id, {
+          is_archived: false,
+          is_deleted: false,
+        })
+      }
+      
+      // Esperar un poco para que la base de datos se actualice
+      await new Promise(resolve => setTimeout(resolve, 600))
+      
+      // Recargar conversaciones para obtener el mensaje recién enviado
+      const updatedConversations = await loadConversations()
+      
+      // Buscar y seleccionar la conversación con el destinatario
+      const targetConversation = updatedConversations.find(c => c.contactId === recipient.id)
+      
+      if (targetConversation) {
+        setSelectedConversation(targetConversation)
+        setIsComposing(false)
+        setSelectedRecipient(null)
+      } else {
+        // Si no se encontró, esperar un poco más y recargar
+        await new Promise(resolve => setTimeout(resolve, 500))
+        const retryConversations = await loadConversations()
+        const retryTarget = retryConversations.find(c => c.contactId === recipient.id)
+        
+        if (retryTarget) {
+          setSelectedConversation(retryTarget)
+          setIsComposing(false)
+          setSelectedRecipient(null)
+        } else {
+          // Si aún no se encuentra, crear una conversación temporal
+          let recipientUser: User | null = null
+          try {
+            recipientUser = await getUserById(recipient.id) as User
+          } catch (error) {
+            console.error('Error getting recipient user:', error)
+            // Fallback: buscar en contactos disponibles
+            const contacts = await getAvailableContactsList()
+            recipientUser = contacts.find((u: any) => u.id === recipient.id) as User || null
+          }
+          
+          if (recipientUser) {
+            const apiMessages = await getMessages()
+            const convMessages = apiMessages
+              .filter((msg: any) => 
+                (msg.from_id === userId && msg.to_id === recipient.id) || 
+                (msg.to_id === userId && msg.from_id === recipient.id)
+              )
+              .map((msg: any) => ({
+                id: msg.id,
+                from: msg.from_email || '',
+                fromName: msg.from_name || '',
+                fromId: msg.from_id,
+                to: msg.to_email || '',
+                toName: msg.to_name || '',
+                toId: msg.to_id,
+                toRole: msg.to_role,
+                subject: msg.subject || 'Mensaje',
+                message: msg.message || '',
+                read: msg.read || false,
+                createdAt: msg.created_at,
+                reply: msg.reply || undefined,
+              } as Message))
+            
+            if (convMessages.length > 0) {
+              const currentChatStatus = await getUserChatStatus()
+              const newConv: Conversation = {
+                contactId: recipient.id,
+                contactName: recipientUser.name || recipientUser.email,
+                contactRole: recipientUser.role,
+                contactEmail: recipientUser.email,
+                lastMessage: convMessages[convMessages.length - 1].message,
+                lastMessageTime: convMessages[convMessages.length - 1].createdAt,
+                unreadCount: convMessages.filter(m => m.toId === userId && !m.read).length,
+                messages: convMessages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
+                archived: currentChatStatus.archived.has(recipient.id),
+                deleted: currentChatStatus.deleted.has(recipient.id),
+              }
+              setSelectedConversation(newConv)
+              setIsComposing(false)
+              setSelectedRecipient(null)
+              
+              setTimeout(() => {
+                loadConversations()
+              }, 300)
+            }
+          }
+        }
+      }
+    } catch (error: any) {
       console.error('Error sending message:', error)
+      alert('Error al enviar el mensaje: ' + (error.message || 'Error desconocido'))
     }
   }
 
@@ -656,16 +636,21 @@ export default function MessagesWidget() {
   }
 
   // Función para archivar conversación
-  const handleArchiveConversation = (contactId: string, e?: React.MouseEvent) => {
+  const handleArchiveConversation = async (contactId: string, e?: React.MouseEvent) => {
     if (e) {
       e.stopPropagation()
       e.preventDefault()
     }
     if (!userId) return
-    const chatStatus = getUserChatStatus()
-    chatStatus.archived.add(contactId)
-    chatStatus.deleted.delete(contactId) // Si estaba eliminada, restaurarla como archivada
-    saveUserChatStatus(chatStatus.archived, chatStatus.deleted)
+    
+    const chatStatus = await getUserChatStatus()
+    const isArchived = chatStatus.archived.has(contactId)
+    
+    // Actualizar en la API
+    await api.updateChatPreference(contactId, {
+      is_archived: !isArchived,
+      is_deleted: false, // Si estaba eliminada, restaurarla como archivada
+    })
     
     if (selectedConversation?.contactId === contactId) {
       setSelectedConversation(null)
@@ -676,15 +661,18 @@ export default function MessagesWidget() {
   }
 
   // Función para desarchivar conversación
-  const handleUnarchiveConversation = (contactId: string, e?: React.MouseEvent) => {
+  const handleUnarchiveConversation = async (contactId: string, e?: React.MouseEvent) => {
     if (e) {
       e.stopPropagation()
       e.preventDefault()
     }
     if (!userId) return
-    const chatStatus = getUserChatStatus()
-    chatStatus.archived.delete(contactId)
-    saveUserChatStatus(chatStatus.archived, chatStatus.deleted)
+    
+    // Actualizar en la API
+    await api.updateChatPreference(contactId, {
+      is_archived: false,
+      is_deleted: false,
+    })
     
     // Si estamos viendo archivados, cambiar a vista normal
     if (showArchived) {
@@ -696,45 +684,69 @@ export default function MessagesWidget() {
   }
 
   // Función para eliminar conversación
-  const handleDeleteConversation = (contactId: string, e?: React.MouseEvent) => {
+  const handleDeleteConversation = async (contactId: string, e?: React.MouseEvent) => {
     if (e) {
       e.stopPropagation()
       e.preventDefault()
     }
     if (!userId) return
-    if (!confirm('¿Estás seguro de que quieres eliminar esta conversación? Esta acción no se puede deshacer.')) {
+    if (!confirm('¿Estás seguro de que quieres eliminar esta conversación? Se borrarán todos los mensajes y no podrás recuperarlos.')) {
       return
     }
     
-    const chatStatus = getUserChatStatus()
-    chatStatus.deleted.add(contactId)
-    chatStatus.archived.delete(contactId) // Si estaba archivada, eliminarla
-    saveUserChatStatus(chatStatus.archived, chatStatus.deleted)
-    
-    // Eliminar mensajes de localStorage
     try {
-      const stored = localStorage.getItem('zona_azul_messages')
-      if (stored) {
-        const allMessages: Message[] = JSON.parse(stored)
-        const filteredMessages = allMessages.filter(
-          (msg) => !(msg.fromId === userId && msg.toId === contactId) && !(msg.toId === userId && msg.fromId === contactId)
-        )
-        localStorage.setItem('zona_azul_messages', JSON.stringify(filteredMessages))
-        window.dispatchEvent(new Event('zona_azul_messages_updated'))
+      // Primero eliminar todos los mensajes de la conversación
+      const messagesDeleted = await api.deleteConversationMessages(contactId)
+      
+      if (!messagesDeleted) {
+        console.error('Error deleting conversation messages')
+        alert('Error al eliminar los mensajes. Por favor, intenta de nuevo.')
+        return
       }
+      
+      // Luego marcar la conversación como eliminada
+      await api.updateChatPreference(contactId, {
+        is_archived: false,
+        is_deleted: true,
+      })
+      
+      if (selectedConversation?.contactId === contactId) {
+        setSelectedConversation(null)
+      }
+      
+      // Recargar conversaciones
+      await loadConversations()
     } catch (error) {
-      console.error('Error deleting messages:', error)
+      console.error('Error deleting conversation:', error)
+      alert('Error al eliminar la conversación. Por favor, intenta de nuevo.')
     }
-    
-    if (selectedConversation?.contactId === contactId) {
-      setSelectedConversation(null)
-    }
-    loadConversations()
   }
 
-  if (!userId || !role) return null
 
-  const availableContacts = getAvailableContacts()
+  // Cargar contactos disponibles cuando se abre el widget o cambia el usuario/rol
+  useEffect(() => {
+    if (!userId || !role) {
+      setAvailableContacts([])
+      return
+    }
+
+    const loadContacts = async () => {
+      try {
+        const contacts = await getAvailableContactsList()
+        setAvailableContacts(contacts)
+      } catch (error) {
+        console.error('Error loading available contacts:', error)
+        setAvailableContacts([])
+      }
+    }
+
+    // Cargar contactos cuando se abre el widget o cuando se está componiendo
+    if (isOpen || isComposing) {
+      loadContacts()
+    }
+  }, [userId, role, isOpen, isComposing])
+
+  if (!userId || !role) return null
 
   return (
     <div className="relative">
@@ -834,19 +846,17 @@ export default function MessagesWidget() {
               <div className={`${selectedConversation || (isComposing && selectedRecipient) ? 'hidden sm:flex' : 'flex'} w-full sm:w-1/3 border-r bg-gray-50 overflow-y-auto flex-col`}>
                 {/* Botones de acción */}
                 <div className="p-2 border-b bg-white flex gap-2">
-                  {availableContacts.length > 0 && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setIsComposing(true)
-                        setSelectedConversation(null)
-                        setSelectedRecipient(null)
-                      }}
-                      className="flex-1 px-3 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition text-sm font-medium"
-                    >
-                      + Nuevo
-                    </button>
-                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setIsComposing(true)
+                      setSelectedConversation(null)
+                      setSelectedRecipient(null)
+                    }}
+                    className="flex-1 px-3 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition text-sm font-medium"
+                  >
+                    + Nuevo
+                  </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
@@ -865,32 +875,39 @@ export default function MessagesWidget() {
                   </button>
                 </div>
                 
-                {isComposing && availableContacts.length > 0 && (
+                {isComposing && (
                   <div className="p-2 border-b bg-white">
                     <p className="text-xs font-semibold text-gray-500 mb-2 px-2">Seleccionar destinatario:</p>
-                    {availableContacts.map((contact) => (
-                      <button
-                        key={contact.id}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleStartNewConversation(contact)
-                        }}
-                        className="w-full p-2 hover:bg-gray-100 rounded-lg text-left"
-                        type="button"
-                      >
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                            <span className="text-primary text-xs font-semibold">
-                              {contact.name.charAt(0).toUpperCase()}
-                            </span>
+                    {availableContacts.length === 0 ? (
+                      <div className="p-4 text-center text-gray-400 text-sm">
+                        <p>No hay contactos disponibles</p>
+                        <p className="text-xs mt-1">Cargando contactos...</p>
+                      </div>
+                    ) : (
+                      availableContacts.map((contact) => (
+                        <button
+                          key={contact.id}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleStartNewConversation(contact)
+                          }}
+                          className="w-full p-2 hover:bg-gray-100 rounded-lg text-left"
+                          type="button"
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                              <span className="text-primary text-xs font-semibold">
+                                {contact.name.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{contact.name}</p>
+                              <p className="text-xs text-gray-500">{getRoleLabel(contact.role)}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">{contact.name}</p>
-                            <p className="text-xs text-gray-500">{getRoleLabel(contact.role)}</p>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
+                        </button>
+                      ))
+                    )}
                   </div>
                 )}
 
@@ -929,11 +946,11 @@ export default function MessagesWidget() {
                               <div className="flex items-center justify-between mb-1">
                                 <div className="flex items-center gap-2">
                                   <p className="font-semibold text-gray-900 text-sm truncate">{conv.contactName}</p>
-                                  {conv.archived && (
+                                  {conv.archived && !conv.deleted && (
                                     <span className="text-xs text-gray-400">📁</span>
                                   )}
                                 </div>
-                                {conv.unreadCount > 0 && !conv.archived && (
+                                {conv.unreadCount > 0 && !conv.archived && !conv.deleted && (
                                   <span className="bg-primary text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0">
                                     {conv.unreadCount > 9 ? '9+' : conv.unreadCount}
                                   </span>
@@ -946,7 +963,7 @@ export default function MessagesWidget() {
                         </button>
                         
                         {/* Botones de acción al hacer hover */}
-                        {hoveredConversation === conv.contactId && (
+                        {hoveredConversation === conv.contactId && !conv.deleted && (
                           <div 
                             className="absolute top-2 right-2 flex gap-1 bg-white rounded-lg shadow-lg border border-gray-200 p-1 z-10"
                             onClick={(e) => e.stopPropagation()}
@@ -1009,8 +1026,8 @@ export default function MessagesWidget() {
               </div>
 
               {/* Vista de mensajes - oculta en móvil cuando no hay conversación seleccionada */}
-              <div className={`${selectedConversation || (isComposing && selectedRecipient) ? 'flex' : 'hidden sm:flex'} flex-1 flex-col bg-white`}>
-                {selectedConversation || (isComposing && selectedRecipient) ? (
+              <div className={`${selectedConversation || isComposing ? 'flex' : 'hidden sm:flex'} flex-1 flex-col bg-white`}>
+                {selectedConversation || isComposing ? (
                   <>
                     {/* Header de conversación */}
                     <div className="p-3 sm:p-4 border-b bg-gray-50 flex items-center gap-2 sm:gap-0">
@@ -1058,6 +1075,16 @@ export default function MessagesWidget() {
                               </span>
                             </div>
                           </div>
+                        ) : isComposing ? (
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 rounded-full flex items-center justify-center flex-shrink-0">
+                              <span className="text-gray-500 font-semibold text-sm sm:text-base">+</span>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-semibold text-gray-900 text-sm sm:text-base">Nuevo mensaje</p>
+                              <p className="text-xs text-gray-500">Selecciona un destinatario</p>
+                            </div>
+                          </div>
                         ) : null}
                       </div>
                     </div>
@@ -1067,6 +1094,11 @@ export default function MessagesWidget() {
                       {selectedConversation && selectedConversation.messages.length === 0 && !isComposing && (
                         <div className="text-center text-gray-400 text-sm py-8">
                           <p>No hay mensajes en esta conversación</p>
+                        </div>
+                      )}
+                      {isComposing && !selectedRecipient && !selectedConversation && (
+                        <div className="text-center text-gray-400 text-sm py-8">
+                          <p>Selecciona un destinatario de la lista para comenzar</p>
                         </div>
                       )}
                       {isComposing && selectedRecipient && !selectedConversation && (
@@ -1123,12 +1155,13 @@ export default function MessagesWidget() {
                           type="text"
                           value={newMessageText}
                           onChange={(e) => setNewMessageText(e.target.value)}
-                          placeholder="Escribe un mensaje..."
-                          className="flex-1 px-3 sm:px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                          placeholder={selectedRecipient ? "Escribe un mensaje..." : "Selecciona un destinatario primero"}
+                          disabled={!selectedRecipient && isComposing}
+                          className="flex-1 px-3 sm:px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-gray-100 disabled:cursor-not-allowed"
                         />
                         <button
                           type="submit"
-                          disabled={!newMessageText.trim()}
+                          disabled={!newMessageText.trim() || (!selectedRecipient && isComposing)}
                           className="px-3 sm:px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
                         >
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

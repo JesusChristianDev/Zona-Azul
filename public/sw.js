@@ -1,103 +1,127 @@
-// Service Worker para la PWA Zona Azul
-const CACHE_NAME = 'zona-azul-cache-v3'
-const urlsToCache = [
+// Service Worker para la PWA Zona Azul - Optimizado
+const CACHE_NAME = 'zona-azul-cache-v4'
+const STATIC_CACHE = 'zona-azul-static-v4'
+const DYNAMIC_CACHE = 'zona-azul-dynamic-v4'
+
+// Recursos críticos para precache (solo assets estáticos)
+const STATIC_ASSETS = [
   '/',
-  '/login',
-  '/invitado',
-  '/booking',
-  '/activate',
-  '/menu',
-  '/admin',
-  '/admin/menu',
-  '/admin/usuarios',
-  '/admin/pedidos',
-  '/suscriptor',
-  '/suscriptor/plan',
-  '/suscriptor/pedidos',
-  '/suscriptor/progreso',
-  '/nutricionista',
-  '/nutricionista/clientes',
-  '/nutricionista/planes',
-  '/repartidor',
-  '/repartidor/pedidos',
-  '/repartidor/historial',
-  '/images/salad.svg',
-  '/images/bowl.svg',
   '/manifest.json',
   '/icon-192x192.png',
   '/icon-512x512.png',
+  '/images/salad.svg',
+  '/images/bowl.svg',
 ]
 
-// Instalación del Service Worker
+// Instalación del Service Worker - Optimizada
 self.addEventListener('install', (event) => {
+  self.skipWaiting() // Activar inmediatamente
   event.waitUntil(
-    caches.open(CACHE_NAME)
+    caches.open(STATIC_CACHE)
       .then((cache) => {
-        console.log('Zona Azul SW: caché precargado')
-        return cache.addAll(urlsToCache)
+        // Solo cachear assets estáticos críticos
+        return cache.addAll(STATIC_ASSETS).catch((err) => {
+          console.warn('SW: Error precacheando algunos assets', err)
+        })
       })
   )
 })
 
-// Activación del Service Worker
+// Activación del Service Worker - Optimizada
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('Zona Azul SW: eliminando caché antiguo', cacheName)
-            return caches.delete(cacheName)
-          }
-        })
-      )
-    })
+    Promise.all([
+      // Limpiar caches antiguos
+      caches.keys().then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((cacheName) => {
+            if (cacheName !== STATIC_CACHE && cacheName !== DYNAMIC_CACHE) {
+              return caches.delete(cacheName)
+            }
+          })
+        )
+      }),
+      // Tomar control inmediatamente
+      self.clients.claim()
+    ])
   )
 })
 
-// Estrategia: Network First, fallback a cache
+// Estrategia de caché optimizada
 self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
 
-  // No cachear requests POST, PUT, DELETE, etc. (solo GET)
+  // Solo procesar requests GET
   if (request.method !== 'GET') {
     return
   }
 
-  // No cachear requests a API routes
+  // Nunca cachear API routes (siempre frescas)
   if (url.pathname.startsWith('/api/')) {
     return
   }
 
-  // No cachear requests a _next (Next.js internals)
-  if (url.pathname.startsWith('/_next/')) {
+  // Cache First para assets estáticos
+  if (url.pathname.startsWith('/_next/static/') || 
+      url.pathname.startsWith('/images/') ||
+      url.pathname.match(/\.(png|jpg|jpeg|svg|ico|woff|woff2|ttf|eot)$/)) {
+    event.respondWith(
+      caches.match(request).then((cachedResponse) => {
+        if (cachedResponse) {
+          return cachedResponse
+        }
+        return fetch(request).then((response) => {
+          if (response && response.status === 200) {
+            const responseToCache = response.clone()
+            caches.open(STATIC_CACHE).then((cache) => {
+              cache.put(request, responseToCache)
+            })
+          }
+          return response
+        })
+      })
+    )
     return
   }
 
+  // Network First para páginas HTML (siempre frescas, fallback a cache)
+  if (request.headers.get('accept')?.includes('text/html')) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          // Solo cachear respuestas exitosas
+          if (response && response.status === 200) {
+            const responseToCache = response.clone()
+            caches.open(DYNAMIC_CACHE).then((cache) => {
+              cache.put(request, responseToCache)
+            })
+          }
+          return response
+        })
+        .catch(() => {
+          // Fallback a cache solo si falla la red
+          return caches.match(request).then((cachedResponse) => {
+            return cachedResponse || new Response('Sin conexión', { status: 503 })
+          })
+        })
+    )
+    return
+  }
+
+  // Para otros recursos, usar Network First
   event.respondWith(
     fetch(request)
       .then((response) => {
-        // Solo cachear respuestas exitosas y básicas (no opaques)
-        if (!response || response.status !== 200 || response.type !== 'basic') {
-          return response
-        }
-
-        const responseToCache = response.clone()
-
-        // Cachear en background (no bloquear la respuesta)
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(request, responseToCache).catch((err) => {
-            console.warn('Zona Azul SW: Error al cachear', request.url, err)
+        if (response && response.status === 200) {
+          const responseToCache = response.clone()
+          caches.open(DYNAMIC_CACHE).then((cache) => {
+            cache.put(request, responseToCache)
           })
-        })
-
+        }
         return response
       })
-      .catch(() => {
-        // Si falla la red, intentar obtener del cache
-        return caches.match(request)
-      })
+      .catch(() => caches.match(request))
   )
 })
 
@@ -164,8 +188,17 @@ self.addEventListener('notificationclick', (event) => {
   )
 })
 
-// Manejar cierre de notificaciones
-self.addEventListener('notificationclose', (event) => {
-  console.log('Notificación cerrada:', event.notification.tag)
-})
+// Limpiar cache dinámico periódicamente (mantener solo últimas 50 entradas)
+async function cleanDynamicCache() {
+  const cache = await caches.open(DYNAMIC_CACHE)
+  const keys = await cache.keys()
+  if (keys.length > 50) {
+    // Eliminar las más antiguas
+    const toDelete = keys.slice(0, keys.length - 50)
+    await Promise.all(toDelete.map(key => cache.delete(key)))
+  }
+}
+
+// Limpiar cache cada hora
+setInterval(cleanDynamicCache, 60 * 60 * 1000)
 

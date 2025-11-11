@@ -51,34 +51,29 @@ export function listenToUpdateEvent(
 }
 
 /**
- * Configura un listener para cambios en localStorage (sincronización entre pestañas)
+ * DEPRECATED: Esta función ya no se usa.
+ * La sincronización entre pestañas ahora se hace mediante polling de APIs o Supabase Realtime.
+ * 
+ * @deprecated Usa polling de APIs o Supabase Realtime en su lugar
  */
 export function listenToStorageChange(
   keys: string[],
   callback: (key: string, newValue: string | null) => void
 ): () => void {
   if (typeof window === 'undefined') return () => {}
-
-  const handleStorageChange = (e: StorageEvent) => {
-    if (e.key && keys.some((key) => e.key === key || e.key?.startsWith(key))) {
-      callback(e.key, e.newValue)
-    }
-  }
-
-  window.addEventListener('storage', handleStorageChange)
-  
-  // Retorna función de limpieza
-  return () => {
-    window.removeEventListener('storage', handleStorageChange)
-  }
+  // Función deprecada - no hace nada
+  return () => {}
 }
 
 /**
- * Configura listeners combinados (eventos personalizados + storage)
+ * Configura listeners combinados (eventos personalizados)
+ * 
+ * NOTA: Ya no escucha cambios en localStorage, solo eventos personalizados.
+ * La sincronización de datos ahora se hace mediante polling de APIs.
  */
 export function setupRealtimeSync(
   eventNames: Array<keyof typeof APP_EVENTS>,
-  storageKeys: string[],
+  storageKeys: string[], // Deprecated: ya no se usa
   callback: () => void
 ): () => void {
   if (typeof window === 'undefined') return () => {}
@@ -90,10 +85,6 @@ export function setupRealtimeSync(
     const cleanup = listenToUpdateEvent(eventName, callback)
     cleanupFunctions.push(cleanup)
   })
-
-  // Escuchar cambios en storage
-  const storageCleanup = listenToStorageChange(storageKeys, () => callback())
-  cleanupFunctions.push(storageCleanup)
 
   // Retorna función de limpieza combinada
   return () => {

@@ -80,47 +80,47 @@ export default function DashboardAdmin() {
   })
 
   useEffect(() => {
-    const loadStats = () => {
+    const loadStats = async () => {
       if (typeof window === 'undefined') return
 
-      // Obtener todos los usuarios
-      const stored = localStorage.getItem('zona_azul_users')
+      // Obtener suscriptores desde la API
+      const validSubscribers = await getSubscribers()
+      const validSubscriberIds = new Set(validSubscribers.map((s) => s.id))
+
+      // Obtener todos los usuarios desde la API
       let allUsers: any[] = []
-      
-      if (stored) {
-        try {
-          allUsers = JSON.parse(stored)
-        } catch (e) {
-          // Error al parsear
-        }
-      }
-      
-      // Si no hay usuarios en localStorage, usar mockUsers como fallback
-      if (allUsers.length === 0) {
-        const { mockUsers } = require('../../lib/mockUsers')
-        allUsers = mockUsers
+      try {
+        const { getUsers } = await import('../../lib/api')
+        allUsers = await getUsers()
+      } catch (error) {
+        console.error('Error loading users:', error)
       }
 
       // Contar usuarios por rol
-      const subscribers = allUsers.filter((u) => u.role === 'suscriptor')
-      const teamMembers = allUsers.filter((u) => 
+      const subscribers = allUsers.filter((u: any) => u.role === 'suscriptor')
+      const teamMembers = allUsers.filter((u: any) => 
         u.role === 'admin' || u.role === 'nutricionista' || u.role === 'repartidor'
       )
 
-      // Obtener pedidos
-      const ordersStr = localStorage.getItem('zona_azul_admin_orders')
+      // Obtener pedidos desde la API
       let orders: Order[] = []
-      if (ordersStr) {
-        try {
-          orders = JSON.parse(ordersStr)
-        } catch (e) {
-          // Error al parsear
-        }
+      try {
+        const { getOrders } = await import('../../lib/api')
+        const apiOrders = await getOrders()
+        // Convertir a formato Order
+        orders = apiOrders.map((o: any) => ({
+          id: o.id,
+          customerId: o.user_id,
+          status: o.status === 'entregado' ? 'Entregado' : o.status === 'en_camino' ? 'En camino' : 'Preparando',
+          total: Number(o.total_amount),
+          createdAt: o.created_at,
+          date: o.created_at.split('T')[0],
+        }))
+      } catch (error) {
+        console.error('Error loading orders:', error)
       }
 
       // Filtrar pedidos válidos (solo con suscriptores existentes)
-      const validSubscribers = getSubscribers()
-      const validSubscriberIds = new Set(validSubscribers.map((s) => s.id))
       const validOrders = orders.filter((o) => validSubscriberIds.has(o.customerId))
 
       // Fecha actual (necesaria para múltiples cálculos)
@@ -190,14 +190,28 @@ export default function DashboardAdmin() {
       const topCustomerValue = topCustomer?.total || 0
       const topCustomerName = topCustomer?.name || 'N/A'
 
-      // Producto más vendido (basado en items de pedidos)
+      // Producto más vendido (basado en order_items de pedidos)
       const itemCounts: Record<string, number> = {}
-      monthlyOrdersDelivered.forEach((order) => {
-        const items = (order as any).items || []
-        items.forEach((item: string) => {
-          itemCounts[item] = (itemCounts[item] || 0) + 1
-        })
-      })
+      try {
+        const { getOrderItemsByOrderIds } = await import('../../lib/db')
+        const { getMeals } = await import('../../lib/api')
+        const orderIds = monthlyOrdersDelivered.map(o => o.id)
+        if (orderIds.length > 0) {
+          const orderItems = await getOrderItemsByOrderIds(orderIds)
+          const allMeals = await getMeals()
+          const mealsMap = new Map(allMeals.map((m: any) => [m.id, m.name]))
+          
+          // Contar items por meal_id
+          for (const item of orderItems) {
+            if (item.meal_id) {
+              const mealName = mealsMap.get(item.meal_id) || 'Producto desconocido'
+              itemCounts[mealName] = (itemCounts[mealName] || 0) + item.quantity
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error getting most sold item:', e)
+      }
       const mostSoldItemEntry = Object.entries(itemCounts).sort((a, b) => b[1] - a[1])[0]
       const mostSoldItem = mostSoldItemEntry?.[0] || 'N/A'
       const mostSoldItemCount = mostSoldItemEntry?.[1] || 0
@@ -229,21 +243,19 @@ export default function DashboardAdmin() {
       const averageMonthsActive = 6 // Estimado
       const customerLifetimeValue = averageOrderValue * averageOrdersPerMonth * averageMonthsActive
 
-      // Contar planes activos primero (necesario para calcular subscribersWithoutPlan)
+      // Contar planes activos desde la API
       let activePlans = 0
-      validSubscribers.forEach((subscriber) => {
-        const plan = localStorage.getItem(`zona_azul_suscriptor_plan_user_${subscriber.id}`)
-        if (plan) {
-          try {
-            const planData = JSON.parse(plan)
-            if (planData && planData.days && planData.days.length > 0) {
-              activePlans++
-            }
-          } catch (e) {
-            // Plan inválido, no contar
+      try {
+        const { getPlan } = await import('../../lib/api')
+        for (const subscriber of validSubscribers) {
+          const plan = await getPlan(subscriber.id)
+          if (plan && plan.id) {
+            activePlans++
           }
         }
-      })
+      } catch (e) {
+        // Error al obtener planes, continuar con 0
+      }
 
       // Suscriptores sin plan
       const subscribersWithoutPlan = subscribers.length - activePlans
@@ -432,18 +444,14 @@ export default function DashboardAdmin() {
         return minutes > 45
       }).length
 
-      // Items del menú sin disponibilidad
-      const menuStr = localStorage.getItem('zona_azul_menu')
+      // Items del menú sin disponibilidad desde la API
       let unavailableMenuItems = 0
-      if (menuStr) {
-        try {
-          const menuItems = JSON.parse(menuStr)
-          unavailableMenuItems = menuItems.filter((item: any) => 
-            item.availability !== 'Disponible'
-          ).length
-        } catch (e) {
-          // Error al parsear
-        }
+      try {
+        const { getMeals } = await import('../../lib/api')
+        const meals = await getMeals()
+        unavailableMenuItems = meals.filter((item: any) => !item.available).length
+      } catch (e) {
+        // Error al obtener comidas
       }
 
       // Nuevos suscriptores esta semana (simulado: suscriptores sin plan)
@@ -496,38 +504,10 @@ export default function DashboardAdmin() {
 
     loadStats()
 
-    // Escuchar cambios
-    const handleUsersUpdate = () => loadStats()
-    const handlePlanUpdate = () => loadStats()
-    const handleOrdersUpdate = () => loadStats()
-    
-    window.addEventListener('zona_azul_users_updated', handleUsersUpdate)
-    window.addEventListener('zona_azul_subscribers_updated', handleUsersUpdate)
-    window.addEventListener('zona_azul_plan_updated', handlePlanUpdate)
-    window.addEventListener('zona_azul_admin_orders_updated', handleOrdersUpdate)
-
-    // Escuchar cambios en localStorage (otras pestañas)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (
-        e.key === 'zona_azul_users' ||
-        e.key === 'zona_azul_admin_orders' ||
-        e.key?.startsWith('zona_azul_suscriptor_plan_user_')
-      ) {
-        loadStats()
-      }
-    }
-
-    window.addEventListener('storage', handleStorageChange)
-
-    // Polling cada 3 segundos como fallback
-    const interval = setInterval(loadStats, 3000)
+    // Polling cada 30 segundos para actualizar datos
+    const interval = setInterval(loadStats, 30000)
 
     return () => {
-      window.removeEventListener('zona_azul_users_updated', handleUsersUpdate)
-      window.removeEventListener('zona_azul_subscribers_updated', handleUsersUpdate)
-      window.removeEventListener('zona_azul_plan_updated', handlePlanUpdate)
-      window.removeEventListener('zona_azul_admin_orders_updated', handleOrdersUpdate)
-      window.removeEventListener('storage', handleStorageChange)
       clearInterval(interval)
     }
   }, [])

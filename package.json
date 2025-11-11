@@ -7,9 +7,18 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "verify-supabase": "node scripts/verificar-supabase.js",
+    "verify-deps": "node scripts/verificar-dependencias.js",
+    "migrate-mock": "node scripts/migrate-mock-to-supabase.js",
+    "migrate": "tsx scripts/migrate-mock-data.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.81.0",
+    "@types/bcryptjs": "^2.4.6",
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^17.2.3",
+    "googleapis": "^165.0.0",
     "next": "^14.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -22,6 +31,7 @@
     "autoprefixer": "^10.4.0",
     "postcss": "^8.4.0",
     "tailwindcss": "^3.4.0",
+    "tsx": "^4.20.6",
     "typescript": "^5.4.0"
   }
 }
