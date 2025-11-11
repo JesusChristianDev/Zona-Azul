@@ -12,16 +12,6 @@ export function getOAuth2Client() {
     (isProduction ? 'https://zonazul.netlify.app' : 'http://localhost:3000')
   const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${baseUrl}/api/calendar/callback`
 
-  // En tiempo de build, retornar un cliente con valores placeholder para evitar errores
-  if (typeof window === 'undefined' && process.env.NODE_ENV !== 'production' && (!clientId || !clientSecret)) {
-    // Durante el build, usar valores placeholder para evitar errores
-    return new OAuth2Client(
-      clientId || 'placeholder_client_id',
-      clientSecret || 'placeholder_client_secret',
-      redirectUri
-    )
-  }
-
   if (!clientId || !clientSecret) {
     throw new Error('Google OAuth credentials not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.')
   }
