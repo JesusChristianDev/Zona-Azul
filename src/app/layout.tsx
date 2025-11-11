@@ -3,6 +3,9 @@ import { Metadata, Viewport } from 'next'
 import RegisterServiceWorker from './register-sw'
 import DashboardHeader from '../components/ui/DashboardHeader'
 
+// Forzar renderizado dinámico para evitar errores de prerenderizado con componentes cliente
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'Zona Azul — Bienestar integral',
   description: 'Plataforma Zona Azul: nutrición personalizada, comunidad y seguimiento de hábitos en una PWA moderna.',
