@@ -79,14 +79,51 @@ async function isNotificationEnabled(
  * Muestra una notificación usando el service worker
  */
 export async function showAppNotification(data: NotificationData): Promise<boolean> {
-  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  // Verificar si las notificaciones están soportadas
+  if (!('Notification' in window)) {
+    console.warn('Las notificaciones no están soportadas en este navegador')
+    return false
+  }
+
+  // Verificar permisos
+  if (Notification.permission !== 'granted') {
+    console.warn('Permiso de notificaciones no concedido')
     return false
   }
 
   try {
-    const registration = await navigator.serviceWorker.ready
+    // Intentar usar Service Worker primero (mejor para PWA)
+    if ('serviceWorker' in navigator) {
+      try {
+        const registration = await navigator.serviceWorker.ready
 
-    await registration.showNotification(data.title, {
+        await registration.showNotification(data.title, {
+          body: data.body,
+          icon: data.icon || '/icon-192x192.png',
+          badge: '/icon-192x192.png',
+          tag: data.tag || 'zona-azul-notification',
+          requireInteraction: false,
+          data: {
+            url: data.url || '/',
+            timestamp: Date.now(),
+          },
+          vibrate: [200, 100, 200],
+          silent: false,
+        } as any)
+
+        return true
+      } catch (swError) {
+        console.warn('Error con Service Worker, usando Notification API:', swError)
+        // Fallback a Notification API si Service Worker falla
+      }
+    }
+
+    // Fallback: usar Notification API directamente
+    const notification = new Notification(data.title, {
       body: data.body,
       icon: data.icon || '/icon-192x192.png',
       badge: '/icon-192x192.png',
@@ -96,8 +133,16 @@ export async function showAppNotification(data: NotificationData): Promise<boole
         url: data.url || '/',
         timestamp: Date.now(),
       },
-      vibrate: [200, 100, 200],
     } as any)
+
+    // Manejar clic en la notificación
+    notification.onclick = () => {
+      window.focus()
+      if (data.url) {
+        window.location.href = data.url
+      }
+      notification.close()
+    }
 
     return true
   } catch (error) {

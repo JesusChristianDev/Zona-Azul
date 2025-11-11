@@ -217,14 +217,30 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Si hay una ventana abierta, enfocarla
+      // Buscar ventana existente que coincida con la URL
       for (let i = 0; i < clientList.length; i++) {
         const client = clientList[i]
-        if (client.url === urlToOpen && 'focus' in client) {
-          return client.focus()
+        // Verificar si la URL base coincide (ignorar query params y hash)
+        const clientUrl = new URL(client.url)
+        const targetUrl = new URL(urlToOpen, clientUrl.origin)
+        
+        if (clientUrl.pathname === targetUrl.pathname && 'focus' in client) {
+          return client.focus().then(() => {
+            // Navegar a la URL específica si es diferente
+            if (clientUrl.href !== targetUrl.href) {
+              return client.navigate(targetUrl.href)
+            }
+          })
         }
       }
+      
       // Si no hay ventana abierta, abrir una nueva
+      if (clients.openWindow) {
+        return clients.openWindow(urlToOpen)
+      }
+    }).catch((error) => {
+      console.error('Error al manejar clic en notificación:', error)
+      // Fallback: intentar abrir ventana
       if (clients.openWindow) {
         return clients.openWindow(urlToOpen)
       }

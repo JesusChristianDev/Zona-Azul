@@ -17,7 +17,9 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    console.log(`Fetching messages for user: ${userId}`)
     const messages = await getMessagesByUserId(userId)
+    console.log(`Returning ${messages.length} messages for user ${userId}`)
     return NextResponse.json({ messages })
   } catch (error: any) {
     console.error('Error fetching messages:', error)
@@ -56,6 +58,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    console.log('Creating message:', {
+      from_user_id: userId,
+      to_user_id,
+      subject: subject || null,
+      message_length: message?.length || 0,
+    })
+
     const newMessage = await createMessage({
       from_user_id: userId,
       to_user_id,
@@ -65,11 +74,18 @@ export async function POST(request: NextRequest) {
     })
 
     if (!newMessage) {
+      console.error('Failed to create message')
       return NextResponse.json(
         { error: 'Error al enviar mensaje' },
         { status: 500 }
       )
     }
+
+    console.log('Message created successfully:', {
+      message_id: newMessage.id,
+      from: newMessage.from_user_id,
+      to: newMessage.to_user_id,
+    })
 
     return NextResponse.json({ message: newMessage }, { status: 201 })
   } catch (error) {

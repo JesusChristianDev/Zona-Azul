@@ -291,17 +291,33 @@ export async function getMessages() {
   return response.data?.messages || []
 }
 
-export async function sendMessage(messageData: {
-  to_user_id: string
-  subject?: string
-  message: string
-}) {
-  const response = await apiRequest<{ message: any }>('/api/messages', {
-    method: 'POST',
-    body: JSON.stringify(messageData),
-  })
-  return response.data?.message || null
-}
+  export async function sendMessage(messageData: {
+    to_user_id: string
+    subject?: string
+    message: string
+  }) {
+    try {
+      const response = await apiRequest<{ message: any }>('/api/messages', {
+        method: 'POST',
+        body: JSON.stringify(messageData),
+      })
+
+      if (response.error) {
+        console.error('API Error sending message:', response.error)
+        return null
+      }
+
+      if (!response.data?.message) {
+        console.error('API: No message returned from server')
+        return null
+      }
+
+      return response.data.message
+    } catch (error) {
+      console.error('API: Exception sending message:', error)
+      return null
+    }
+  }
 
 export async function updateMessage(id: string, messageData: { read?: boolean; reply?: string }) {
   const response = await apiRequest<{ message: any }>(`/api/messages/${id}`, {

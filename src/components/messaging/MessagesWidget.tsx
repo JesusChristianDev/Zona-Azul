@@ -97,16 +97,25 @@ export default function MessagesWidget() {
   const [availableContacts, setAvailableContacts] = useState<User[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Scroll al final de los mensajes
+  // Scroll al final de los mensajes - optimizado para evitar reflows
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (messagesEndRef.current) {
+      // Usar requestAnimationFrame para evitar forced reflow
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+      })
+    }
   }
 
   useEffect(() => {
     if (selectedConversation) {
-      scrollToBottom()
+      // Delay el scroll para evitar conflictos con el render
+      const timeoutId = setTimeout(() => {
+        scrollToBottom()
+      }, 100)
+      return () => clearTimeout(timeoutId)
     }
-  }, [selectedConversation])
+  }, [selectedConversation?.messages.length]) // Solo scroll cuando cambia el número de mensajes
 
   // Función para obtener contactos disponibles para todos los roles
   const getAvailableContactsList = async (): Promise<User[]> => {
@@ -232,7 +241,10 @@ export default function MessagesWidget() {
         // Obtener el rol del contacto desde el mensaje
         const contactRole = msg.fromId === userId ? msg.toRole : (msg.fromRole || 'suscriptor')
 
+
         if (!conversationsMap.has(contactId)) {
+          // Inicializar contador de no leídos correctamente
+          const initialUnreadCount = msg.toId === userId && !msg.read ? 1 : 0
           conversationsMap.set(contactId, {
             contactId,
             contactName,
@@ -240,7 +252,7 @@ export default function MessagesWidget() {
             contactEmail,
             lastMessage: msg.message,
             lastMessageTime: msg.createdAt,
-            unreadCount: 0,
+            unreadCount: initialUnreadCount,
             messages: [],
             archived: isArchived,
             deleted: isDeleted,
@@ -258,10 +270,11 @@ export default function MessagesWidget() {
           conversation.lastMessageTime = msg.createdAt
         }
 
-        // Contar no leídos (solo mensajes recibidos)
-        if (msg.toId === userId && !msg.read) {
-          conversation.unreadCount++
-        }
+        // Contar no leídos (solo mensajes recibidos que no han sido leídos)
+        // IMPORTANTE: Recalcular desde cero para evitar duplicados
+        conversation.unreadCount = conversation.messages.filter(
+          (m) => m.toId === userId && !m.read
+        ).length
       })
 
       // Ordenar mensajes dentro de cada conversación
@@ -281,12 +294,12 @@ export default function MessagesWidget() {
       })
 
       setConversations(conversationsArray)
-      // Solo contar no leídos de conversaciones no archivadas
-      setUnreadTotal(
-        conversationsArray
-          .filter((conv) => !conv.archived)
-          .reduce((sum, conv) => sum + conv.unreadCount, 0)
-      )
+      // Solo contar no leídos de conversaciones no archivadas y no eliminadas
+      const totalUnread = conversationsArray
+        .filter((conv) => !conv.archived && !conv.deleted)
+        .reduce((sum, conv) => sum + conv.unreadCount, 0)
+
+      setUnreadTotal(totalUnread)
 
       // Actualizar conversación seleccionada si existe (solo si realmente cambió)
       if (selectedConversation) {
@@ -360,12 +373,12 @@ export default function MessagesWidget() {
         )
 
         // Mostrar notificación para nuevos mensajes no leídos
-        if (newMessages.length > 0 && document.hidden) {
-          // Solo mostrar notificación si la ventana no está visible
+        // Mostrar notificación si la ventana no está visible O si el widget de mensajes no está abierto
+        if (newMessages.length > 0 && (document.hidden || !isOpen)) {
           newMessages.forEach((msg) => {
             NotificationHelpers.newMessage(
               msg.fromName,
-              msg.message.substring(0, 50) + (msg.message.length > 50 ? '...' : ''),
+              msg.message.substring(0, 80) + (msg.message.length > 80 ? '...' : ''),
               '/',
               userId
             )
@@ -385,31 +398,44 @@ export default function MessagesWidget() {
     checkForNewMessages()
 
     const handleMessagesUpdate = () => {
-      // Usar setTimeout para evitar bucles infinitos
-      setTimeout(() => {
+      // Usar requestAnimationFrame para optimizar el rendimiento
+      requestAnimationFrame(() => {
         if (!isProcessing) {
-          checkForNewMessages()
-          // Siempre recargar conversaciones para mostrar nuevos mensajes
-          loadConversations()
+          // Throttle: solo actualizar si ha pasado suficiente tiempo
+          const now = Date.now()
+          if (now - lastUpdateTime >= 1000) { // Mínimo 1 segundo entre actualizaciones
+            lastUpdateTime = now
+            checkForNewMessages()
+            // Usar setTimeout para no bloquear el thread principal
+            setTimeout(() => {
+              loadConversations()
+            }, 0)
+          }
         }
-      }, 200)
+      })
     }
 
-    window.addEventListener('zona_azul_messages_updated', handleMessagesUpdate)
+    window.addEventListener('zona_azul_messages_updated', handleMessagesUpdate, { passive: true })
     const interval = setInterval(() => {
       if (!isProcessing) {
-        checkForNewMessages()
-        // Recargar conversaciones periódicamente para mantener actualizado
-        loadConversations()
+        const now = Date.now()
+        if (now - lastUpdateTime >= 3000) { // Throttle: mínimo 3 segundos
+          lastUpdateTime = now
+          checkForNewMessages()
+          // Usar setTimeout para no bloquear el thread principal
+          setTimeout(() => {
+            loadConversations()
+          }, 0)
+        }
       }
-    }, 3000) // Aumentar intervalo a 3 segundos para reducir carga
+    }, 3000) // Intervalo de 3 segundos
 
     return () => {
       window.removeEventListener('zona_azul_messages_updated', handleMessagesUpdate)
       clearInterval(interval)
       isProcessing = false
     }
-  }, [userId, role, showArchived]) // Agregar showArchived como dependencia
+  }, [userId, role, showArchived, isOpen]) // Agregar isOpen para controlar notificaciones
 
   // Marcar mensajes como leídos al abrir conversación
   useEffect(() => {
@@ -488,9 +514,16 @@ export default function MessagesWidget() {
       })
 
       if (!sentMessage) {
+        console.error('Failed to send message')
         alert('Error al enviar el mensaje. Por favor, intenta de nuevo.')
         return
       }
+
+      // Disparar evento global para notificar a otros componentes/usuarios
+      // Esto ayudará a que el destinatario vea el mensaje más rápido
+      window.dispatchEvent(new CustomEvent('zona_azul_messages_updated', {
+        detail: { messageId: sentMessage.id, toUserId: sentMessage.to_user_id }
+      }))
 
       // Limpiar campos
       setNewMessageText('')
@@ -505,89 +538,97 @@ export default function MessagesWidget() {
         })
       }
 
-      // Esperar un poco para que la base de datos se actualice
-      await new Promise(resolve => setTimeout(resolve, 600))
+      // Forzar recarga inmediata de conversaciones para el remitente
+      // El destinatario verá el mensaje en su próxima actualización automática (cada 3 segundos)
+      // Usar requestAnimationFrame para optimizar el rendimiento
+      requestAnimationFrame(async () => {
+        await new Promise(resolve => setTimeout(resolve, 200)) // Reducir delay
 
-      // Recargar conversaciones para obtener el mensaje recién enviado
-      const updatedConversations = await loadConversations()
+        // Recargar conversaciones para obtener el mensaje recién enviado
+        const updatedConversations = await loadConversations()
 
-      // Buscar y seleccionar la conversación con el destinatario
-      const targetConversation = updatedConversations.find(c => c.contactId === recipient.id)
+        // Buscar y seleccionar la conversación con el destinatario
+        const targetConversation = updatedConversations.find(c => c.contactId === recipient.id)
 
-      if (targetConversation) {
-        setSelectedConversation(targetConversation)
-        setIsComposing(false)
-        setSelectedRecipient(null)
-      } else {
-        // Si no se encontró, esperar un poco más y recargar
-        await new Promise(resolve => setTimeout(resolve, 500))
-        const retryConversations = await loadConversations()
-        const retryTarget = retryConversations.find(c => c.contactId === recipient.id)
-
-        if (retryTarget) {
-          setSelectedConversation(retryTarget)
-          setIsComposing(false)
-          setSelectedRecipient(null)
+        if (targetConversation) {
+          // Usar setTimeout para no bloquear el thread principal
+          setTimeout(() => {
+            setSelectedConversation(targetConversation)
+            setIsComposing(false)
+            setSelectedRecipient(null)
+          }, 0)
         } else {
-          // Si aún no se encuentra, crear una conversación temporal
-          let recipientUser: User | null = null
-          try {
-            recipientUser = await getUserById(recipient.id) as User
-          } catch (error) {
-            console.error('Error getting recipient user:', error)
-            // Fallback: buscar en contactos disponibles
-            const contacts = await getAvailableContactsList()
-            recipientUser = contacts.find((u: any) => u.id === recipient.id) as User || null
-          }
+          // Si no se encontró, esperar un poco más y recargar
+          setTimeout(async () => {
+            const retryConversations = await loadConversations()
+            const retryTarget = retryConversations.find(c => c.contactId === recipient.id)
 
-          if (recipientUser) {
-            const apiMessages = await getMessages()
-            const convMessages = apiMessages
-              .filter((msg: any) =>
-                (msg.from_id === userId && msg.to_id === recipient.id) ||
-                (msg.to_id === userId && msg.from_id === recipient.id)
-              )
-              .map((msg: any) => ({
-                id: msg.id,
-                from: msg.from_email || '',
-                fromName: msg.from_name || '',
-                fromId: msg.from_id,
-                to: msg.to_email || '',
-                toName: msg.to_name || '',
-                toId: msg.to_id,
-                toRole: msg.to_role,
-                subject: msg.subject || 'Mensaje',
-                message: msg.message || '',
-                read: msg.read || false,
-                createdAt: msg.created_at,
-                reply: msg.reply || undefined,
-              } as Message))
-
-            if (convMessages.length > 0) {
-              const currentChatStatus = await getUserChatStatus()
-              const newConv: Conversation = {
-                contactId: recipient.id,
-                contactName: recipientUser.name || recipientUser.email,
-                contactRole: recipientUser.role,
-                contactEmail: recipientUser.email,
-                lastMessage: convMessages[convMessages.length - 1].message,
-                lastMessageTime: convMessages[convMessages.length - 1].createdAt,
-                unreadCount: convMessages.filter(m => m.toId === userId && !m.read).length,
-                messages: convMessages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
-                archived: currentChatStatus.archived.has(recipient.id),
-                deleted: currentChatStatus.deleted.has(recipient.id),
-              }
-              setSelectedConversation(newConv)
+            if (retryTarget) {
+              setSelectedConversation(retryTarget)
               setIsComposing(false)
               setSelectedRecipient(null)
+            } else {
+              // Si aún no se encuentra, crear una conversación temporal
+              let recipientUser: User | null = null
+              try {
+                recipientUser = await getUserById(recipient.id) as User
+              } catch (error) {
+                console.error('Error getting recipient user:', error)
+                // Fallback: buscar en contactos disponibles
+                const contacts = await getAvailableContactsList()
+                recipientUser = contacts.find((u: any) => u.id === recipient.id) as User || null
+              }
 
-              setTimeout(() => {
-                loadConversations()
-              }, 300)
+              if (recipientUser) {
+                const apiMessages = await getMessages()
+                const convMessages = apiMessages
+                  .filter((msg: any) =>
+                    (msg.from_id === userId && msg.to_id === recipient.id) ||
+                    (msg.to_id === userId && msg.from_id === recipient.id)
+                  )
+                  .map((msg: any) => ({
+                    id: msg.id,
+                    from: msg.from_email || '',
+                    fromName: msg.from_name || '',
+                    fromId: msg.from_id,
+                    to: msg.to_email || '',
+                    toName: msg.to_name || '',
+                    toId: msg.to_id,
+                    toRole: msg.to_role,
+                    subject: msg.subject || 'Mensaje',
+                    message: msg.message || '',
+                    read: msg.read || false,
+                    createdAt: msg.created_at,
+                    reply: msg.reply || undefined,
+                  } as Message))
+
+                if (convMessages.length > 0) {
+                  const currentChatStatus = await getUserChatStatus()
+                  const newConv: Conversation = {
+                    contactId: recipient.id,
+                    contactName: recipientUser.name || recipientUser.email,
+                    contactRole: recipientUser.role,
+                    contactEmail: recipientUser.email,
+                    lastMessage: convMessages[convMessages.length - 1].message,
+                    lastMessageTime: convMessages[convMessages.length - 1].createdAt,
+                    unreadCount: convMessages.filter(m => m.toId === userId && !m.read).length,
+                    messages: convMessages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
+                    archived: currentChatStatus.archived.has(recipient.id),
+                    deleted: currentChatStatus.deleted.has(recipient.id),
+                  }
+                  setSelectedConversation(newConv)
+                  setIsComposing(false)
+                  setSelectedRecipient(null)
+
+                  setTimeout(() => {
+                    loadConversations()
+                  }, 300)
+                }
+              }
             }
-          }
+          }, 500)
         }
-      }
+      })
     } catch (error: any) {
       console.error('Error sending message:', error)
       alert('Error al enviar el mensaje: ' + (error.message || 'Error desconocido'))
@@ -774,7 +815,7 @@ export default function MessagesWidget() {
           />
         </svg>
         {unreadTotal > 0 && (
-          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center shadow-lg animate-pulse z-10">
             {unreadTotal > 9 ? '9+' : unreadTotal}
           </span>
         )}
@@ -799,14 +840,14 @@ export default function MessagesWidget() {
           />
 
           <div
-            className="fixed top-0 left-0 right-0 bottom-0 sm:top-16 sm:left-auto sm:right-2 sm:bottom-2 sm:w-[600px] md:w-[700px] sm:h-[calc(100vh-5rem)] sm:rounded-2xl bg-white shadow-2xl z-[60] flex flex-col border border-gray-200"
+            className="fixed inset-0 sm:inset-auto sm:top-16 sm:left-auto sm:right-4 sm:bottom-4 sm:w-[calc(100vw-2rem)] sm:max-w-[720px] md:max-w-[800px] sm:h-[calc(100vh-6rem)] sm:rounded-xl bg-white shadow-2xl z-[60] flex flex-col border-0 sm:border border-gray-200 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between p-3 sm:p-4 border-b bg-primary text-white sm:rounded-t-2xl">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
-                  <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            {/* Header profesional */}
+            <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-primary to-primary/90 text-white sm:rounded-t-xl">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -816,9 +857,9 @@ export default function MessagesWidget() {
                   </svg>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h3 className="font-semibold text-sm sm:text-base truncate">Mensajes</h3>
+                  <h3 className="font-bold text-base sm:text-lg truncate">Mensajes</h3>
                   {unreadTotal > 0 && (
-                    <p className="text-xs text-white/80">{unreadTotal} no leídos</p>
+                    <p className="text-xs text-white/90 font-medium mt-0.5">{unreadTotal} {unreadTotal === 1 ? 'mensaje no leído' : 'mensajes no leídos'}</p>
                   )}
                 </div>
               </div>
@@ -826,12 +867,11 @@ export default function MessagesWidget() {
                 onClick={(e) => {
                   e.stopPropagation()
                   setIsOpen(false)
-                  // Limpiar estado al cerrar
                   setSelectedConversation(null)
                   setIsComposing(false)
                   setSelectedRecipient(null)
                 }}
-                className="p-1.5 sm:p-2 hover:bg-white/20 rounded-lg transition-colors flex-shrink-0"
+                className="p-2 hover:bg-white/20 rounded-lg transition-all duration-200 flex-shrink-0 active:scale-95"
                 aria-label="Cerrar"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -841,194 +881,186 @@ export default function MessagesWidget() {
             </div>
 
             {/* Contenido principal - responsive: móvil fullscreen, desktop dos columnas */}
-            <div className="flex flex-1 overflow-hidden">
-              {/* Lista de conversaciones - oculta en móvil cuando hay conversación seleccionada */}
-              <div className={`${selectedConversation || (isComposing && selectedRecipient) ? 'hidden sm:flex' : 'flex'} w-full sm:w-1/3 border-r bg-gray-50 overflow-y-auto flex-col`}>
-                {/* Botones de acción */}
-                <div className="p-2 border-b bg-white flex gap-2">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setIsComposing(true)
-                      setSelectedConversation(null)
-                      setSelectedRecipient(null)
-                    }}
-                    className="flex-1 px-3 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition text-sm font-medium"
-                  >
-                    + Nuevo
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setShowArchived(!showArchived)
-                      setSelectedConversation(null)
-                      setIsComposing(false)
-                      setSelectedRecipient(null)
-                    }}
-                    className={`px-3 py-2 rounded-lg transition text-sm font-medium ${showArchived
-                      ? 'bg-primary text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                  >
-                    {showArchived ? '📂 Archivados' : '📁 Ver archivados'}
-                  </button>
+            <div className="flex flex-1 overflow-hidden bg-white">
+              {/* Lista de conversaciones - oculta en móvil cuando hay conversación seleccionada o se está componiendo */}
+              <div className={`${selectedConversation || isComposing ? 'hidden sm:flex' : 'flex'} w-full sm:w-[320px] md:w-[360px] border-r border-gray-200 bg-gray-50/50 overflow-hidden flex-col transition-all duration-300`}>
+                {/* Barra de acciones profesional */}
+                <div className="px-2 sm:px-3 py-2.5 sm:py-3 border-b border-gray-200 bg-white">
+                  <div className="flex gap-1.5 sm:gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setIsComposing(true)
+                        setSelectedConversation(null)
+                        setSelectedRecipient(null)
+                      }}
+                      className="flex-1 px-3 sm:px-4 py-2 sm:py-2.5 bg-primary text-white rounded-lg hover:bg-primary/90 transition-all duration-200 text-xs sm:text-sm font-semibold shadow-sm hover:shadow-md active:scale-[0.98] flex items-center justify-center gap-1.5 sm:gap-2"
+                    >
+                      <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      <span className="hidden xs:inline">Nuevo Mensaje</span>
+                      <span className="xs:hidden">Nuevo</span>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setShowArchived(!showArchived)
+                        setSelectedConversation(null)
+                        setIsComposing(false)
+                        setSelectedRecipient(null)
+                      }}
+                      className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-all duration-200 text-xs sm:text-sm font-medium flex items-center justify-center gap-1 sm:gap-1.5 ${showArchived
+                        ? 'bg-primary text-white shadow-sm'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
+                        }`}
+                      title={showArchived ? 'Ver activos' : 'Ver archivados'}
+                    >
+                      <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                      </svg>
+                      <span className="hidden sm:inline">{showArchived ? 'Activos' : 'Archivados'}</span>
+                    </button>
+                  </div>
                 </div>
 
-                {isComposing && (
-                  <div className="p-2 border-b bg-white">
-                    <p className="text-xs font-semibold text-gray-500 mb-2 px-2">Seleccionar destinatario:</p>
-                    {availableContacts.length === 0 ? (
-                      <div className="p-4 text-center text-gray-400 text-sm">
-                        <p>No hay contactos disponibles</p>
-                        <p className="text-xs mt-1">Cargando contactos...</p>
-                      </div>
-                    ) : (
-                      availableContacts.map((contact) => (
-                        <button
-                          key={contact.id}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleStartNewConversation(contact)
-                          }}
-                          className="w-full p-2 hover:bg-gray-100 rounded-lg text-left"
-                          type="button"
-                        >
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                              <span className="text-primary text-xs font-semibold">
-                                {contact.name.charAt(0).toUpperCase()}
-                              </span>
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-gray-900">{contact.name}</p>
-                              <p className="text-xs text-gray-500">{getRoleLabel(contact.role)}</p>
-                            </div>
-                          </div>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                )}
 
-                <div className="divide-y flex-1 overflow-y-auto">
+                {/* Lista de conversaciones */}
+                <div className="flex-1 overflow-y-auto">
                   {conversations.length === 0 ? (
-                    <div className="p-8 text-center text-gray-400 text-sm">
-                      {showArchived ? 'No hay conversaciones archivadas' : 'No hay conversaciones aún'}
+                    <div className="p-12 text-center">
+                      <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                        <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                      </div>
+                      <p className="text-gray-500 font-medium text-sm">{showArchived ? 'No hay conversaciones archivadas' : 'No hay conversaciones aún'}</p>
+                      <p className="text-gray-400 text-xs mt-1">{showArchived ? 'Las conversaciones archivadas aparecerán aquí' : 'Comienza una nueva conversación'}</p>
                     </div>
                   ) : (
-                    conversations.map((conv) => (
-                      <div
-                        key={conv.contactId}
-                        className={`relative group ${selectedConversation?.contactId === conv.contactId ? 'bg-primary/5' : ''
-                          }`}
-                        onMouseEnter={() => setHoveredConversation(conv.contactId)}
-                        onMouseLeave={() => setHoveredConversation(null)}
-                      >
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setSelectedConversation(conv)
-                            setIsComposing(false)
-                            setSelectedRecipient(null)
-                          }}
-                          className="w-full p-3 hover:bg-gray-100 transition-colors text-left"
-                          type="button"
+                    <div className="divide-y divide-gray-100">
+                      {conversations.map((conv) => (
+                        <div
+                          key={conv.contactId}
+                          className={`relative group transition-all duration-200 ${selectedConversation?.contactId === conv.contactId
+                            ? 'bg-primary/5 border-l-4 border-primary'
+                            : 'hover:bg-white border-l-4 border-transparent'
+                            }`}
+                          onMouseEnter={() => setHoveredConversation(conv.contactId)}
+                          onMouseLeave={() => setHoveredConversation(null)}
                         >
-                          <div className="flex items-start gap-2">
-                            <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
-                              <span className="text-primary font-semibold text-sm">
-                                {conv.contactName.charAt(0).toUpperCase()}
-                              </span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between mb-1">
-                                <div className="flex items-center gap-2">
-                                  <p className="font-semibold text-gray-900 text-sm truncate">{conv.contactName}</p>
-                                  {conv.archived && !conv.deleted && (
-                                    <span className="text-xs text-gray-400">📁</span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSelectedConversation(conv)
+                              setIsComposing(false)
+                              setSelectedRecipient(null)
+                            }}
+                            className="w-full p-4 transition-colors text-left"
+                            type="button"
+                          >
+                            <div className="flex items-start gap-2 sm:gap-3">
+                              <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ${selectedConversation?.contactId === conv.contactId
+                                ? 'bg-primary text-white'
+                                : 'bg-gradient-to-br from-primary/10 to-primary/5 text-primary'
+                                }`}>
+                                <span className="font-bold text-sm sm:text-base">
+                                  {conv.contactName.charAt(0).toUpperCase()}
+                                </span>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start justify-between gap-1.5 sm:gap-2 mb-1 sm:mb-1.5">
+                                  <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
+                                    <p className="font-semibold text-gray-900 text-xs sm:text-sm truncate">{conv.contactName}</p>
+                                    <span className={`px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-medium flex-shrink-0 ${getRoleBadgeColor(conv.contactRole)}`}>
+                                      {getRoleLabel(conv.contactRole)}
+                                    </span>
+                                    {conv.archived && !conv.deleted && (
+                                      <span className="text-[10px] sm:text-xs text-gray-400 flex-shrink-0">📁</span>
+                                    )}
+                                  </div>
+                                  {conv.unreadCount > 0 && !conv.archived && !conv.deleted && (
+                                    <span className="bg-primary text-white text-[10px] sm:text-xs font-bold rounded-full min-w-[18px] sm:min-w-[20px] h-[18px] sm:h-5 px-1 sm:px-1.5 flex items-center justify-center flex-shrink-0 shadow-sm">
+                                      {conv.unreadCount > 9 ? '9+' : conv.unreadCount}
+                                    </span>
                                   )}
                                 </div>
-                                {conv.unreadCount > 0 && !conv.archived && !conv.deleted && (
-                                  <span className="bg-primary text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0">
-                                    {conv.unreadCount > 9 ? '9+' : conv.unreadCount}
-                                  </span>
-                                )}
+                                <p className="text-xs sm:text-sm text-gray-600 truncate mb-0.5 sm:mb-1">{conv.lastMessage || 'Sin mensajes'}</p>
+                                <p className="text-[10px] sm:text-xs text-gray-400 font-medium">{formatTime(conv.lastMessageTime)}</p>
                               </div>
-                              <p className="text-xs text-gray-600 truncate">{conv.lastMessage}</p>
-                              <p className="text-xs text-gray-400 mt-1">{formatTime(conv.lastMessageTime)}</p>
                             </div>
-                          </div>
-                        </button>
+                          </button>
 
-                        {/* Botones de acción al hacer hover */}
-                        {hoveredConversation === conv.contactId && !conv.deleted && (
-                          <div
-                            className="absolute top-2 right-2 flex gap-1 bg-white rounded-lg shadow-lg border border-gray-200 p-1 z-10"
-                            onClick={(e) => e.stopPropagation()}
-                            onMouseDown={(e) => e.stopPropagation()}
-                          >
-                            {conv.archived ? (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  e.preventDefault()
-                                  handleUnarchiveConversation(conv.contactId, e)
-                                }}
-                                onMouseDown={(e) => e.stopPropagation()}
-                                className="p-1.5 hover:bg-gray-100 rounded transition text-gray-600 hover:text-primary"
-                                title="Desarchivar"
-                                type="button"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                </svg>
-                              </button>
-                            ) : (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  e.preventDefault()
-                                  handleArchiveConversation(conv.contactId, e)
-                                }}
-                                onMouseDown={(e) => e.stopPropagation()}
-                                className="p-1.5 hover:bg-gray-100 rounded transition text-gray-600 hover:text-primary"
-                                title="Archivar"
-                                type="button"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                                </svg>
-                              </button>
-                            )}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                e.preventDefault()
-                                handleDeleteConversation(conv.contactId, e)
-                              }}
+                          {/* Botones de acción al hacer hover - diseño profesional */}
+                          {hoveredConversation === conv.contactId && !conv.deleted && (
+                            <div
+                              className="absolute top-3 right-3 flex gap-1 bg-white rounded-lg shadow-lg border border-gray-200 p-1.5 z-10"
+                              onClick={(e) => e.stopPropagation()}
                               onMouseDown={(e) => e.stopPropagation()}
-                              className="p-1.5 hover:bg-red-50 rounded transition text-gray-600 hover:text-red-600"
-                              title="Eliminar"
-                              type="button"
                             >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ))
+                              {conv.archived ? (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    e.preventDefault()
+                                    handleUnarchiveConversation(conv.contactId, e)
+                                  }}
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  className="p-2 hover:bg-primary/10 rounded-md transition-all duration-200 text-gray-600 hover:text-primary"
+                                  title="Desarchivar"
+                                  type="button"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                  </svg>
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    e.preventDefault()
+                                    handleArchiveConversation(conv.contactId, e)
+                                  }}
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  className="p-2 hover:bg-primary/10 rounded-md transition-all duration-200 text-gray-600 hover:text-primary"
+                                  title="Archivar"
+                                  type="button"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                                  </svg>
+                                </button>
+                              )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  e.preventDefault()
+                                  handleDeleteConversation(conv.contactId, e)
+                                }}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                className="p-2 hover:bg-red-50 rounded-md transition-all duration-200 text-gray-600 hover:text-red-600"
+                                title="Eliminar"
+                                type="button"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>
 
-              {/* Vista de mensajes - oculta en móvil cuando no hay conversación seleccionada */}
+              {/* Vista de mensajes - visible en móvil cuando hay conversación seleccionada o se está componiendo */}
               <div className={`${selectedConversation || isComposing ? 'flex' : 'hidden sm:flex'} flex-1 flex-col bg-white`}>
                 {selectedConversation || isComposing ? (
                   <>
-                    {/* Header de conversación */}
-                    <div className="p-3 sm:p-4 border-b bg-gray-50 flex items-center gap-2 sm:gap-0">
+                    {/* Header de conversación profesional */}
+                    <div className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white flex items-center gap-2 sm:gap-3">
                       {/* Botón volver - solo visible en móvil */}
                       <button
                         onClick={(e) => {
@@ -1037,97 +1069,158 @@ export default function MessagesWidget() {
                           setIsComposing(false)
                           setSelectedRecipient(null)
                         }}
-                        className="sm:hidden p-1.5 hover:bg-gray-200 rounded-lg transition-colors"
+                        className="sm:hidden p-2 hover:bg-gray-200 rounded-lg transition-all duration-200 flex-shrink-0 active:scale-95 touch-manipulation"
                         aria-label="Volver"
                       >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                         </svg>
                       </button>
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         {selectedConversation ? (
                           <div className="flex items-center gap-2 sm:gap-3">
-                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
-                              <span className="text-primary font-semibold text-sm sm:text-base">
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-primary to-primary/80 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm">
+                              <span className="text-white font-bold text-sm sm:text-base">
                                 {selectedConversation.contactName.charAt(0).toUpperCase()}
                               </span>
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="font-semibold text-gray-900 text-sm sm:text-base truncate">{selectedConversation.contactName}</p>
-                              <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${getRoleBadgeColor(selectedConversation.contactRole)}`}>
-                                {getRoleLabel(selectedConversation.contactRole)}
-                              </span>
+                              <p className="font-bold text-gray-900 text-sm sm:text-base truncate">{selectedConversation.contactName}</p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className={`inline-block px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-semibold ${getRoleBadgeColor(selectedConversation.contactRole)}`}>
+                                  {getRoleLabel(selectedConversation.contactRole)}
+                                </span>
+                              </div>
                             </div>
                           </div>
                         ) : selectedRecipient ? (
                           <div className="flex items-center gap-2 sm:gap-3">
-                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
-                              <span className="text-primary font-semibold text-sm sm:text-base">
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-primary to-primary/80 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm">
+                              <span className="text-white font-bold text-sm sm:text-base">
                                 {selectedRecipient.name.charAt(0).toUpperCase()}
                               </span>
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="font-semibold text-gray-900 text-sm sm:text-base truncate">{selectedRecipient.name}</p>
-                              <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${getRoleBadgeColor(selectedRecipient.role)}`}>
-                                {getRoleLabel(selectedRecipient.role)}
-                              </span>
+                              <p className="font-bold text-gray-900 text-sm sm:text-base truncate">{selectedRecipient.name}</p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className={`inline-block px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-semibold ${getRoleBadgeColor(selectedRecipient.role)}`}>
+                                  {getRoleLabel(selectedRecipient.role)}
+                                </span>
+                              </div>
                             </div>
                           </div>
                         ) : isComposing ? (
                           <div className="flex items-center gap-2 sm:gap-3">
-                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 rounded-full flex items-center justify-center flex-shrink-0">
-                              <span className="text-gray-500 font-semibold text-sm sm:text-base">+</span>
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-gray-200 to-gray-300 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm">
+                              <svg className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                              </svg>
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="font-semibold text-gray-900 text-sm sm:text-base">Nuevo mensaje</p>
-                              <p className="text-xs text-gray-500">Selecciona un destinatario</p>
+                              <p className="font-bold text-gray-900 text-sm sm:text-base">Nuevo mensaje</p>
+                              <p className="text-[10px] sm:text-xs text-gray-500 font-medium mt-0.5">Selecciona un destinatario</p>
                             </div>
                           </div>
                         ) : null}
                       </div>
                     </div>
 
-                    {/* Mensajes */}
-                    <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4">
-                      {selectedConversation && selectedConversation.messages.length === 0 && !isComposing && (
-                        <div className="text-center text-gray-400 text-sm py-8">
-                          <p>No hay mensajes en esta conversación</p>
+                    {/* Mensajes o Lista de contactos */}
+                    <div className="flex-1 overflow-y-auto px-3 sm:px-4 md:px-6 py-3 sm:py-4 space-y-3 sm:space-y-4 bg-gray-50/30">
+                      {/* Lista de contactos cuando se está componiendo sin destinatario */}
+                      {isComposing && !selectedRecipient && !selectedConversation && (
+                        <div className="space-y-2 sm:space-y-3">
+                          <div className="mb-3 sm:mb-4">
+                            <p className="text-sm sm:text-base font-bold text-gray-900 mb-1">Seleccionar destinatario</p>
+                            <p className="text-[10px] sm:text-xs text-gray-500">Elige con quién quieres iniciar una conversación</p>
+                          </div>
+                          {availableContacts.length === 0 ? (
+                            <div className="text-center py-8 sm:py-12">
+                              <div className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                                <svg className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                </svg>
+                              </div>
+                              <p className="text-gray-500 font-medium text-xs sm:text-sm">No hay contactos disponibles</p>
+                              <p className="text-gray-400 text-[10px] sm:text-xs mt-1">Cargando contactos...</p>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                              {availableContacts.map((contact) => (
+                                <button
+                                  key={contact.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleStartNewConversation(contact)
+                                  }}
+                                  className="w-full p-3 sm:p-4 hover:bg-white rounded-lg sm:rounded-xl text-left transition-all duration-200 border border-gray-200 hover:border-primary/30 hover:shadow-md active:scale-[0.98] bg-white touch-manipulation"
+                                  type="button"
+                                >
+                                  <div className="flex items-center gap-2 sm:gap-3">
+                                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-primary/10 to-primary/5 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0">
+                                      <span className="text-primary text-sm sm:text-base font-bold">
+                                        {contact.name.charAt(0).toUpperCase()}
+                                      </span>
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-xs sm:text-sm font-semibold text-gray-900 truncate">{contact.name}</p>
+                                      <span className={`inline-block px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-medium mt-0.5 sm:mt-1 ${getRoleBadgeColor(contact.role)}`}>
+                                        {getRoleLabel(contact.role)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
-                      {isComposing && !selectedRecipient && !selectedConversation && (
-                        <div className="text-center text-gray-400 text-sm py-8">
-                          <p>Selecciona un destinatario de la lista para comenzar</p>
+                      {selectedConversation && selectedConversation.messages.length === 0 && !isComposing && (
+                        <div className="text-center py-12">
+                          <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                            </svg>
+                          </div>
+                          <p className="text-gray-500 font-medium text-sm">No hay mensajes en esta conversación</p>
+                          <p className="text-gray-400 text-xs mt-1">Inicia la conversación enviando un mensaje</p>
                         </div>
                       )}
                       {isComposing && selectedRecipient && !selectedConversation && (
-                        <div className="text-center text-gray-400 text-sm py-8">
-                          <p>Inicia la conversación escribiendo un mensaje</p>
+                        <div className="text-center py-12">
+                          <div className="w-16 h-16 mx-auto mb-4 bg-primary/10 rounded-full flex items-center justify-center">
+                            <svg className="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                          </div>
+                          <p className="text-gray-500 font-medium text-sm">Inicia la conversación</p>
+                          <p className="text-gray-400 text-xs mt-1">Escribe un mensaje para comenzar</p>
                         </div>
                       )}
                       {selectedConversation?.messages.map((msg) => (
                         <div
                           key={msg.id}
-                          className={`flex ${msg.fromId === userId ? 'justify-end' : 'justify-start'}`}
+                          className={`flex ${msg.fromId === userId ? 'justify-end' : 'justify-start'} animate-in fade-in duration-300`}
                         >
                           <div
-                            className={`max-w-[85%] sm:max-w-[80%] rounded-2xl px-3 py-2 sm:px-4 sm:py-2 ${msg.fromId === userId
-                              ? 'bg-primary text-white'
-                              : 'bg-gray-100 text-gray-900'
+                            className={`max-w-[90%] xs:max-w-[85%] sm:max-w-[75%] rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 shadow-sm ${msg.fromId === userId
+                              ? 'bg-gradient-to-br from-primary to-primary/90 text-white'
+                              : 'bg-white text-gray-900 border border-gray-200'
                               }`}
                           >
                             {msg.subject && msg.subject !== 'Mensaje' && (
-                              <p className={`text-xs font-semibold mb-1 ${msg.fromId === userId ? 'text-white/80' : 'text-gray-500'}`}>
+                              <p className={`text-[10px] sm:text-xs font-bold mb-1.5 sm:mb-2 pb-1.5 sm:pb-2 border-b ${msg.fromId === userId ? 'text-white/90 border-white/20' : 'text-gray-500 border-gray-200'}`}>
                                 {msg.subject}
                               </p>
                             )}
-                            <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
-                            <p className={`text-xs mt-1 ${msg.fromId === userId ? 'text-white/70' : 'text-gray-400'}`}>
+                            <p className="text-xs sm:text-sm whitespace-pre-wrap leading-relaxed break-words">{msg.message}</p>
+                            <p className={`text-[10px] sm:text-xs mt-1.5 sm:mt-2 font-medium ${msg.fromId === userId ? 'text-white/70' : 'text-gray-400'}`}>
                               {formatTime(msg.createdAt)}
                             </p>
                             {msg.reply && (
-                              <div className={`mt-2 p-2 rounded-lg ${msg.fromId === userId ? 'bg-white/20' : 'bg-gray-200'}`}>
-                                <p className="text-xs font-semibold mb-1">Respuesta:</p>
-                                <p className="text-xs">{msg.reply}</p>
+                              <div className={`mt-2 sm:mt-3 p-2 sm:p-3 rounded-lg border ${msg.fromId === userId ? 'bg-white/20 border-white/30' : 'bg-gray-50 border-gray-200'}`}>
+                                <p className={`text-[10px] sm:text-xs font-bold mb-1 sm:mb-1.5 ${msg.fromId === userId ? 'text-white/90' : 'text-gray-600'}`}>Respuesta:</p>
+                                <p className={`text-[10px] sm:text-xs leading-relaxed break-words ${msg.fromId === userId ? 'text-white/90' : 'text-gray-700'}`}>{msg.reply}</p>
                               </div>
                             )}
                           </div>
@@ -1136,32 +1229,46 @@ export default function MessagesWidget() {
                       <div ref={messagesEndRef} />
                     </div>
 
-                    {/* Input de mensaje */}
-                    <form onSubmit={handleSendMessage} className="p-3 sm:p-4 border-t bg-gray-50">
+                    {/* Input de mensaje profesional */}
+                    <form onSubmit={handleSendMessage} className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-t border-gray-200 bg-white safe-area-inset-bottom">
                       {isComposing && !selectedConversation && (
-                        <input
-                          type="text"
-                          value={newMessageSubject}
-                          onChange={(e) => setNewMessageSubject(e.target.value)}
-                          placeholder="Asunto (opcional)"
-                          className="w-full mb-2 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                        />
+                        <div className="mb-2 sm:mb-3">
+                          <label className="block text-[10px] sm:text-xs font-semibold text-gray-600 mb-1 sm:mb-1.5">Asunto (opcional)</label>
+                          <input
+                            type="text"
+                            value={newMessageSubject}
+                            onChange={(e) => setNewMessageSubject(e.target.value)}
+                            placeholder="Ej: Consulta sobre plan nutricional"
+                            className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                          />
+                        </div>
                       )}
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={newMessageText}
-                          onChange={(e) => setNewMessageText(e.target.value)}
-                          placeholder={selectedRecipient ? "Escribe un mensaje..." : "Selecciona un destinatario primero"}
-                          disabled={!selectedRecipient && isComposing}
-                          className="flex-1 px-3 sm:px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-gray-100 disabled:cursor-not-allowed"
-                        />
+                      <div className="flex gap-2 sm:gap-3 items-end">
+                        <div className="flex-1">
+                          <textarea
+                            value={newMessageText}
+                            onChange={(e) => setNewMessageText(e.target.value)}
+                            placeholder={selectedRecipient ? "Escribe tu mensaje aquí..." : "Selecciona un destinatario primero"}
+                            disabled={!selectedRecipient && isComposing}
+                            rows={1}
+                            className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed resize-none transition-all min-h-[44px] sm:min-h-[48px] max-h-[120px] touch-manipulation"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault()
+                                if (newMessageText.trim() && selectedRecipient) {
+                                  handleSendMessage(e as any)
+                                }
+                              }
+                            }}
+                          />
+                        </div>
                         <button
                           type="submit"
                           disabled={!newMessageText.trim() || (!selectedRecipient && isComposing)}
-                          className="px-3 sm:px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                          className="px-4 sm:px-5 py-2.5 sm:py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 shadow-sm hover:shadow-md active:scale-95 flex items-center justify-center touch-manipulation min-w-[44px] min-h-[44px]"
+                          aria-label="Enviar mensaje"
                         >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                           </svg>
                         </button>

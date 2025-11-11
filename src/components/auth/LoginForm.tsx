@@ -108,6 +108,7 @@ export default function LoginForm() {
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
               placeholder="tu@email.com"
               disabled={isLoading}
+              autoComplete="email"
             />
           </div>
 
@@ -128,6 +129,7 @@ export default function LoginForm() {
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all pr-12"
                 placeholder="••••••••"
                 disabled={isLoading}
+                autoComplete="current-password"
               />
               <button
                 type="button"

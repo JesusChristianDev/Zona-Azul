@@ -5,6 +5,10 @@ module.exports = {
   ],
   theme: {
     extend: {
+      screens: {
+        'xs': '475px',
+        '3xl': '1920px',
+      },
       colors: {
         primary: '#1d4ed8', // Azul profundo Zona Azul
         accent: '#14b8a6', // Turquesa energizante
@@ -13,6 +17,10 @@ module.exports = {
       },
       fontFamily: {
         sans: ['Inter', 'ui-sans-serif', 'system-ui']
+      },
+      spacing: {
+        '4.5': '1.125rem',
+        '18': '4.5rem',
       }
     }
   },

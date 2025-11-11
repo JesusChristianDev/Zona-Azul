@@ -697,34 +697,152 @@ export interface DatabaseMessage {
 export async function createMessage(
   messageData: Omit<DatabaseMessage, 'id' | 'created_at' | 'updated_at'>
 ): Promise<any | null> {
-  const { data, error } = await supabase
-    .from('messages')
-    .insert(messageData)
-    .select()
-    .single()
+  try {
 
-  if (error || !data) {
-    console.error('Error creating message:', error)
+    const { data, error } = await supabase
+      .from('messages')
+      .insert(messageData)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Error creating message:', error)
+      console.error('Error details:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      })
+      return null
+    }
+
+    if (!data) {
+      console.error('No data returned from message creation')
+      return null
+    }
+
+
+    // Enriquecer el mensaje con datos de usuarios
+    const userIds = [data.from_user_id, data.to_user_id].filter(Boolean)
+    if (userIds.length > 0) {
+      const { data: users } = await supabase
+        .from('users')
+        .select('id, name, email, role')
+        .in('id', userIds)
+
+      if (users) {
+        const usersMap = new Map(users.map((u: any) => [u.id, u]))
+        const fromUser = usersMap.get(data.from_user_id)
+        const toUser = usersMap.get(data.to_user_id)
+
+        return {
+          ...data,
+          from_id: data.from_user_id,
+          to_id: data.to_user_id,
+          from_name: fromUser?.name || '',
+          from_email: fromUser?.email || '',
+          from_role: fromUser?.role || '',
+          to_name: toUser?.name || '',
+          to_email: toUser?.email || '',
+          to_role: toUser?.role || '',
+        }
+      }
+    }
+
+    return {
+      ...data,
+      from_id: data.from_user_id,
+      to_id: data.to_user_id,
+      from_name: '',
+      from_email: '',
+      from_role: '',
+      to_name: '',
+      to_email: '',
+      to_role: '',
+    }
+  } catch (error) {
+    console.error('Exception in createMessage:', error)
     return null
   }
+}
 
-  // Enriquecer el mensaje con datos de usuarios
-  const userIds = [data.from_user_id, data.to_user_id].filter(Boolean)
-  if (userIds.length > 0) {
-    const { data: users } = await supabase
-      .from('users')
-      .select('id, name, email, role')
-      .in('id', userIds)
+export async function getMessagesByUserId(userId: string): Promise<any[]> {
+  try {
+    // Obtener mensajes donde el usuario es remitente o destinatario
+    // Usar dos consultas separadas para mayor compatibilidad y claridad
+    const { data: messagesSent, error: sentError } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('from_user_id', userId)
+      .order('created_at', { ascending: false })
 
-    if (users) {
-      const usersMap = new Map(users.map((u: any) => [u.id, u]))
-      const fromUser = usersMap.get(data.from_user_id)
-      const toUser = usersMap.get(data.to_user_id)
+    const { data: messagesReceived, error: receivedError } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('to_user_id', userId)
+      .order('created_at', { ascending: false })
 
+    if (sentError) {
+      console.error('Error fetching sent messages:', sentError)
+    }
+    if (receivedError) {
+      console.error('Error fetching received messages:', receivedError)
+    }
+
+
+    // Combinar y deduplicar mensajes (un mensaje puede aparecer en ambas listas si from = to, aunque no debería)
+    const messagesMap = new Map()
+    if (messagesSent) {
+      messagesSent.forEach((msg: any) => messagesMap.set(msg.id, msg))
+    }
+    if (messagesReceived) {
+      messagesReceived.forEach((msg: any) => messagesMap.set(msg.id, msg))
+    }
+
+    const messages = Array.from(messagesMap.values())
+      .sort((a: any, b: any) => {
+        const dateA = new Date(a.created_at).getTime()
+        const dateB = new Date(b.created_at).getTime()
+        return dateB - dateA // Orden descendente (más recientes primero)
+      })
+
+    if (!messages || messages.length === 0) {
+      return []
+    }
+
+    // Obtener todos los IDs de usuarios únicos
+    const userIds = new Set<string>()
+    messages.forEach((msg: any) => {
+      if (msg.from_user_id) userIds.add(msg.from_user_id)
+      if (msg.to_user_id) userIds.add(msg.to_user_id)
+    })
+
+    // Obtener datos de usuarios solo si hay IDs
+    let usersMap = new Map<string, any>()
+    if (userIds.size > 0) {
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('id, name, email, role')
+        .in('id', Array.from(userIds))
+
+      if (usersError) {
+        console.error('Error fetching users for messages:', usersError)
+      } else if (users) {
+        users.forEach((user: any) => {
+          usersMap.set(user.id, user)
+        })
+      }
+    }
+
+    // Combinar mensajes con datos de usuarios
+    return messages.map((msg: any) => {
+      const fromUser = usersMap.get(msg.from_user_id)
+      const toUser = usersMap.get(msg.to_user_id)
+      
       return {
-        ...data,
-        from_id: data.from_user_id,
-        to_id: data.to_user_id,
+        ...msg,
+        from_id: msg.from_user_id,
+        to_id: msg.to_user_id,
         from_name: fromUser?.name || '',
         from_email: fromUser?.email || '',
         from_role: fromUser?.role || '',
@@ -732,80 +850,11 @@ export async function createMessage(
         to_email: toUser?.email || '',
         to_role: toUser?.role || '',
       }
-    }
-  }
-
-  return {
-    ...data,
-    from_id: data.from_user_id,
-    to_id: data.to_user_id,
-    from_name: '',
-    from_email: '',
-    from_role: '',
-    to_name: '',
-    to_email: '',
-    to_role: '',
-  }
-}
-
-export async function getMessagesByUserId(userId: string): Promise<any[]> {
-  // Obtener mensajes
-  const { data: messages, error: messagesError } = await supabase
-    .from('messages')
-    .select('*')
-    .or(`from_user_id.eq.${userId},to_user_id.eq.${userId}`)
-    .order('created_at', { ascending: false })
-
-  if (messagesError || !messages) {
-    console.error('Error fetching messages:', messagesError)
+    })
+  } catch (error) {
+    console.error('Exception in getMessagesByUserId:', error)
     return []
   }
-
-  if (messages.length === 0) {
-    return []
-  }
-
-  // Obtener todos los IDs de usuarios únicos
-  const userIds = new Set<string>()
-  messages.forEach((msg: any) => {
-    if (msg.from_user_id) userIds.add(msg.from_user_id)
-    if (msg.to_user_id) userIds.add(msg.to_user_id)
-  })
-
-  // Obtener datos de usuarios solo si hay IDs
-  let usersMap = new Map<string, any>()
-  if (userIds.size > 0) {
-    const { data: users, error: usersError } = await supabase
-      .from('users')
-      .select('id, name, email, role')
-      .in('id', Array.from(userIds))
-
-    if (usersError) {
-      console.error('Error fetching users for messages:', usersError)
-    } else if (users) {
-      users.forEach((user: any) => {
-        usersMap.set(user.id, user)
-      })
-    }
-  }
-
-  // Combinar mensajes con datos de usuarios
-  return messages.map((msg: any) => {
-    const fromUser = usersMap.get(msg.from_user_id)
-    const toUser = usersMap.get(msg.to_user_id)
-    
-    return {
-      ...msg,
-      from_id: msg.from_user_id,
-      to_id: msg.to_user_id,
-      from_name: fromUser?.name || '',
-      from_email: fromUser?.email || '',
-      from_role: fromUser?.role || '',
-      to_name: toUser?.name || '',
-      to_email: toUser?.email || '',
-      to_role: toUser?.role || '',
-    }
-  })
 }
 
 export async function updateMessage(
