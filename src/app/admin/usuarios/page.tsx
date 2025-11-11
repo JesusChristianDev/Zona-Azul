@@ -377,7 +377,7 @@ export default function AdminUsuariosPage() {
     const success = await assignPlanToSubscriber(selectedUser.id, selectedPlanId, 'Admin')
     if (success) {
       // Actualizar el estado de planes asignados
-      setUsersWithPlans(prev => new Set([...prev, selectedUser.id]))
+      setUsersWithPlans(prev => new Set([...Array.from(prev), selectedUser.id]))
       showToast(`Plan "${plan.name}" asignado correctamente a ${selectedUser.name}`)
       setIsAssignPlanModalOpen(false)
       setSelectedUser(null)

@@ -164,8 +164,8 @@ export default function MessagesWidget() {
       const preferenceMap = new Map(preferences.map((p: any) => [p.contact_id, p]))
       
       // Actualizar cada preferencia
-      const allContactIds = new Set([...archived, ...deleted])
-      for (const contactId of allContactIds) {
+      const allContactIds = new Set([...Array.from(archived), ...Array.from(deleted)])
+      for (const contactId of Array.from(allContactIds)) {
         await api.updateChatPreference(contactId, {
           is_archived: archived.has(contactId),
           is_deleted: deleted.has(contactId),

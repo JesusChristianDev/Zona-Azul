@@ -101,7 +101,7 @@ export default function RepartidorPedidosPage() {
       
       // Marcar entregas con incidencias
       const finalDeliveries: Delivery[] = deliveries.map((delivery) => {
-        const incident = incidentsByOrderId.get(delivery.id)
+        const incident = incidentsByOrderId.get(delivery.id) as any
         if (incident && incident.status === 'reported') {
           return { ...delivery, status: 'incidencia' as const }
         }

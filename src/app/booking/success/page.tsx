@@ -18,7 +18,7 @@ export default function BookingSuccess() {
   useEffect(() => {
     const loadLastAppointment = async () => {
       try {
-        const { getAppointments } = await import('../../lib/api')
+        const { getAppointments } = await import('../../../lib/api')
         const appointments = await getAppointments()
         if (appointments && appointments.length > 0) {
           // Ordenar por fecha y obtener el más reciente

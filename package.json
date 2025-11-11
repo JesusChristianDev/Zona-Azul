@@ -10,8 +10,7 @@
     "lint": "next lint",
     "verify-supabase": "node scripts/verificar-supabase.js",
     "verify-deps": "node scripts/verificar-dependencias.js",
-    "migrate-mock": "node scripts/migrate-mock-to-supabase.js",
-    "migrate": "tsx scripts/migrate-mock-data.ts"
+    "migrate-mock": "node scripts/migrate-mock-to-supabase.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.81.0",
