@@ -15,7 +15,17 @@ Asegúrate de configurar las siguientes variables de entorno en Netlify:
 - `NEXT_PUBLIC_SUPABASE_URL` - URL de tu proyecto Supabase
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Clave anónima de Supabase
 - `SUPABASE_SERVICE_ROLE_KEY` - Clave de servicio de Supabase (para operaciones administrativas)
-- `NEXT_PUBLIC_APP_URL` - URL de producción: `https://zonazul.netlify.app`
+- `NEXT_PUBLIC_APP_URL` - URL de producción (ej: `https://zonazul.netlify.app`)
+
+#### Configuración de Secrets Scanning:
+
+**IMPORTANTE:** Las variables `NEXT_PUBLIC_*` están diseñadas para estar en el cliente, por lo que aparecerán en el build output. Netlify detectará esto como secretos, pero es normal y esperado.
+
+Para permitir estas variables públicas en el build, agrega esta variable de entorno en Netlify:
+
+- `SECRETS_SCAN_OMIT_KEYS` = `NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,NEXT_PUBLIC_APP_URL`
+
+Esto le dice a Netlify que ignore estas variables públicas en el escaneo de secretos, ya que están diseñadas para estar disponibles en el cliente.
 
 #### Variables Opcionales (para Google Calendar):
 

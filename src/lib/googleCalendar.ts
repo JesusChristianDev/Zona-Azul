@@ -9,7 +9,7 @@ export function getOAuth2Client() {
   // Determinar el redirect URI basado en el entorno
   const isProduction = process.env.NODE_ENV === 'production'
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
-    (isProduction ? 'https://zonazul.netlify.app' : 'http://localhost:3000')
+    (isProduction ? process.env.NEXT_PUBLIC_APP_URL || 'https://zonazul.netlify.app' : 'http://localhost:3000')
   const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${baseUrl}/api/calendar/callback`
 
   if (!clientId || !clientSecret) {
