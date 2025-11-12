@@ -429,12 +429,13 @@ export default function NutricionistaCitasPage() {
     setIsDetailModalOpen(true)
   }
 
-  const handleChangeStatus = async (appointmentId: string, newStatus: 'confirmada' | 'cancelada' | 'completada') => {
+  const handleChangeStatus = async (appointmentId: string, newStatus: 'pendiente' | 'confirmada' | 'cancelada' | 'completada') => {
     if (!userId) return
 
     try {
       // Mapear estados del frontend a estados de API
       const apiStatusMap: Record<string, string> = {
+        'pendiente': 'pendiente',
         'confirmada': 'confirmada',
         'cancelada': 'cancelada',
         'completada': 'completada',
@@ -453,7 +454,7 @@ export default function NutricionistaCitasPage() {
       if (updated) {
         // Recargar citas
         await loadAppointments()
-        showToast(`Cita ${newStatus === 'confirmada' ? 'confirmada' : newStatus === 'completada' ? 'marcada como completada' : 'cancelada'} correctamente`)
+        showToast(`Cita ${newStatus === 'pendiente' ? 'marcada como pendiente' : newStatus === 'confirmada' ? 'confirmada' : newStatus === 'completada' ? 'marcada como completada' : 'cancelada'} correctamente`)
 
         // Actualizar selectedAppointment si es el mismo
         if (selectedAppointment?.id === appointmentId) {
