@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { User } from '../../lib/types'
 import { NotificationHelpers } from '../../lib/notifications'
@@ -97,15 +97,15 @@ export default function MessagesWidget() {
   const [availableContacts, setAvailableContacts] = useState<User[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Scroll al final de los mensajes - optimizado para evitar reflows
-  const scrollToBottom = () => {
+  // Scroll al final de los mensajes - optimizado para evitar reflows - memoizado
+  const scrollToBottom = useCallback(() => {
     if (messagesEndRef.current) {
       // Usar requestAnimationFrame para evitar forced reflow
       requestAnimationFrame(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
       })
     }
-  }
+  }, [])
 
   useEffect(() => {
     if (selectedConversation) {
@@ -117,8 +117,8 @@ export default function MessagesWidget() {
     }
   }, [selectedConversation?.messages.length]) // Solo scroll cuando cambia el número de mensajes
 
-  // Función para obtener contactos disponibles para todos los roles
-  const getAvailableContactsList = async (): Promise<User[]> => {
+  // Función para obtener contactos disponibles para todos los roles - memoizada
+  const getAvailableContactsList = useCallback(async (): Promise<User[]> => {
     if (!userId || !role) return []
 
     try {
@@ -138,7 +138,7 @@ export default function MessagesWidget() {
       }
       return []
     }
-  }
+  }, [userId, role])
 
   // Función para obtener chats archivados/eliminados del usuario desde la API
   const getUserChatStatus = async (): Promise<{ archived: Set<string>; deleted: Set<string> }> => {
@@ -641,7 +641,8 @@ export default function MessagesWidget() {
     setSelectedConversation(null)
   }
 
-  const formatTime = (dateString: string) => {
+  // Funciones memoizadas para mejor rendimiento
+  const formatTime = useCallback((dateString: string) => {
     const date = new Date(dateString)
     const now = new Date()
     const diff = now.getTime() - date.getTime()
@@ -654,9 +655,9 @@ export default function MessagesWidget() {
     if (hours < 24) return `${hours}h`
     if (days < 7) return `${days}d`
     return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
-  }
+  }, [])
 
-  const getRoleBadgeColor = (contactRole: string) => {
+  const getRoleBadgeColor = useCallback((contactRole: string) => {
     const colors: Record<string, string> = {
       admin: 'bg-purple-100 text-purple-700',
       nutricionista: 'bg-green-100 text-green-700',
@@ -664,9 +665,9 @@ export default function MessagesWidget() {
       suscriptor: 'bg-gray-100 text-gray-700',
     }
     return colors[contactRole] || colors.suscriptor
-  }
+  }, [])
 
-  const getRoleLabel = (contactRole: string) => {
+  const getRoleLabel = useCallback((contactRole: string) => {
     const labels: Record<string, string> = {
       admin: 'Admin',
       nutricionista: 'Nutri',
@@ -674,7 +675,18 @@ export default function MessagesWidget() {
       suscriptor: 'Cliente',
     }
     return labels[contactRole] || contactRole
-  }
+  }, [])
+
+  // Memoizar conversaciones filtradas para evitar recálculos innecesarios
+  const filteredConversations = useMemo(() => {
+    if (!conversations.length) return []
+    return conversations.filter((conv) => {
+      if (showArchived) {
+        return conv.archived && !conv.deleted
+      }
+      return !conv.archived && !conv.deleted
+    })
+  }, [conversations, showArchived])
 
   // Función para archivar conversación
   const handleArchiveConversation = async (contactId: string, e?: React.MouseEvent) => {
@@ -939,7 +951,7 @@ export default function MessagesWidget() {
                     </div>
                   ) : (
                     <div className="divide-y divide-gray-100">
-                      {conversations.map((conv) => (
+                      {filteredConversations.map((conv) => (
                         <div
                           key={conv.contactId}
                           className={`relative group transition-all duration-200 ${selectedConversation?.contactId === conv.contactId

@@ -18,6 +18,10 @@ export default function AdminUsuariosPage() {
   const { orders: apiOrders } = useOrders()
   const [activeTab, setActiveTab] = useState<'team' | 'clients'>('team')
   const [users, setUsers] = useState<TeamMember[]>([])
+  const [filteredUsers, setFilteredUsers] = useState<TeamMember[]>([])
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterRole, setFilterRole] = useState<string>('todos')
+  const [filterStatus, setFilterStatus] = useState<string>('todos')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isAssignPlanModalOpen, setIsAssignPlanModalOpen] = useState(false)
@@ -97,6 +101,46 @@ export default function AdminUsuariosPage() {
     }
     loadUsersWithClients()
   }, [apiUsers, usersLoading, apiOrders])
+
+  // Filtrar y buscar usuarios
+  useEffect(() => {
+    let filtered = [...users]
+
+    // Filtrar por tab activo (team o clients)
+    if (activeTab === 'team') {
+      filtered = filtered.filter(user => user.role !== 'suscriptor')
+    } else {
+      filtered = filtered.filter(user => user.role === 'suscriptor')
+    }
+
+    // Filtrar por rol (solo en tab team)
+    if (activeTab === 'team' && filterRole !== 'todos') {
+      filtered = filtered.filter(user => user.role === filterRole)
+    }
+
+    // Filtrar por estado de suscripción (solo en tab clients)
+    if (activeTab === 'clients' && filterStatus !== 'todos') {
+      filtered = filtered.filter(user => {
+        const subscription = userSubscriptions.get(user.id)
+        if (filterStatus === 'activa') return subscription === 'active'
+        if (filterStatus === 'inactiva') return subscription === 'inactive'
+        if (filterStatus === 'expirada') return subscription === 'expired'
+        return true
+      })
+    }
+
+    // Buscar por nombre, email o rol
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase()
+      filtered = filtered.filter(user =>
+        user.name.toLowerCase().includes(term) ||
+        user.email.toLowerCase().includes(term) ||
+        user.role.toLowerCase().includes(term)
+      )
+    }
+
+    setFilteredUsers(filtered)
+  }, [users, activeTab, filterRole, filterStatus, searchTerm, userSubscriptions])
 
   // Cargar planes completos disponibles (sin asignar) de todos los nutricionistas
   useEffect(() => {
@@ -584,7 +628,11 @@ export default function AdminUsuariosPage() {
       {/* Tabs */}
       <div className="flex border-b border-gray-200">
         <button
-          onClick={() => setActiveTab('team')}
+          onClick={() => {
+            setActiveTab('team')
+            setFilterRole('todos')
+            setSearchTerm('')
+          }}
           className={`py-2 px-4 text-sm font-medium ${
             activeTab === 'team'
               ? 'border-b-2 border-primary text-primary'
@@ -594,7 +642,11 @@ export default function AdminUsuariosPage() {
           Equipo
         </button>
         <button
-          onClick={() => setActiveTab('clients')}
+          onClick={() => {
+            setActiveTab('clients')
+            setFilterStatus('todos')
+            setSearchTerm('')
+          }}
           className={`py-2 px-4 text-sm font-medium ${
             activeTab === 'clients'
               ? 'border-b-2 border-primary text-primary'
@@ -604,6 +656,79 @@ export default function AdminUsuariosPage() {
           Clientes
         </button>
       </div>
+
+      {/* Búsqueda y filtros */}
+      {!usersLoading && users.length > 0 && (
+        <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
+          <div className="space-y-4">
+            {/* Barra de búsqueda */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <input
+                type="text"
+                placeholder={`Buscar por nombre, email${activeTab === 'team' ? ' o rol' : ''}...`}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition placeholder-gray-400"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                >
+                  <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+            
+            {/* Filtros */}
+            <div className="flex flex-wrap items-center gap-3">
+              {activeTab === 'team' ? (
+                <>
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Rol:</span>
+                  <select
+                    value={filterRole}
+                    onChange={(e) => setFilterRole(e.target.value)}
+                    className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  >
+                    <option value="todos">Todos</option>
+                    <option value="admin">Administrador</option>
+                    <option value="nutricionista">Nutricionista</option>
+                    <option value="repartidor">Repartidor</option>
+                  </select>
+                </>
+              ) : (
+                <>
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Suscripción:</span>
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  >
+                    <option value="todos">Todas</option>
+                    <option value="activa">Activa</option>
+                    <option value="inactiva">Inactiva</option>
+                    <option value="expirada">Expirada</option>
+                  </select>
+                </>
+              )}
+            </div>
+            
+            {/* Resultados */}
+            {(searchTerm || (activeTab === 'team' && filterRole !== 'todos') || (activeTab === 'clients' && filterStatus !== 'todos')) && (
+              <div className="text-xs text-gray-500">
+                Mostrando {filteredUsers.length} de {users.filter(u => activeTab === 'team' ? u.role !== 'suscriptor' : u.role === 'suscriptor').length} {activeTab === 'team' ? 'miembros del equipo' : 'clientes'}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {activeTab === 'team' && (
         <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -642,7 +767,7 @@ export default function AdminUsuariosPage() {
           </div>
 
           <div className="space-y-3">
-            {users
+            {filteredUsers
               .filter((member) => member.role !== 'suscriptor')
               .map((member) => (
                 <article
@@ -691,9 +816,24 @@ export default function AdminUsuariosPage() {
                   </div>
                 </article>
               ))}
-            {users.filter((member) => member.role !== 'suscriptor').length === 0 && (
-              <div className="text-center py-8 text-gray-500 text-sm">
-                No hay miembros del equipo registrados aún.
+            {filteredUsers.filter((member) => member.role !== 'suscriptor').length === 0 && (
+              <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-xl p-6">
+                {users.filter((member) => member.role !== 'suscriptor').length === 0 ? (
+                  <>
+                    <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    <p className="text-sm font-medium text-gray-600 mb-1">No hay miembros del equipo registrados aún.</p>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <p className="text-sm font-medium text-gray-600 mb-1">No se encontraron miembros del equipo</p>
+                    <p className="text-xs text-gray-500">Intenta ajustar los filtros o la búsqueda</p>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -737,7 +877,7 @@ export default function AdminUsuariosPage() {
           </div>
 
           <div className="space-y-3">
-            {users
+            {filteredUsers
               .filter((member) => member.role === 'suscriptor')
               .map((member) => (
                 <article
@@ -797,9 +937,24 @@ export default function AdminUsuariosPage() {
                   </div>
                 </article>
               ))}
-            {users.filter((member) => member.role === 'suscriptor').length === 0 && (
-              <div className="text-center py-8 text-gray-500 text-sm">
-                No hay clientes registrados aún.
+            {filteredUsers.filter((member) => member.role === 'suscriptor').length === 0 && (
+              <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-xl p-6">
+                {users.filter((member) => member.role === 'suscriptor').length === 0 ? (
+                  <>
+                    <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    <p className="text-sm font-medium text-gray-600 mb-1">No hay clientes registrados aún.</p>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <p className="text-sm font-medium text-gray-600 mb-1">No se encontraron clientes</p>
+                    <p className="text-xs text-gray-500">Intenta ajustar los filtros o la búsqueda</p>
+                  </>
+                )}
               </div>
             )}
           </div>

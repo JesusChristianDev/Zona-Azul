@@ -1,11 +1,14 @@
 "use client"
 
 import { useState } from 'react'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '../../hooks/useAuth'
-import MobileMenu from '../MobileMenu'
-import MessagesWidget from '../messaging/MessagesWidget'
+
+// Lazy load de componentes pesados
+const MobileMenu = dynamic(() => import('../MobileMenu'), { ssr: true })
+const MessagesWidget = dynamic(() => import('../messaging/MessagesWidget'), { ssr: false })
 
 export default function DashboardHeader() {
   const pathname = usePathname()
@@ -93,15 +96,15 @@ export default function DashboardHeader() {
           </div>
         </div>
       )}
-      <header className="bg-white shadow-sm sticky top-0 z-50 border-b">
-      <div className="max-w-7xl mx-auto">
+      <header className="bg-white shadow-sm sticky top-0 z-40 border-b w-full">
+      <div className="max-w-7xl mx-auto w-full">
         {/* Navegación principal */}
-        <div className="flex items-center justify-between py-3 px-4 sm:py-4">
-          <Link href="/" className="flex items-center gap-2 sm:gap-3 hover:opacity-80 transition-opacity">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-base">
+        <div className="flex items-center justify-between py-2.5 sm:py-3 md:py-4 px-3 sm:px-4 gap-2 w-full">
+          <Link href="/" className="flex items-center gap-1.5 sm:gap-2 md:gap-3 hover:opacity-80 transition-opacity flex-shrink-0 min-w-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-base flex-shrink-0">
               ZA
             </div>
-            <h1 className="text-base sm:text-lg font-semibold">Zona Azul</h1>
+            <h1 className="text-sm sm:text-base md:text-lg font-semibold truncate">Zona Azul</h1>
           </Link>
 
           {/* Navegación desktop - solo en páginas públicas */}
@@ -122,19 +125,19 @@ export default function DashboardHeader() {
             </nav>
           )}
 
-          {/* Navegación dashboard */}
+          {/* Navegación dashboard - Desktop */}
           {isDashboardPage && (
-            <div className="hidden sm:flex items-center gap-4">
+            <div className="hidden sm:flex items-center gap-3 md:gap-4 flex-shrink-0">
               {role !== 'invitado' && (
                 <>
                   <MessagesWidget />
                   <Link
                     href={`/${role}/ajustes`}
-                    className="relative p-2 text-gray-600 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
+                    className="relative p-2 text-gray-600 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors flex-shrink-0"
                     aria-label="Ajustes"
                     title="Ajustes"
                   >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -147,7 +150,7 @@ export default function DashboardHeader() {
                   <button
                     onClick={handleLogout}
                     disabled={isLoggingOut}
-                    className="px-3 py-1.5 text-sm text-gray-700 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-3 py-1.5 text-sm text-gray-700 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                   >
                     {isLoggingOut ? 'Saliendo...' : 'Salir'}
                   </button>
@@ -165,14 +168,17 @@ export default function DashboardHeader() {
 
           {/* Mobile - Dashboard pages */}
           {isDashboardPage && (
-            <div className="sm:hidden flex items-center gap-2">
+            <div className="sm:hidden flex items-center gap-1.5 flex-shrink-0 ml-auto">
               {role !== 'invitado' && (
                 <>
-                  <MessagesWidget />
+                  <div className="flex-shrink-0 relative z-10">
+                    <MessagesWidget />
+                  </div>
                   <Link
                     href={`/${role}/ajustes`}
-                    className="p-2 text-gray-700 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
+                    className="p-1.5 text-gray-700 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors flex-shrink-0 relative z-10"
                     aria-label="Ajustes"
+                    title="Ajustes"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
@@ -187,8 +193,9 @@ export default function DashboardHeader() {
                   <button
                     onClick={handleLogout}
                     disabled={isLoggingOut}
-                    className="p-2 text-gray-700 hover:text-red-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="p-1.5 text-gray-700 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 relative z-10"
                     aria-label={isLoggingOut ? 'Saliendo...' : 'Salir'}
+                    title={isLoggingOut ? 'Saliendo...' : 'Salir'}
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -202,16 +209,16 @@ export default function DashboardHeader() {
 
         {/* Breadcrumb integrado - solo en dashboards */}
         {isDashboardPage && breadcrumbTitle && (
-          <div className="border-t bg-gray-50/50 px-4 py-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-600">
-                <Link href="/" className="hover:text-primary transition-colors">
+          <div className="border-t bg-gray-50/50 px-3 sm:px-4 py-1.5 sm:py-2">
+            <div className="flex items-center justify-between gap-2 min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 min-w-0 flex-1">
+                <Link href="/" className="hover:text-primary transition-colors flex-shrink-0">
                   Inicio
                 </Link>
-                <span>/</span>
-                <span className="text-gray-900 font-medium">{breadcrumbTitle}</span>
+                <span className="flex-shrink-0">/</span>
+                <span className="text-gray-900 font-medium truncate">{breadcrumbTitle}</span>
               </div>
-              <div className="hidden sm:flex items-center gap-2 text-xs">
+              <div className="hidden sm:flex items-center gap-2 text-xs flex-shrink-0">
                 <span className="text-gray-500">Rol:</span>
                 <span className="px-2 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium capitalize">
                   {role}

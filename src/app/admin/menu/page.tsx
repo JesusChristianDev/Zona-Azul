@@ -39,6 +39,10 @@ function mealToMenuItem(meal: any): MenuItem {
 export default function AdminMenuPage() {
   const { meals, loading, error: apiError, refetch } = useMeals()
   const [items, setItems] = useState<MenuItem[]>([])
+  const [filteredItems, setFilteredItems] = useState<MenuItem[]>([])
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterCategory, setFilterCategory] = useState<string>('todas')
+  const [filterAvailability, setFilterAvailability] = useState<string>('todas')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null)
@@ -61,6 +65,34 @@ export default function AdminMenuPage() {
       setItems([])
     }
   }, [meals, loading])
+
+  // Filtrar y buscar items
+  useEffect(() => {
+    let filtered = [...items]
+
+    // Filtrar por categoría
+    if (filterCategory !== 'todas') {
+      filtered = filtered.filter(item => item.category === filterCategory)
+    }
+
+    // Filtrar por disponibilidad
+    if (filterAvailability !== 'todas') {
+      filtered = filtered.filter(item => item.availability === filterAvailability)
+    }
+
+    // Buscar por nombre, descripción o precio
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase()
+      filtered = filtered.filter(item =>
+        item.name.toLowerCase().includes(term) ||
+        (item.description && item.description.toLowerCase().includes(term)) ||
+        item.price.toString().includes(term) ||
+        item.calories.toString().includes(term)
+      )
+    }
+
+    setFilteredItems(filtered)
+  }, [items, filterCategory, filterAvailability, searchTerm])
 
   const showToast = (message: string, isError = false) => {
     if (isError) {
@@ -269,8 +301,91 @@ export default function AdminMenuPage() {
         </div>
       )}
 
-      <section className="grid gap-4 md:grid-cols-3">
-        {items.map((item) => (
+      {/* Búsqueda y filtros */}
+      {!loading && !apiError && items.length > 0 && (
+        <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
+          <div className="space-y-4">
+            {/* Barra de búsqueda */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <input
+                type="text"
+                placeholder="Buscar por nombre, descripción, precio o calorías..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition placeholder-gray-400"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                >
+                  <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+            
+            {/* Filtros */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Categoría:</span>
+                <select
+                  value={filterCategory}
+                  onChange={(e) => setFilterCategory(e.target.value)}
+                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                >
+                  <option value="todas">Todas</option>
+                  <option value="Desayuno">Desayuno</option>
+                  <option value="Plato principal">Plato principal</option>
+                  <option value="Cena">Cena</option>
+                  <option value="Bebida funcional">Bebida funcional</option>
+                  <option value="On the go">On the go</option>
+                </select>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Disponibilidad:</span>
+                <select
+                  value={filterAvailability}
+                  onChange={(e) => setFilterAvailability(e.target.value)}
+                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                >
+                  <option value="todas">Todas</option>
+                  <option value="Disponible">Disponible</option>
+                  <option value="No disponible">No disponible</option>
+                </select>
+              </div>
+            </div>
+            
+            {/* Resultados */}
+            {(searchTerm || filterCategory !== 'todas' || filterAvailability !== 'todas') && (
+              <div className="text-xs text-gray-500">
+                Mostrando {filteredItems.length} de {items.length} platos
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {!loading && !apiError && filteredItems.length === 0 && items.length > 0 && (
+        <div className="text-center py-12 text-gray-500 bg-white rounded-2xl border border-gray-200 p-6">
+          <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <p className="text-sm font-medium text-gray-600 mb-1">No se encontraron platos</p>
+          <p className="text-xs text-gray-500">Intenta ajustar los filtros o la búsqueda</p>
+        </div>
+      )}
+
+      {!loading && !apiError && filteredItems.length > 0 && (
+        <section className="grid gap-4 md:grid-cols-3">
+          {filteredItems.map((item) => (
           <article key={item.id} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -316,8 +431,9 @@ export default function AdminMenuPage() {
               </button>
             </div>
           </article>
-        ))}
-      </section>
+          ))}
+        </section>
+      )}
 
       {/* Modal Crear Plato */}
       <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} title="Agregar plato">

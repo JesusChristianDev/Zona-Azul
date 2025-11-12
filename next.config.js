@@ -4,6 +4,9 @@ const nextConfig = {
   compress: true,
   poweredByHeader: false,
   
+  // Next.js ya tiene code splitting optimizado por defecto
+  // No necesitamos modificar webpack para esto
+  
   // Configuración para PWA
   async headers() {
     return [
@@ -60,6 +63,16 @@ const nextConfig = {
           },
         ],
       },
+      {
+        // Optimizar caché para assets estáticos de Next.js
+        source: '/_next/static/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
     ]
   },
   
@@ -68,6 +81,22 @@ const nextConfig = {
     formats: ['image/avif', 'image/webp'],
     deviceSizes: [640, 750, 828, 1080, 1200],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    minimumCacheTTL: 60,
+    dangerouslyAllowSVG: true,
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+    // Optimización adicional
+    unoptimized: false,
+  },
+  
+  // Optimizaciones de compilación
+  swcMinify: true,
+  
+  // Optimizaciones de producción
+  productionBrowserSourceMaps: false,
+  
+  // Optimización de bundle
+  experimental: {
+    optimizeCss: false, // Ya removido anteriormente por problemas
   },
   
   // Configuración para evitar errores de prerenderizado de páginas de error

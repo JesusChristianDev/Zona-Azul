@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
 import Modal from '../../../components/ui/Modal'
 import { NotificationHelpers } from '../../../lib/notifications'
-import { getAppointments, updateAppointment, getCalendarAuthUrl, getNutritionistSchedule, updateNutritionistSchedule } from '../../../lib/api'
+import { getAppointments, updateAppointment, createUser, getCalendarAuthUrl, getNutritionistSchedule, updateNutritionistSchedule } from '../../../lib/api'
+import { formatAppointmentDateTime, formatCreatedDate } from '../../../lib/dateFormatters'
 
 interface Appointment {
   id: string
@@ -12,10 +13,12 @@ interface Appointment {
   email: string
   phone?: string
   slot: string
+  date_time?: string
   created_at?: string
   status?: 'pendiente' | 'nueva' | 'confirmada' | 'cancelada' | 'completada'
   notes?: string
-  nutritionistId?: string
+  nutricionista_id?: string
+  user_id?: string | null
 }
 
 type FilterStatus = 'todas' | 'pendiente' | 'confirmada' | 'cancelada' | 'completada'
@@ -38,6 +41,10 @@ export default function NutricionistaCitasPage() {
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false)
   const [schedule, setSchedule] = useState<any>(null)
   const [savingSchedule, setSavingSchedule] = useState(false)
+  // Estados para crear usuario
+  const [creatingUser, setCreatingUser] = useState(false)
+  const [userPassword, setUserPassword] = useState('')
+  const [isCreateUserModalOpen, setIsCreateUserModalOpen] = useState(false)
 
   // Verificar si el calendario está conectado
   const checkCalendarConnection = async () => {
@@ -175,17 +182,47 @@ export default function NutricionistaCitasPage() {
       // Filtrar citas asignadas a este nutricionista o sin asignar
       const filtered = apiAppointments
         .filter((apt: any) => !apt.nutricionista_id || apt.nutricionista_id === userId)
-        .map((apt: any) => ({
-          id: apt.id,
-          name: apt.name || 'Cliente',
-          email: apt.email || '',
-          phone: apt.phone || undefined,
-          slot: apt.date_time || '',
-          created_at: apt.created_at,
-          status: apt.status || 'pendiente',
-          notes: apt.notes || undefined,
-          nutritionistId: apt.nutricionista_id || undefined,
-        } as Appointment))
+        .map((apt: any) => {
+          // Normalizar estado: 'nueva' -> 'pendiente'
+          const normalizedStatus = (apt.status === 'nueva' ? 'pendiente' : apt.status) || 'pendiente'
+          
+          // Generar slot formateado de manera consistente
+          let slot = ''
+          if (apt.date_time) {
+            try {
+              const date = new Date(apt.date_time)
+              if (!isNaN(date.getTime())) {
+                const weekday = date.toLocaleDateString('es-ES', { weekday: 'long' })
+                const day = date.getDate()
+                const month = date.toLocaleDateString('es-ES', { month: 'long' })
+                const year = date.getFullYear()
+                const time = date.toLocaleTimeString('es-ES', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })
+                const capitalizedWeekday = weekday.charAt(0).toUpperCase() + weekday.slice(1)
+                const capitalizedMonth = month.charAt(0).toUpperCase() + month.slice(1)
+                slot = `${capitalizedWeekday}, ${day} de ${capitalizedMonth} de ${year} a las ${time}`
+              }
+            } catch (error) {
+              console.error('Error formatting slot:', error)
+            }
+          }
+          
+          return {
+            id: apt.id,
+            name: apt.name || 'Cliente',
+            email: apt.email || '',
+            phone: apt.phone || undefined,
+            slot,
+            date_time: apt.date_time || undefined,
+            created_at: apt.created_at,
+            status: normalizedStatus,
+            notes: apt.notes || undefined,
+            nutricionista_id: apt.nutricionista_id || undefined,
+            user_id: apt.user_id || null,
+          } as Appointment
+        })
 
       // Ordenar por fecha de creación (más recientes primero)
       const sorted = filtered.sort((a: Appointment, b: Appointment) => {
@@ -271,14 +308,15 @@ export default function NutricionistaCitasPage() {
       })
     }
 
-    // Buscar por nombre o email
+    // Buscar por nombre, email, teléfono o fecha
     if (searchTerm) {
       const term = searchTerm.toLowerCase()
       filtered = filtered.filter(
         (apt) =>
           apt.name.toLowerCase().includes(term) ||
           apt.email.toLowerCase().includes(term) ||
-          (apt.phone && apt.phone.includes(term))
+          (apt.phone && apt.phone.includes(term)) ||
+          (apt.slot && apt.slot.toLowerCase().includes(term))
       )
     }
 
@@ -292,6 +330,91 @@ export default function NutricionistaCitasPage() {
     } else {
       setSuccess(message)
       setTimeout(() => setSuccess(null), 3000)
+    }
+  }
+
+  // Función helper para extraer datos del invitado de las notes
+  const extractGuestDataFromNotes = (notes: string | null | undefined): { name: string; email: string; phone?: string } | null => {
+    if (!notes) return null
+    try {
+      const guestDataMatch = notes.match(/--- DATOS DEL INVITADO ---\s*(\{[\s\S]*?\})/)
+      if (guestDataMatch) {
+        const guestData = JSON.parse(guestDataMatch[1])
+        return {
+          name: guestData.name || '',
+          email: guestData.email || '',
+          phone: guestData.phone || undefined,
+        }
+      }
+    } catch (error) {
+      console.error('Error parsing guest data from notes:', error)
+    }
+    return null
+  }
+
+  const handleSubmitCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedAppointment || !userPassword) {
+      showToast('La contraseña es requerida', true)
+      return
+    }
+
+    setCreatingUser(true)
+    try {
+      const guestData = extractGuestDataFromNotes(selectedAppointment.notes) || {
+        name: selectedAppointment.name,
+        email: selectedAppointment.email,
+        phone: selectedAppointment.phone,
+      }
+
+      // Si la cita está completada, crear el usuario con suscripción activa
+      // Si no, crear con suscripción inactiva (por defecto)
+      const subscriptionStatus = selectedAppointment.status === 'completada' 
+        ? 'active' as const 
+        : 'inactive' as const
+
+      const newUser = await createUser({
+        name: guestData.name,
+        email: guestData.email,
+        password: userPassword,
+        role: 'suscriptor',
+        phone: guestData.phone,
+        subscription_status: subscriptionStatus,
+      })
+
+      if (!newUser) {
+        throw new Error('Error al crear usuario')
+      }
+
+      // Asociar la cita con el nuevo usuario
+      if (selectedAppointment.id) {
+        try {
+          await updateAppointment(selectedAppointment.id, { user_id: newUser.id })
+        } catch (updateError: any) {
+          console.error('Error asociando cita al usuario:', updateError)
+          // No fallar si hay error al asociar, el usuario ya fue creado
+          showToast('Usuario creado. La cita se asociará automáticamente.', false)
+        }
+      }
+
+      showToast('Usuario creado y cita asociada correctamente')
+      
+      // Cerrar el modal
+      setIsCreateUserModalOpen(false)
+      setUserPassword('')
+      setSelectedAppointment(null)
+      
+      // Recargar citas para reflejar los cambios
+      await loadAppointments()
+      
+      window.dispatchEvent(new Event('zona_azul_subscribers_updated'))
+      window.dispatchEvent(new Event('zona_azul_appointments_updated'))
+    } catch (err: any) {
+      console.error('Error creating user:', err)
+      const errorMessage = err.message || err.error || 'Error al crear usuario'
+      showToast(errorMessage, true)
+    } finally {
+      setCreatingUser(false)
     }
   }
 
@@ -337,6 +460,18 @@ export default function NutricionistaCitasPage() {
           const updatedApt = appointments.find((apt) => apt.id === appointmentId)
           if (updatedApt) {
             setSelectedAppointment({ ...updatedApt, status: newStatus })
+          }
+        }
+
+        // Si se completó una cita sin usuario, abrir modal de crear usuario
+        if (newStatus === 'completada') {
+          const currentAppointment = appointments.find(apt => apt.id === appointmentId) || 
+            filteredAppointments.find(apt => apt.id === appointmentId)
+          if (currentAppointment && !currentAppointment.user_id) {
+            setTimeout(() => {
+              setSelectedAppointment(currentAppointment)
+              setIsCreateUserModalOpen(true)
+            }, 500)
           }
         }
       } else {
@@ -487,177 +622,201 @@ export default function NutricionistaCitasPage() {
         </article>
       </section>
 
-      {/* Filtros y búsqueda */}
-      <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
+      {/* Filtros y búsqueda mejorados */}
+      <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
+        <div className="space-y-4">
+          {/* Barra de búsqueda */}
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
             <input
               type="text"
-              placeholder="Buscar por nombre, email o teléfono..."
+              placeholder="Buscar por nombre, email, teléfono o fecha..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-xl border border-gray-200 px-4 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition"
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition placeholder-gray-400"
             />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center"
+              >
+                <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
           </div>
-          <div className="flex gap-2 flex-wrap">
+          
+          {/* Filtros por estado */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mr-2">Filtrar por:</span>
             {(['todas', 'pendiente', 'confirmada', 'completada', 'cancelada'] as FilterStatus[]).map((status) => (
               <button
                 key={status}
                 onClick={() => setFilter(status)}
-                className={`rounded-full px-4 py-2 text-xs font-semibold transition ${filter === status
-                  ? 'bg-primary text-white shadow-md'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
+                className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-all ${
+                  filter === status
+                    ? 'bg-primary text-white shadow-md scale-105'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:scale-105'
+                }`}
               >
                 {status === 'todas' ? 'Todas' : status.charAt(0).toUpperCase() + status.slice(1)}
               </button>
             ))}
           </div>
+          
+          {/* Resultados */}
+          {searchTerm && (
+            <div className="text-xs text-gray-500">
+              Mostrando {filteredAppointments.length} de {appointments.length} citas
+            </div>
+          )}
         </div>
       </section>
 
       {/* Lista de citas */}
-      <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm space-y-4">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">
-            {filter === 'todas' ? 'Todas las citas' : `Citas ${filter === 'pendiente' ? 'pendientes' : filter}`}
-            {filteredAppointments.length > 0 && (
-              <span className="ml-2 text-sm font-normal text-gray-500">({filteredAppointments.length})</span>
-            )}
-          </h3>
-        </div>
-
+      <div className="bg-white rounded-lg shadow">
         {filteredAppointments.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            <svg
-              className="w-16 h-16 mx-auto mb-4 text-gray-300"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
-            <p className="text-sm">
-              {searchTerm
-                ? 'No se encontraron citas con ese criterio de búsqueda.'
-                : filter !== 'todas'
-                  ? `No hay citas ${filter === 'pendiente' ? 'pendientes' : filter}.`
-                  : 'No hay citas registradas aún.'}
-            </p>
+          <div className="p-8 text-center text-gray-500">
+            {searchTerm
+              ? 'No se encontraron citas con ese criterio de búsqueda.'
+              : filter !== 'todas'
+                ? `No hay citas ${filter === 'pendiente' ? 'pendientes' : filter}.`
+                : 'No hay citas registradas aún.'}
           </div>
         ) : (
-          filteredAppointments.map((appointment) => (
-            <article
-              key={appointment.id}
-              className="rounded-2xl border border-gray-200 p-5 transition hover:border-primary/40 hover:shadow-md animate-in fade-in slide-in-from-bottom-2"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="flex-1 min-w-[200px]">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <span className="text-primary font-bold text-sm">
-                        {appointment.name
-                          .split(' ')
-                          .map((n) => n[0])
-                          .join('')
-                          .toUpperCase()
-                          .slice(0, 2)}
-                      </span>
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">{appointment.name}</p>
-                      <p className="text-xs text-gray-500">{appointment.email}</p>
-                    </div>
-                  </div>
-                  {appointment.phone && (
-                    <p className="text-xs text-gray-500 mb-2">
-                      <svg className="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-                        />
-                      </svg>
-                      {appointment.phone}
-                    </p>
-                  )}
-                  <div className="flex items-center gap-2 mt-2">
-                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                      />
-                    </svg>
-                    <p className="text-sm font-medium text-gray-700">{appointment.slot}</p>
-                  </div>
-                  {appointment.created_at && (
-                    <p className="text-xs text-gray-400 mt-1">
-                      Solicitud: {new Date(appointment.created_at).toLocaleDateString('es-ES', {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                      })}
-                    </p>
-                  )}
-                </div>
-                <div className="flex flex-col items-end gap-3">
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs font-semibold border ${getStatusColor(appointment.status)}`}
+          <div className="divide-y divide-gray-200">
+            {filteredAppointments.map((appointment) => (
+              <div
+                key={appointment.id}
+                className="p-4 hover:bg-gray-50 transition-colors relative"
+              >
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 w-full">
+                  <div 
+                    className="flex-1 cursor-pointer min-w-0"
+                    onClick={() => handleViewDetail(appointment)}
                   >
-                    {getStatusLabel(appointment.status)}
-                  </span>
-                  <div className="flex gap-2 flex-wrap">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <h3 className="font-semibold text-gray-900">{appointment.name}</h3>
+                      {!appointment.user_id && (
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          appointment.status === 'completada' 
+                            ? 'bg-red-100 text-red-800 animate-pulse' 
+                            : 'bg-orange-100 text-orange-800'
+                        }`}>
+                          {appointment.status === 'completada' ? '⚠️ Sin Usuario (Completada)' : 'Sin Usuario'}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-600 mt-1">{appointment.email}</p>
+                    {appointment.phone && (
+                      <p className="text-sm text-gray-600">{appointment.phone}</p>
+                    )}
+                    <p className="text-sm text-gray-500 mt-1">
+                      {formatAppointmentDateTime(appointment.slot, appointment.date_time)}
+                    </p>
+                  </div>
+                  <div 
+                    className="flex gap-3 flex-shrink-0 flex-wrap items-center"
+                    style={{ 
+                      minWidth: '200px',
+                      position: 'relative',
+                      zIndex: 10
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      e.preventDefault()
+                    }}
+                  >
+                    {/* Dropdown de Estado */}
+                    <div className="relative" style={{ display: 'block', visibility: 'visible' }}>
+                      <select
+                        value={appointment.status || 'pendiente'}
+                        onChange={(e) => {
+                          const newStatus = e.target.value as 'pendiente' | 'confirmada' | 'cancelada' | 'completada'
+                          if (newStatus !== appointment.status) {
+                            handleChangeStatus(appointment.id, newStatus)
+                          }
+                        }}
+                        className={`appearance-none px-4 py-2 pr-8 rounded-lg border-2 font-medium text-sm cursor-pointer transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                          appointment.status === 'pendiente' 
+                            ? 'bg-yellow-50 border-yellow-300 text-yellow-800 focus:ring-yellow-500'
+                            : appointment.status === 'confirmada'
+                            ? 'bg-green-50 border-green-300 text-green-800 focus:ring-green-500'
+                            : appointment.status === 'cancelada'
+                            ? 'bg-red-50 border-red-300 text-red-800 focus:ring-red-500'
+                            : 'bg-blue-50 border-blue-300 text-blue-800 focus:ring-blue-500'
+                        }`}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ 
+                          display: 'block',
+                          visibility: 'visible',
+                          opacity: 1,
+                          position: 'relative',
+                          zIndex: 12
+                        }}
+                      >
+                        <option value="pendiente">⏳ Pendiente</option>
+                        <option value="confirmada">✓ Confirmada</option>
+                        <option value="cancelada">✕ Cancelada</option>
+                        <option value="completada">✓ Completada</option>
+                      </select>
+                      <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none" style={{ zIndex: 13 }}>
+                        <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </div>
+
                     <button
-                      onClick={() => handleViewDetail(appointment)}
-                      className="rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-primary hover:text-primary hover:bg-primary/5 transition"
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        e.preventDefault()
+                        handleViewDetail(appointment)
+                      }}
+                      style={{ 
+                        position: 'relative',
+                        zIndex: 11,
+                        minWidth: '80px'
+                      }}
+                      className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap shadow-sm flex-shrink-0"
+                      title="Ver detalle"
+                      aria-label="Ver detalle"
                     >
-                      Ver detalle
+                      👁️ Ver
                     </button>
-                    {appointment.status !== 'confirmada' && appointment.status !== 'completada' && (
+                    {!appointment.user_id && (
                       <button
-                        onClick={() => handleChangeStatus(appointment.id, 'confirmada')}
-                        className="rounded-full border border-primary px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary hover:text-white transition"
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          e.preventDefault()
+                          setSelectedAppointment(appointment)
+                          setIsCreateUserModalOpen(true)
+                        }}
+                        style={{ 
+                          position: 'relative',
+                          zIndex: 11,
+                          minWidth: '120px'
+                        }}
+                        className="px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors whitespace-nowrap shadow-sm flex-shrink-0"
+                        aria-label="Crear usuario"
                       >
-                        Confirmar
-                      </button>
-                    )}
-                    {appointment.status === 'confirmada' && (
-                      <button
-                        onClick={() => handleChangeStatus(appointment.id, 'completada')}
-                        className="rounded-full border border-green-500 px-3 py-1.5 text-xs font-medium text-green-600 hover:bg-green-500 hover:text-white transition"
-                      >
-                        Completar
-                      </button>
-                    )}
-                    {appointment.status !== 'cancelada' && appointment.status !== 'completada' && (
-                      <button
-                        onClick={() => handleChangeStatus(appointment.id, 'cancelada')}
-                        className="rounded-full border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-500 hover:text-white transition"
-                      >
-                        Cancelar
+                        👤 Crear Usuario
                       </button>
                     )}
                   </div>
                 </div>
               </div>
-              {appointment.notes && (
-                <div className="mt-3 pt-3 border-t border-gray-100">
-                  <p className="text-xs font-medium text-gray-500 mb-1">Notas:</p>
-                  <p className="text-sm text-gray-700">{appointment.notes}</p>
-                </div>
-              )}
-            </article>
-          ))
+            ))}
+          </div>
         )}
-      </section>
+      </div>
 
       {/* Modal Detalle */}
       <Modal
@@ -666,105 +825,88 @@ export default function NutricionistaCitasPage() {
           setIsDetailModalOpen(false)
           setSelectedAppointment(null)
         }}
-        title="Detalle de la cita"
+        title="Detalle de la Cita"
         size="md"
       >
         {selectedAppointment && (
-          <div className="space-y-4">
-            <div>
-              <p className="text-sm font-medium text-gray-500">Nombre completo</p>
-              <p className="text-lg font-semibold text-gray-900 mt-1">{selectedAppointment.name}</p>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-500">Email</p>
-              <p className="text-lg font-semibold text-gray-900 mt-1">{selectedAppointment.email}</p>
-            </div>
-            {selectedAppointment.phone && (
-              <div>
-                <p className="text-sm font-medium text-gray-500">Teléfono</p>
-                <p className="text-lg font-semibold text-gray-900 mt-1">{selectedAppointment.phone}</p>
+          <div className="space-y-6">
+            {/* Información del Cliente */}
+            <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+              <h3 className="font-semibold text-gray-900 text-sm uppercase tracking-wide mb-3">Información del Cliente</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Nombre</label>
+                  <p className="text-sm text-gray-900 font-medium">{selectedAppointment.name}</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Email</label>
+                  <p className="text-sm text-gray-900 break-all">{selectedAppointment.email}</p>
+                </div>
+                {selectedAppointment.phone && (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Teléfono</label>
+                    <p className="text-sm text-gray-900">{selectedAppointment.phone}</p>
+                  </div>
+                )}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Estado</label>
+                  <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold ${getStatusColor(selectedAppointment.status || 'pendiente')}`}>
+                    {selectedAppointment.status === 'pendiente' && '⏳ Pendiente'}
+                    {selectedAppointment.status === 'confirmada' && '✓ Confirmada'}
+                    {selectedAppointment.status === 'cancelada' && '✕ Cancelada'}
+                    {selectedAppointment.status === 'completada' && '✓ Completada'}
+                  </span>
+                </div>
+                {!selectedAppointment.user_id && (
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Usuario</label>
+                    <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium bg-orange-100 text-orange-800">
+                      ⚠️ Sin usuario asociado
+                    </span>
+                    {selectedAppointment.status === 'completada' && (
+                      <p className="text-xs text-orange-600 mt-1 italic">
+                        Se recomienda crear un usuario para esta cita completada
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
-            )}
-            <div>
-              <p className="text-sm font-medium text-gray-500">Horario solicitado</p>
-              <p className="text-lg font-semibold text-gray-900 mt-1">{selectedAppointment.slot}</p>
             </div>
-            <div>
-              <p className="text-sm font-medium text-gray-500">Estado</p>
-              <span
-                className={`inline-block rounded-full px-3 py-1 text-xs font-semibold border mt-1 ${getStatusColor(
-                  selectedAppointment.status
-                )}`}
-              >
-                {getStatusLabel(selectedAppointment.status)}
-              </span>
-            </div>
-            {selectedAppointment.created_at && (
+
+            {/* Información de la Cita */}
+            <div className="space-y-3">
+              <h3 className="font-semibold text-gray-900 text-sm uppercase tracking-wide">Información de la Cita</h3>
               <div>
-                <p className="text-sm font-medium text-gray-500">Fecha de solicitud</p>
-                <p className="text-sm text-gray-700 mt-1">
-                  {new Date(selectedAppointment.created_at).toLocaleDateString('es-ES', {
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
+                <label className="block text-xs font-medium text-gray-500 mb-1">Fecha y Hora</label>
+                <p className="text-sm text-gray-900 font-medium">
+                  {formatAppointmentDateTime(selectedAppointment.slot, selectedAppointment.date_time)}
                 </p>
               </div>
-            )}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-medium text-gray-500">Notas de la consulta</p>
-                <button
-                  onClick={() => {
-                    setIsNotesModalOpen(true)
-                  }}
-                  className="text-xs text-primary hover:text-primary/80 font-medium"
-                >
-                  {selectedAppointment.notes ? 'Editar' : 'Agregar'} notas
-                </button>
-              </div>
-              {selectedAppointment.notes ? (
-                <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg">{selectedAppointment.notes}</p>
-              ) : (
-                <p className="text-sm text-gray-400 italic">No hay notas registradas</p>
+              {selectedAppointment.created_at && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Fecha de Solicitud</label>
+                  <p className="text-sm text-gray-900">{formatCreatedDate(selectedAppointment.created_at)}</p>
+                </div>
               )}
             </div>
-            <div className="flex gap-3 pt-4 border-t">
-              {selectedAppointment.status !== 'confirmada' && selectedAppointment.status !== 'completada' && (
-                <button
-                  onClick={() => {
-                    handleChangeStatus(selectedAppointment.id, 'confirmada')
-                    setIsDetailModalOpen(false)
-                  }}
-                  className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition font-medium"
-                >
-                  Confirmar cita
-                </button>
-              )}
-              {selectedAppointment.status === 'confirmada' && (
-                <button
-                  onClick={() => {
-                    handleChangeStatus(selectedAppointment.id, 'completada')
-                    setIsDetailModalOpen(false)
-                  }}
-                  className="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-medium"
-                >
-                  Marcar como completada
-                </button>
-              )}
-              {selectedAppointment.status !== 'cancelada' && selectedAppointment.status !== 'completada' && (
-                <button
-                  onClick={() => {
-                    handleChangeStatus(selectedAppointment.id, 'cancelada')
-                    setIsDetailModalOpen(false)
-                  }}
-                  className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition font-medium"
-                >
-                  Cancelar cita
-                </button>
-              )}
+
+            {/* Notas */}
+            {selectedAppointment.notes && (
+              <div className="space-y-3">
+                <h3 className="font-semibold text-gray-900 text-sm uppercase tracking-wide">Notas</h3>
+                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                  <p className="text-sm text-gray-900 whitespace-pre-wrap">
+                    {selectedAppointment.notes.replace(/--- DATOS DEL INVITADO ---[\s\S]*/, '').trim() || 'Sin notas adicionales'}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Mensaje informativo */}
+            <div className="pt-4 border-t">
+              <p className="text-xs text-gray-500 text-center italic">
+                Para editar, cambiar el estado o crear un usuario, usa los botones en la lista de citas
+              </p>
             </div>
           </div>
         )}
@@ -805,6 +947,95 @@ export default function NutricionistaCitasPage() {
             </button>
           </div>
         </div>
+      </Modal>
+
+      {/* Modal Crear Usuario */}
+      <Modal
+        isOpen={isCreateUserModalOpen}
+        onClose={() => {
+          setIsCreateUserModalOpen(false)
+          setUserPassword('')
+          setSelectedAppointment(null)
+        }}
+        title="Crear Usuario desde Cita"
+        size="md"
+      >
+        {selectedAppointment && (
+          <form onSubmit={handleSubmitCreateUser} className="space-y-4">
+            <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+              <h3 className="font-semibold text-gray-900 text-sm uppercase tracking-wide mb-2">Datos del Cliente</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Nombre</label>
+                  <input
+                    type="text"
+                    value={selectedAppointment.name}
+                    disabled
+                    autoComplete="name"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={selectedAppointment.email}
+                    disabled
+                    autoComplete="email"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-600"
+                  />
+                </div>
+                {selectedAppointment.phone && (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Teléfono</label>
+                    <input
+                      type="tel"
+                      value={selectedAppointment.phone}
+                      disabled
+                      autoComplete="tel"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-600"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Contraseña <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="password"
+                value={userPassword}
+                onChange={(e) => setUserPassword(e.target.value)}
+                required
+                autoComplete="new-password"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                placeholder="Ingresa la contraseña para el nuevo usuario"
+              />
+            </div>
+            <div className="flex gap-2 pt-4 border-t">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCreateUserModalOpen(false)
+                  setUserPassword('')
+                  setSelectedAppointment(null)
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                disabled={creatingUser}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+                disabled={creatingUser || !userPassword}
+              >
+                {creatingUser ? 'Creando...' : 'Crear Usuario'}
+              </button>
+            </div>
+          </form>
+        )}
       </Modal>
 
       {/* Modal Configurar Horarios */}

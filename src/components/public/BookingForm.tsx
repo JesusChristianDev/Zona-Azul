@@ -85,12 +85,35 @@ export default function BookingForm({ nutricionistaId: propNutricionistaId }: Bo
         const data = await res.json()
         // Guardar información de la cita en sessionStorage para mostrarla en la página de éxito
         if (data.appointment) {
+          // Generar slot formateado de manera consistente
+          let slot = ''
+          if (selectedSlot) {
+            try {
+              const date = new Date(selectedSlot)
+              if (!isNaN(date.getTime())) {
+                const weekday = date.toLocaleDateString('es-ES', { weekday: 'long' })
+                const day = date.getDate()
+                const month = date.toLocaleDateString('es-ES', { month: 'long' })
+                const year = date.getFullYear()
+                const time = date.toLocaleTimeString('es-ES', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })
+                const capitalizedWeekday = weekday.charAt(0).toUpperCase() + weekday.slice(1)
+                const capitalizedMonth = month.charAt(0).toUpperCase() + month.slice(1)
+                slot = `${capitalizedWeekday}, ${day} de ${capitalizedMonth} de ${year} a las ${time}`
+              }
+            } catch (error) {
+              console.error('Error formatting slot:', error)
+            }
+          }
+          
           sessionStorage.setItem('lastBooking', JSON.stringify({
             id: data.appointment.id,
             name: name.trim(),
             email: email.trim(),
             phone: phone.trim(),
-            slot: new Date(selectedSlot!).toLocaleString('es-ES'),
+            slot,
             date_time: selectedSlot,
             created_at: data.appointment.created_at,
           }))
@@ -133,7 +156,7 @@ export default function BookingForm({ nutricionistaId: propNutricionistaId }: Bo
     <form onSubmit={handleSubmit} className="space-y-8">
       {error && (
         <div className="p-4 bg-red-50/80 border border-red-200 text-red-700 rounded-xl flex items-start gap-3 backdrop-blur-sm">
-          <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <span className="text-sm font-medium">{error}</span>

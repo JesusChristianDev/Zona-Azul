@@ -6,6 +6,7 @@ import * as api from '../../lib/api'
 import { getSubscribers } from '../../lib/subscribers'
 import { getAppointments } from '../../lib/api'
 import InteractiveGreeting from '../../components/ui/InteractiveGreeting'
+import { formatAppointmentDateTime } from '../../lib/dateFormatters'
 
 export default function NutricionistaPage() {
   const { userId, userName } = useAuth()
@@ -62,7 +63,8 @@ export default function NutricionistaPage() {
             id: apt.id,
             name: apt.name || 'Cliente',
             email: apt.email || '',
-            slot: apt.date_time || '',
+            slot: apt.slot || apt.date_time || '',
+            date_time: apt.date_time,
           }))
           .slice(0, 3)
         appointments.push(...confirmed)
@@ -157,7 +159,9 @@ export default function NutricionistaPage() {
                       d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
                     />
                   </svg>
-                  <p className="text-sm font-medium text-gray-700">{appointment.slot}</p>
+                  <p className="text-sm font-medium text-gray-700">
+                    {formatAppointmentDateTime(appointment.slot, appointment.date_time)}
+                  </p>
                 </div>
               </article>
             ))

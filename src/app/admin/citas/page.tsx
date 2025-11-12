@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
 import Modal from '../../../components/ui/Modal'
 import { getAppointments, updateAppointment, createUser, deleteAppointment } from '../../../lib/api'
+import { formatAppointmentDateTime, formatCreatedDate } from '../../../lib/dateFormatters'
 
 interface Appointment {
   id: string
@@ -45,6 +46,29 @@ export default function AdminCitasPage() {
   
   const [isMounted, setIsMounted] = useState(false)
 
+  // Función helper para formatear slot (reutilizable)
+  const formatSlot = (dateTime: string | undefined): string => {
+    if (!dateTime) return ''
+    try {
+      const date = new Date(dateTime)
+      if (isNaN(date.getTime())) return ''
+      const weekday = date.toLocaleDateString('es-ES', { weekday: 'long' })
+      const day = date.getDate()
+      const month = date.toLocaleDateString('es-ES', { month: 'long' })
+      const year = date.getFullYear()
+      const time = date.toLocaleTimeString('es-ES', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+      const capitalizedWeekday = weekday.charAt(0).toUpperCase() + weekday.slice(1)
+      const capitalizedMonth = month.charAt(0).toUpperCase() + month.slice(1)
+      return `${capitalizedWeekday}, ${day} de ${capitalizedMonth} de ${year} a las ${time}`
+    } catch (error) {
+      console.error('Error formatting slot:', error)
+      return ''
+    }
+  }
+
   // Función helper para extraer datos del invitado de las notes
   const extractGuestDataFromNotes = (notes: string | null | undefined): { name: string; email: string; phone?: string } | null => {
     if (!notes) return null
@@ -74,24 +98,29 @@ export default function AdminCitasPage() {
     }
   }
 
-  const loadAppointments = async () => {
+  const loadAppointments = useCallback(async () => {
     if (!userId) return
 
     try {
       const apiAppointments = await getAppointments()
-      const mappedAppointments = apiAppointments.map((apt: any) => ({
-        id: apt.id,
-        name: apt.name || 'Cliente',
-        email: apt.email || '',
-        phone: apt.phone || undefined,
-        slot: apt.date_time ? new Date(apt.date_time).toLocaleString('es-ES') : '',
-        date_time: apt.date_time || undefined,
-        created_at: apt.created_at,
-        status: apt.status || 'pendiente',
-        notes: apt.notes || undefined,
-        nutricionista_id: apt.nutricionista_id || undefined,
-        user_id: apt.user_id || null,
-      } as Appointment))
+      const mappedAppointments = apiAppointments.map((apt: any) => {
+        // Normalizar estado: 'nueva' -> 'pendiente'
+        const normalizedStatus = (apt.status === 'nueva' ? 'pendiente' : apt.status) || 'pendiente'
+        
+        return {
+          id: apt.id,
+          name: apt.name || 'Cliente',
+          email: apt.email || '',
+          phone: apt.phone || undefined,
+          slot: formatSlot(apt.date_time),
+          date_time: apt.date_time || undefined,
+          created_at: apt.created_at,
+          status: normalizedStatus,
+          notes: apt.notes || undefined,
+          nutricionista_id: apt.nutricionista_id || undefined,
+          user_id: apt.user_id || null,
+        } as Appointment
+      })
 
       const sorted = mappedAppointments.sort((a: Appointment, b: Appointment) => {
         const dateA = a.created_at ? new Date(a.created_at).getTime() : 0
@@ -104,7 +133,7 @@ export default function AdminCitasPage() {
       console.error('Error loading appointments:', error)
       showToast('Error al cargar citas', true)
     }
-  }
+  }, [userId])
 
   useEffect(() => {
     setIsMounted(true)
@@ -127,7 +156,7 @@ export default function AdminCitasPage() {
     loadAppointments()
     const interval = setInterval(loadAppointments, 10000)
     return () => clearInterval(interval)
-  }, [userId])
+  }, [userId, loadAppointments])
 
   const filteredAppointments = useMemo(() => {
     let filtered = [...appointments]
@@ -145,7 +174,8 @@ export default function AdminCitasPage() {
       filtered = filtered.filter(apt =>
         apt.name.toLowerCase().includes(term) ||
         apt.email.toLowerCase().includes(term) ||
-        (apt.phone && apt.phone.includes(term))
+        (apt.phone && apt.phone.includes(term)) ||
+        (apt.slot && apt.slot.toLowerCase().includes(term))
       )
     }
 
@@ -166,10 +196,20 @@ export default function AdminCitasPage() {
       setEditNotes(appointment.notes || '')
     } else if (mode === 'edit' && appointment.slot) {
       try {
-        const dateTime = new Date(appointment.slot)
-        if (!isNaN(dateTime.getTime())) {
-          setEditDate(dateTime.toISOString().split('T')[0])
-          setEditTime(dateTime.toTimeString().slice(0, 5))
+        // Usar date_time si está disponible, si no intentar parsear slot
+        const dateTimeStr = appointment.date_time || appointment.slot
+        if (dateTimeStr) {
+          const dateTime = new Date(dateTimeStr)
+          if (!isNaN(dateTime.getTime())) {
+            setEditDate(dateTime.toISOString().split('T')[0])
+            setEditTime(dateTime.toTimeString().slice(0, 5))
+          } else {
+            setEditDate('')
+            setEditTime('')
+          }
+        } else {
+          setEditDate('')
+          setEditTime('')
         }
       } catch {
         setEditDate('')
@@ -215,7 +255,7 @@ export default function AdminCitasPage() {
             ...updatedAppointment,
             date_time: dateTime,
             notes: editNotes || undefined,
-            slot: new Date(dateTime).toLocaleString('es-ES')
+            slot: formatSlot(dateTime)
           })
         }
         window.dispatchEvent(new Event('zona_azul_appointments_updated'))
@@ -383,33 +423,61 @@ export default function AdminCitasPage() {
         </div>
       </div>
 
-      {/* Filtros y búsqueda */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="flex-1">
-          <input
-            type="text"
-            placeholder="Buscar por nombre, email o teléfono..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-          />
+      {/* Filtros y búsqueda mejorados */}
+      <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
+        <div className="space-y-4">
+          {/* Barra de búsqueda */}
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <input
+              type="text"
+              placeholder="Buscar por nombre, email, teléfono o fecha..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition placeholder-gray-400"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center"
+              >
+                <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+          
+          {/* Filtros por estado */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mr-2">Filtrar por:</span>
+            {(['todas', 'pendiente', 'confirmada', 'cancelada', 'completada', 'sin_usuario'] as FilterStatus[]).map((status) => (
+              <button
+                key={status}
+                onClick={() => setFilter(status)}
+                className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-all ${
+                  filter === status
+                    ? 'bg-primary text-white shadow-md scale-105'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:scale-105'
+                }`}
+              >
+                {status === 'todas' ? 'Todas' : status === 'sin_usuario' ? 'Sin Usuario' : status.charAt(0).toUpperCase() + status.slice(1)}
+              </button>
+            ))}
+          </div>
+          
+          {/* Resultados */}
+          {searchTerm && (
+            <div className="text-xs text-gray-500">
+              Mostrando {filteredAppointments.length} de {appointments.length} citas
+            </div>
+          )}
         </div>
-        <div className="flex gap-2 overflow-x-auto">
-          {(['todas', 'pendiente', 'confirmada', 'cancelada', 'completada', 'sin_usuario'] as FilterStatus[]).map((status) => (
-            <button
-              key={status}
-              onClick={() => setFilter(status)}
-              className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
-                filter === status
-                  ? 'bg-primary text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              {status === 'todas' ? 'Todas' : status === 'sin_usuario' ? 'Sin Usuario' : status.charAt(0).toUpperCase() + status.slice(1)}
-            </button>
-          ))}
-        </div>
-      </div>
+      </section>
 
       {/* Mensajes de error/éxito */}
       {error && (
@@ -457,7 +525,9 @@ export default function AdminCitasPage() {
                     {appointment.phone && (
                       <p className="text-sm text-gray-600">{appointment.phone}</p>
                     )}
-                    <p className="text-sm text-gray-500 mt-1">{appointment.slot}</p>
+                    <p className="text-sm text-gray-500 mt-1">
+                      {formatAppointmentDateTime(appointment.slot, appointment.date_time)}
+                    </p>
                   </div>
                   <div 
                     className="flex gap-3 flex-shrink-0 flex-wrap items-center"
@@ -640,7 +710,9 @@ export default function AdminCitasPage() {
                 <h3 className="font-semibold text-gray-900 text-sm uppercase tracking-wide mb-3">Información de la Cita</h3>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Fecha y Hora</label>
-                  <p className="text-sm text-gray-900 font-medium">{selectedAppointment.slot}</p>
+                  <p className="text-sm text-gray-900 font-medium">
+                    {formatAppointmentDateTime(selectedAppointment.slot, selectedAppointment.date_time)}
+                  </p>
                 </div>
                 {selectedAppointment.notes && (
                   <div>
@@ -653,7 +725,7 @@ export default function AdminCitasPage() {
                 {selectedAppointment.created_at && (
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Fecha de Creación</label>
-                    <p className="text-sm text-gray-900">{new Date(selectedAppointment.created_at).toLocaleString('es-ES')}</p>
+                    <p className="text-sm text-gray-900">{formatCreatedDate(selectedAppointment.created_at)}</p>
                   </div>
                 )}
               </div>

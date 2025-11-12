@@ -145,7 +145,11 @@ export default function NutricionistaPlanesPage() {
   const { userId } = useAuth()
   const [activeTab, setActiveTab] = useState<'plans' | 'suggestions'>('plans')
   const [templates, setTemplates] = useState<PlanTemplate[]>([])
+  const [filteredTemplates, setFilteredTemplates] = useState<PlanTemplate[]>([])
   const [suggestedMeals, setSuggestedMeals] = useState<SuggestedMeal[]>([])
+  const [filteredMeals, setFilteredMeals] = useState<SuggestedMeal[]>([])
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterCategory, setFilterCategory] = useState<string>('todas')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isMealModalOpen, setIsMealModalOpen] = useState(false)
@@ -242,6 +246,45 @@ export default function NutricionistaPlanesPage() {
       clearInterval(interval)
     }
   }, [userId])
+
+  // Filtrar y buscar planes
+  useEffect(() => {
+    let filtered = [...templates]
+
+    // Buscar por nombre, descripción o focus
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase()
+      filtered = filtered.filter(template =>
+        template.name.toLowerCase().includes(term) ||
+        (template.description && template.description.toLowerCase().includes(term)) ||
+        template.focus.toLowerCase().includes(term)
+      )
+    }
+
+    setFilteredTemplates(filtered)
+  }, [templates, searchTerm])
+
+  // Filtrar y buscar comidas sugeridas
+  useEffect(() => {
+    let filtered = [...suggestedMeals]
+
+    // Filtrar por categoría
+    if (filterCategory !== 'todas') {
+      filtered = filtered.filter(meal => meal.category === filterCategory)
+    }
+
+    // Buscar por nombre o descripción
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase()
+      filtered = filtered.filter(meal =>
+        meal.name.toLowerCase().includes(term) ||
+        meal.description.toLowerCase().includes(term) ||
+        meal.calories.toString().includes(term)
+      )
+    }
+
+    setFilteredMeals(filtered)
+  }, [suggestedMeals, filterCategory, searchTerm])
 
   const showToast = (message: string, isError = false) => {
     if (isError) {
@@ -567,7 +610,11 @@ export default function NutricionistaPlanesPage() {
       <div className="border-b border-gray-200">
         <nav className="flex space-x-8">
           <button
-            onClick={() => setActiveTab('plans')}
+            onClick={() => {
+              setActiveTab('plans')
+              setSearchTerm('')
+              setFilterCategory('todas')
+            }}
             className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'plans'
               ? 'border-primary text-primary'
               : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -576,7 +623,11 @@ export default function NutricionistaPlanesPage() {
             Planes
           </button>
           <button
-            onClick={() => setActiveTab('suggestions')}
+            onClick={() => {
+              setActiveTab('suggestions')
+              setSearchTerm('')
+              setFilterCategory('todas')
+            }}
             className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'suggestions'
               ? 'border-primary text-primary'
               : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -606,8 +657,55 @@ export default function NutricionistaPlanesPage() {
             </button>
           </div>
 
+          {/* Búsqueda para planes */}
+          {templates.length > 0 && (
+            <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
+              <div className="space-y-4">
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Buscar por nombre, descripción o características..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition placeholder-gray-400"
+                  />
+                  {searchTerm && (
+                    <button
+                      onClick={() => setSearchTerm('')}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                    >
+                      <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+                {searchTerm && (
+                  <div className="text-xs text-gray-500">
+                    Mostrando {filteredTemplates.length} de {templates.length} planes
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+          {filteredTemplates.length === 0 && templates.length > 0 && (
+            <div className="text-center py-12 text-gray-500 bg-white rounded-2xl border border-gray-200 p-6">
+              <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <p className="text-sm font-medium text-gray-600 mb-1">No se encontraron planes</p>
+              <p className="text-xs text-gray-500">Intenta ajustar la búsqueda</p>
+            </div>
+          )}
+
           <section className="grid gap-4 md:grid-cols-3">
-            {templates.map((template) => (
+            {filteredTemplates.map((template) => (
               <article
                 key={template.id}
                 className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
@@ -659,9 +757,60 @@ export default function NutricionistaPlanesPage() {
             </button>
           </div>
 
+          {/* Búsqueda y filtros para comidas */}
+          {suggestedMeals.length > 0 && (
+            <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
+              <div className="space-y-4">
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Buscar por nombre, descripción o calorías..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition placeholder-gray-400"
+                  />
+                  {searchTerm && (
+                    <button
+                      onClick={() => setSearchTerm('')}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                    >
+                      <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Categoría:</span>
+                  <select
+                    value={filterCategory}
+                    onChange={(e) => setFilterCategory(e.target.value)}
+                    className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  >
+                    <option value="todas">Todas</option>
+                    <option value="breakfast">Desayuno</option>
+                    <option value="lunch">Almuerzo</option>
+                    <option value="dinner">Cena</option>
+                    <option value="snack">Snack</option>
+                  </select>
+                </div>
+                {(searchTerm || filterCategory !== 'todas') && (
+                  <div className="text-xs text-gray-500">
+                    Mostrando {filteredMeals.length} de {suggestedMeals.length} opciones
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
           <div className="space-y-6">
             {['breakfast', 'lunch', 'dinner', 'snack'].map((category) => {
-              const categoryMeals = suggestedMeals.filter((m) => m.category === category)
+              const categoryMeals = filteredMeals.filter((m) => m.category === category)
               if (categoryMeals.length === 0) return null
 
               return (

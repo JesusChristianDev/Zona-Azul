@@ -1,7 +1,8 @@
-// Service Worker para la PWA Zona Azul - Optimizado
-const CACHE_NAME = 'zona-azul-cache-v6'
-const STATIC_CACHE = 'zona-azul-static-v6'
-const DYNAMIC_CACHE = 'zona-azul-dynamic-v6'
+// Service Worker para la PWA Zona Azul - Optimizado v7
+const CACHE_NAME = 'zona-azul-cache-v7'
+const STATIC_CACHE = 'zona-azul-static-v7'
+const DYNAMIC_CACHE = 'zona-azul-dynamic-v7'
+const MAX_DYNAMIC_CACHE_SIZE = 50 // Máximo de entradas en cache dinámico
 
 // Recursos críticos para precache (solo assets estáticos)
 const STATIC_ASSETS = [
@@ -40,6 +41,21 @@ self.addEventListener('install', (event) => {
   )
 })
 
+// Limpiar cache dinámico periódicamente (mantener solo últimas N entradas)
+async function cleanDynamicCache() {
+  try {
+    const cache = await caches.open(DYNAMIC_CACHE)
+    const keys = await cache.keys()
+    if (keys.length > MAX_DYNAMIC_CACHE_SIZE) {
+      // Eliminar las más antiguas (FIFO)
+      const toDelete = keys.slice(0, keys.length - MAX_DYNAMIC_CACHE_SIZE)
+      await Promise.all(toDelete.map(key => cache.delete(key)))
+    }
+  } catch (error) {
+    console.warn('SW: Error cleaning dynamic cache', error)
+  }
+}
+
 // Activación del Service Worker - Optimizada
 self.addEventListener('activate', (event) => {
   event.waitUntil(
@@ -54,11 +70,16 @@ self.addEventListener('activate', (event) => {
           })
         )
       }),
+      // Limpiar cache dinámico al activar
+      cleanDynamicCache(),
       // Tomar control inmediatamente
       self.clients.claim()
     ])
   )
 })
+
+// Limpiar cache cada 30 minutos (más frecuente para mejor rendimiento)
+setInterval(cleanDynamicCache, 30 * 60 * 1000)
 
 // Estrategia de caché optimizada
 self.addEventListener('fetch', (event) => {
@@ -75,30 +96,36 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Cache First para assets estáticos
+  // Cache First para assets estáticos (más agresivo para mejor rendimiento)
   if (url.pathname.startsWith('/_next/static/') || 
       url.pathname.startsWith('/images/') ||
-      url.pathname.match(/\.(png|jpg|jpeg|svg|ico|woff|woff2|ttf|eot|css)$/)) {
+      url.pathname.match(/\.(png|jpg|jpeg|svg|ico|woff|woff2|ttf|eot|css|js)$/)) {
     event.respondWith(
       caches.match(request).then((cachedResponse) => {
+        // Si está en cache, devolver inmediatamente (sin esperar red)
         if (cachedResponse) {
           return cachedResponse
         }
-        return fetch(request)
+        // Si no está en cache, obtener de la red y cachear
+        return fetch(request, { cache: 'no-cache' })
           .then((response) => {
-            if (response && response.status === 200) {
+            // Solo cachear respuestas exitosas y válidas
+            if (response && response.status === 200 && response.type === 'basic') {
               const responseToCache = response.clone()
+              // Cachear de forma asíncrona para no bloquear la respuesta
               caches.open(STATIC_CACHE).then((cache) => {
                 cache.put(request, responseToCache).catch((err) => {
                   console.warn('SW: Error caching static asset', err)
                 })
+              }).catch(() => {
+                // Ignorar errores de cacheo
               })
             }
             return response
           })
           .catch((error) => {
             // Si falla el fetch, devolver respuesta vacía en lugar de fallar
-            console.warn('SW: Error fetching static asset, returning empty response', error)
+            console.warn('SW: Error fetching static asset', error)
             // Para CSS, devolver CSS vacío en lugar de error
             if (url.pathname.endsWith('.css')) {
               return new Response('/* CSS not available */', {
@@ -248,17 +275,4 @@ self.addEventListener('notificationclick', (event) => {
   )
 })
 
-// Limpiar cache dinámico periódicamente (mantener solo últimas 50 entradas)
-async function cleanDynamicCache() {
-  const cache = await caches.open(DYNAMIC_CACHE)
-  const keys = await cache.keys()
-  if (keys.length > 50) {
-    // Eliminar las más antiguas
-    const toDelete = keys.slice(0, keys.length - 50)
-    await Promise.all(toDelete.map(key => cache.delete(key)))
-  }
-}
-
-// Limpiar cache cada hora
-setInterval(cleanDynamicCache, 60 * 60 * 1000)
 

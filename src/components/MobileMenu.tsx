@@ -13,22 +13,13 @@ export default function MobileMenu() {
     setIsOpen(false)
   }, [pathname])
 
-  // Cerrar menú al hacer clic fuera
+  // Cerrar menú al hacer clic fuera y prevenir scroll
   useEffect(() => {
     if (isOpen) {
-      const handleClickOutside = (event: MouseEvent) => {
-        const target = event.target as HTMLElement
-        if (!target.closest('[data-mobile-menu]')) {
-          setIsOpen(false)
-        }
-      }
-
-      document.addEventListener('click', handleClickOutside)
       // Prevenir scroll del body cuando el menú está abierto
       document.body.style.overflow = 'hidden'
 
       return () => {
-        document.removeEventListener('click', handleClickOutside)
         document.body.style.overflow = 'unset'
       }
     }
@@ -61,24 +52,27 @@ export default function MobileMenu() {
         </svg>
       </button>
 
-      {/* Overlay/Backdrop */}
+      {/* Overlay/Backdrop - debe estar detrás del menú */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 sm:hidden transition-opacity duration-300"
+          className="fixed inset-0 bg-black/50 z-[100] sm:hidden transition-opacity duration-300"
           onClick={() => setIsOpen(false)}
           aria-hidden="true"
+          style={{ pointerEvents: 'auto' }}
         />
       )}
 
-      {/* Menú deslizante */}
+      {/* Menú deslizante - debe estar encima del overlay */}
       <nav
         data-mobile-menu="menu"
-        className={`fixed top-0 right-0 h-full w-80 max-w-[85vw] bg-white shadow-2xl z-50 sm:hidden transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-full'
+        className={`fixed top-0 right-0 h-full w-80 max-w-[85vw] bg-white shadow-2xl z-[110] sm:hidden transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-full'
           }`}
+        style={{ pointerEvents: 'auto' }}
+        onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full relative">
           {/* Header del menú */}
-          <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-primary/5 to-accent/5">
+          <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-primary/5 to-accent/5 relative z-10 flex-shrink-0">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white font-bold text-sm">
                 ZA
@@ -86,9 +80,13 @@ export default function MobileMenu() {
               <span className="font-semibold text-gray-900">Zona Azul</span>
             </div>
             <button
-              onClick={() => setIsOpen(false)}
-              className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              onClick={(e) => {
+                e.stopPropagation()
+                setIsOpen(false)
+              }}
+              className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors relative z-20"
               aria-label="Cerrar menú"
+              style={{ pointerEvents: 'auto' }}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -97,17 +95,21 @@ export default function MobileMenu() {
           </div>
 
           {/* Navegación */}
-          <div className="flex-1 overflow-y-auto py-4">
+          <div className="flex-1 overflow-y-auto py-4" style={{ minHeight: 0 }}>
             <div className="px-4 space-y-1">
               <Link
                 href="/"
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${pathname === '/'
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all relative z-20 ${pathname === '/'
                     ? 'bg-primary text-white shadow-md'
                     : 'text-gray-700 hover:bg-gray-100 hover:text-primary'
                   }`}
-                onClick={() => setIsOpen(false)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setIsOpen(false)
+                }}
+                style={{ pointerEvents: 'auto' }}
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                 </svg>
                 <span className="font-medium">Inicio</span>
@@ -115,13 +117,17 @@ export default function MobileMenu() {
 
               <Link
                 href="/booking"
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${pathname === '/booking'
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all relative z-20 ${pathname === '/booking'
                     ? 'bg-primary text-white shadow-md'
                     : 'text-gray-700 hover:bg-gray-100 hover:text-primary'
                   }`}
-                onClick={() => setIsOpen(false)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setIsOpen(false)
+                }}
+                style={{ pointerEvents: 'auto' }}
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -134,13 +140,17 @@ export default function MobileMenu() {
 
               <Link
                 href="/menu"
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${pathname === '/menu' || pathname?.startsWith('/menu/')
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all relative z-20 ${pathname === '/menu' || pathname?.startsWith('/menu/')
                     ? 'bg-primary text-white shadow-md'
                     : 'text-gray-700 hover:bg-gray-100 hover:text-primary'
                   }`}
-                onClick={() => setIsOpen(false)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setIsOpen(false)
+                }}
+                style={{ pointerEvents: 'auto' }}
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -153,13 +163,17 @@ export default function MobileMenu() {
 
               <Link
                 href="/login"
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${pathname === '/login'
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all relative z-20 ${pathname === '/login'
                     ? 'bg-primary text-white shadow-md'
                     : 'text-gray-700 hover:bg-gray-100 hover:text-primary'
                   }`}
-                onClick={() => setIsOpen(false)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setIsOpen(false)
+                }}
+                style={{ pointerEvents: 'auto' }}
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -170,7 +184,6 @@ export default function MobileMenu() {
                 <span className="font-medium">Acceso</span>
               </Link>
             </div>
-
           </div>
 
           {/* Footer del menú */}

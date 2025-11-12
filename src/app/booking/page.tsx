@@ -1,22 +1,65 @@
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
+import { Suspense } from 'react'
 
-const BookingForm = dynamic(() => import('../../components/public/BookingForm'), { ssr: false })
+// Preload del formulario para mejorar LCP
+const BookingForm = dynamic(() => import('../../components/public/BookingForm'), { 
+  ssr: false,
+  loading: () => (
+    <div className="space-y-6 animate-pulse">
+      <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+      <div className="h-10 bg-gray-200 rounded"></div>
+      <div className="h-10 bg-gray-200 rounded"></div>
+      <div className="h-10 bg-gray-200 rounded"></div>
+      <div className="h-32 bg-gray-200 rounded"></div>
+    </div>
+  )
+})
+
+// Skeleton para el sidebar para evitar CLS
+function SidebarSkeleton() {
+  return (
+    <div className="lg:col-span-1 space-y-6">
+      <div className="bg-gradient-to-br from-primary/5 via-accent/5 to-highlight/5 rounded-3xl p-6 sm:p-7 border border-primary/10 shadow-sm h-[280px] animate-pulse">
+        <div className="h-6 bg-gray-200 rounded w-1/2 mb-4"></div>
+        <div className="space-y-3">
+          <div className="h-4 bg-gray-200 rounded"></div>
+          <div className="h-4 bg-gray-200 rounded"></div>
+          <div className="h-4 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+      <div className="bg-white rounded-3xl shadow-sm p-6 sm:p-7 border border-gray-100/50 h-[320px] animate-pulse">
+        <div className="h-6 bg-gray-200 rounded w-2/3 mb-4"></div>
+        <div className="space-y-4">
+          <div className="h-16 bg-gray-200 rounded"></div>
+          <div className="h-16 bg-gray-200 rounded"></div>
+          <div className="h-16 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+      <div className="bg-gradient-to-br from-primary via-primary/95 to-accent rounded-3xl p-6 sm:p-7 h-[180px] animate-pulse">
+        <div className="h-6 bg-white/20 rounded w-1/2 mb-2"></div>
+        <div className="h-4 bg-white/20 rounded w-full mb-4"></div>
+        <div className="h-10 bg-white/20 rounded"></div>
+      </div>
+    </div>
+  )
+}
 
 export default function BookingPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
-      {/* Hero Section */}
+      {/* Hero Section - Optimizado para LCP */}
       <section className="relative overflow-hidden bg-gradient-to-br from-primary via-primary/95 to-accent">
-        <div className="absolute inset-0 bg-grid-pattern opacity-[0.02]"></div>
-        <div className="absolute inset-0 bg-gradient-to-t from-primary/20 to-transparent"></div>
+        <div className="absolute inset-0 bg-grid-pattern opacity-[0.02]" style={{ willChange: 'auto' }}></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-primary/20 to-transparent" style={{ willChange: 'auto' }}></div>
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10 py-16 sm:py-20 lg:py-24">
           <div className="max-w-4xl mx-auto text-center">
             <Link
               href="/"
               className="inline-flex items-center text-white/80 hover:text-white transition-colors text-sm font-medium mb-8 group"
+              prefetch={true}
             >
-              <svg className="w-4 h-4 mr-2 transition-transform group-hover:-translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 mr-2 transition-transform group-hover:-translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
               Volver al inicio
@@ -25,6 +68,7 @@ export default function BookingPage() {
               <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
               <span className="text-sm font-medium uppercase tracking-wider text-white/90">Primer Paso</span>
             </div>
+            {/* H1 optimizado para LCP */}
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-tight text-white">
               Agenda tu diagnóstico nutricional
             </h1>
@@ -47,8 +91,8 @@ export default function BookingPage() {
                 <div className="bg-white rounded-3xl shadow-xl p-8 sm:p-10 lg:p-12 border border-gray-100/50 backdrop-blur-sm">
                   <div className="mb-8 pb-6 border-b border-gray-100">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-xl flex items-center justify-center">
-                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-xl flex items-center justify-center flex-shrink-0">
+                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                       </div>
@@ -60,12 +104,34 @@ export default function BookingPage() {
                       Llena el formulario y selecciona un horario disponible. Te contactaremos para confirmar tu cita.
                     </p>
                   </div>
-                  <BookingForm />
+                  <div>
+                    <Suspense fallback={
+                      <div className="space-y-6 animate-pulse">
+                        <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                        <div className="h-10 bg-gray-200 rounded"></div>
+                        <div className="h-10 bg-gray-200 rounded"></div>
+                        <div className="h-10 bg-gray-200 rounded"></div>
+                        <div className="h-32 bg-gray-200 rounded"></div>
+                      </div>
+                    }>
+                      <BookingForm />
+                    </Suspense>
+                  </div>
                 </div>
               </div>
 
-              {/* Info Sidebar */}
-              <div className="lg:col-span-1 space-y-6">
+              {/* Info Sidebar - Scrollable y sticky */}
+              <Suspense fallback={<SidebarSkeleton />}>
+                <aside 
+                  className="lg:col-span-1 lg:sticky lg:top-4 lg:self-start" 
+                  style={{ 
+                    height: 'calc(100vh - 2rem)', 
+                    overflowY: 'scroll',
+                    overflowX: 'hidden',
+                    WebkitOverflowScrolling: 'touch'
+                  }}
+                >
+                  <div className="space-y-6 pr-2">
                 {/* Qué esperar */}
                 <div className="bg-gradient-to-br from-primary/5 via-accent/5 to-highlight/5 rounded-3xl p-6 sm:p-7 border border-primary/10 shadow-sm backdrop-blur-sm">
                   <div className="flex items-center gap-3 mb-5">
@@ -168,7 +234,9 @@ export default function BookingPage() {
                     </Link>
                   </div>
                 </div>
-              </div>
+                  </div>
+                </aside>
+              </Suspense>
             </div>
           </div>
         </div>
