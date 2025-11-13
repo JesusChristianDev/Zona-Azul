@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCalendarCredentials } from '../../../../lib/db'
-import { getCalendarBusyTimes, refreshAccessToken } from '../../../../lib/googleCalendar'
+import { getCalendarCredentials } from '@/lib/db'
+import { getCalendarBusyTimes, refreshAccessToken } from '@/lib/googleCalendar'
 import { cookies } from 'next/headers'
 
 export const dynamic = 'force-dynamic'

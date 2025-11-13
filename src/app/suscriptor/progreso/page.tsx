@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { useAuth } from '../../../hooks/useAuth'
-import { getProgress, saveProgress } from '../../../lib/api'
+import { useAuth } from '@/hooks/useAuth'
+import { getProgress, saveProgress } from '@/lib/api'
 
 interface ProgressEntry {
   date: string

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getUserSettings, updateUserSettings } from '../../../lib/db'
+import { getUserSettings, updateUserSettings } from '@/lib/db'
 import { cookies } from 'next/headers'
 
 export const dynamic = 'force-dynamic'
@@ -29,6 +29,12 @@ export async function GET(request: NextRequest) {
                     notifications_plan_assignments: true,
                     notifications_appointments: true,
                     notifications_new_orders: true,
+                    notifications_weekly_menu: true,
+                    notifications_menu_changes_approved: true,
+                    notifications_order_status: true,
+                    notifications_renewal_reminder: true,
+                    notifications_plan_approval: true,
+                    notifications_consultation_required: true,
                     preferences_language: 'es',
                     preferences_theme: 'light',
                     preferences_email_notifications: false,
@@ -67,6 +73,12 @@ export async function POST(request: NextRequest) {
             notifications_plan_assignments,
             notifications_appointments,
             notifications_new_orders,
+            notifications_weekly_menu,
+            notifications_menu_changes_approved,
+            notifications_order_status,
+            notifications_renewal_reminder,
+            notifications_plan_approval,
+            notifications_consultation_required,
             preferences_language,
             preferences_theme,
             preferences_email_notifications,
@@ -79,6 +91,12 @@ export async function POST(request: NextRequest) {
             notifications_plan_assignments,
             notifications_appointments,
             notifications_new_orders,
+            notifications_weekly_menu,
+            notifications_menu_changes_approved,
+            notifications_order_status,
+            notifications_renewal_reminder,
+            notifications_plan_approval,
+            notifications_consultation_required,
             preferences_language,
             preferences_theme,
             preferences_email_notifications,

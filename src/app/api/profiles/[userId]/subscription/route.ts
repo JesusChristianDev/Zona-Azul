@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { getProfileByUserId, createOrUpdateProfile } from '../../../../../lib/db'
+import { getProfileByUserId, createOrUpdateProfile } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 

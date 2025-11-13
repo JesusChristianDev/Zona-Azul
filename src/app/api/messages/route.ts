@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getMessagesByUserId, createMessage } from '../../../lib/db'
+import { getMessagesByUserId, createMessage } from '@/lib/db'
 import { cookies } from 'next/headers'
 
 export const dynamic = 'force-dynamic'

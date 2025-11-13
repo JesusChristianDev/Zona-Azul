@@ -275,105 +275,263 @@ export default function DashboardSuscriptor() {
       </div>
 
       {/* Gráficos */}
-      {weeklyChartData.length > 0 && (
+      {weeklyChartData.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8 mb-4 sm:mb-6 lg:mb-8">
           {/* Gráfico de progreso semanal */}
-          <div className="bg-white rounded-xl shadow-md p-3 sm:p-4 lg:p-6 overflow-hidden">
-            <h2 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900 mb-3 sm:mb-4">Progreso Semanal</h2>
-            <ResponsiveContainer width="100%" height={250} className="sm:h-[300px]">
-              <LineChart data={weeklyChartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="fecha" tick={{ fontSize: 10 }} className="sm:text-xs" />
-                <YAxis tick={{ fontSize: 10 }} className="sm:text-xs" />
-                <Tooltip contentStyle={{ fontSize: '12px' }} />
-                <Legend wrapperStyle={{ fontSize: '12px' }} />
-                <Line type="monotone" dataKey="calorías" stroke="#059669" strokeWidth={2} name="Calorías" />
-                <Line type="monotone" dataKey="agua" stroke="#0ea5e9" strokeWidth={2} name="Agua (ml)" />
+          <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 sm:p-5 lg:p-6 overflow-hidden">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Progreso Semanal</h2>
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+                <span>Calorías</span>
+                <div className="w-3 h-3 rounded-full bg-sky-500 ml-2"></div>
+                <span>Agua</span>
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={weeklyChartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis 
+                  dataKey="fecha" 
+                  tick={{ fontSize: 11, fill: '#6b7280' }} 
+                  stroke="#e5e7eb"
+                />
+                <YAxis 
+                  tick={{ fontSize: 11, fill: '#6b7280' }} 
+                  stroke="#e5e7eb"
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    fontSize: '12px', 
+                    backgroundColor: '#fff',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    padding: '8px'
+                  }} 
+                />
+                <Legend 
+                  wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} 
+                  iconType="line"
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="calorías" 
+                  stroke="#059669" 
+                  strokeWidth={2.5} 
+                  name="Calorías (kcal)"
+                  dot={{ fill: '#059669', r: 4 }}
+                  activeDot={{ r: 6 }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="agua" 
+                  stroke="#0ea5e9" 
+                  strokeWidth={2.5} 
+                  name="Agua (ml)"
+                  dot={{ fill: '#0ea5e9', r: 4 }}
+                  activeDot={{ r: 6 }}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
 
           {/* Gráfico de hidratación */}
-          <div className="bg-white rounded-xl shadow-md p-3 sm:p-4 lg:p-6 overflow-hidden">
-            <h2 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900 mb-3 sm:mb-4">Hidratación Diaria</h2>
-            <ResponsiveContainer width="100%" height={250} className="sm:h-[300px]">
-              <BarChart data={weeklyChartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="fecha" tick={{ fontSize: 10 }} className="sm:text-xs" />
-                <YAxis tick={{ fontSize: 10 }} className="sm:text-xs" />
-                <Tooltip contentStyle={{ fontSize: '12px' }} />
-                <Bar dataKey="agua" fill="#0ea5e9" radius={[8, 8, 0, 0]} name="Agua (ml)" />
+          <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 sm:p-5 lg:p-6 overflow-hidden">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Hidratación Diaria</h2>
+              <div className="text-xs text-gray-500">
+                Meta: {profile.goals.water} ml
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={weeklyChartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis 
+                  dataKey="fecha" 
+                  tick={{ fontSize: 11, fill: '#6b7280' }} 
+                  stroke="#e5e7eb"
+                />
+                <YAxis 
+                  tick={{ fontSize: 11, fill: '#6b7280' }} 
+                  stroke="#e5e7eb"
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    fontSize: '12px', 
+                    backgroundColor: '#fff',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    padding: '8px'
+                  }} 
+                />
+                <Bar 
+                  dataKey="agua" 
+                  fill="#0ea5e9" 
+                  radius={[8, 8, 0, 0]} 
+                  name="Agua (ml)"
+                />
               </BarChart>
             </ResponsiveContainer>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-md border border-gray-100 p-8 sm:p-12 text-center">
+          <div className="max-w-md mx-auto">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Aún no hay datos de progreso</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Comienza a registrar tu progreso diario para ver tus estadísticas aquí.
+            </p>
+            <a
+              href="/suscriptor/progreso"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium"
+            >
+              Registrar Progreso
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </a>
           </div>
         </div>
       )}
 
       {/* Plan de comidas */}
-      {plan && plan.days && plan.days.length > 0 && (
-        <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 mb-6 sm:mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Plan de Comidas</h2>
-            {assignedNutricionista ? (
-              <span className="text-xs sm:text-sm text-gray-500">
-                Creado por {assignedNutricionista.name}
-              </span>
-            ) : plan?.createdBy ? (
-              <span className="text-xs sm:text-sm text-gray-500">
-                Creado por {plan.createdBy}
-              </span>
-            ) : null}
+      {plan && plan.days && plan.days.length > 0 ? (
+        <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 sm:p-6 mb-6 sm:mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+            <div>
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Plan de Comidas</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                {plan.days.length} días programados
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {assignedNutricionista ? (
+                <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-600">
+                  <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                    <span className="text-primary font-semibold text-xs">
+                      {assignedNutricionista.name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <span>Creado por {assignedNutricionista.name}</span>
+                </div>
+              ) : plan?.createdBy ? (
+                <span className="text-xs sm:text-sm text-gray-500">
+                  Creado por {plan.createdBy}
+                </span>
+              ) : null}
+              <a
+                href="/suscriptor/plan"
+                className="text-sm text-primary hover:text-primary/80 font-medium flex items-center gap-1"
+              >
+                Ver plan completo
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </a>
+            </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {plan.days.slice(0, 3).map((day) => (
-              <div key={day.day} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
-                <h3 className="font-semibold text-gray-900 mb-3">{day.day}</h3>
-                <p className="text-xs text-primary font-medium mb-3">
-                  Total: {day.totalCalories} kcal
-                </p>
-                <div className="space-y-2">
-                  {day.meals.slice(0, 2).map((meal, index) => (
-                    <div key={index} className="text-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-gray-800">{meal.name}</span>
+              <div 
+                key={day.day} 
+                className="border border-gray-200 rounded-xl p-4 sm:p-5 hover:shadow-lg hover:border-primary/30 transition-all bg-gradient-to-br from-white to-gray-50/50"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-gray-900 text-base">{day.day}</h3>
+                  <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full font-medium">
+                    {day.totalCalories} kcal
+                  </span>
+                </div>
+                <div className="space-y-2.5">
+                  {day.meals.slice(0, 3).map((meal, index) => (
+                    <div key={index} className="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-100">
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium text-gray-800 text-sm block truncate">{meal.name}</span>
                         <span className="text-xs text-gray-500">{meal.calories} kcal</span>
                       </div>
                     </div>
                   ))}
+                  {day.meals.length > 3 && (
+                    <p className="text-xs text-gray-500 text-center pt-1">
+                      +{day.meals.length - 3} comida{day.meals.length - 3 > 1 ? 's' : ''} más
+                    </p>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-md border border-gray-100 p-8 sm:p-12 text-center">
+          <div className="max-w-md mx-auto">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">No tienes un plan activo</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Contacta con tu nutricionista para que te asigne un plan personalizado.
+            </p>
+            {assignedNutricionista && (
+              <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                <p className="text-xs text-gray-600 mb-2">Tu nutricionista asignado:</p>
+                <p className="font-medium text-gray-900">{assignedNutricionista.name}</p>
+                {assignedNutricionista.email && (
+                  <p className="text-xs text-gray-500 mt-1">{assignedNutricionista.email}</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Información del perfil */}
-      <div className="bg-white rounded-xl shadow-md p-4 sm:p-6">
-        <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">Mi Perfil</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <p className="text-sm text-gray-600">Nombre</p>
+      <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 sm:p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Mi Perfil</h2>
+          <a
+            href="/suscriptor/ajustes"
+            className="text-sm text-primary hover:text-primary/80 font-medium flex items-center gap-1"
+          >
+            Editar
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          </a>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+          <div className="p-3 bg-gray-50 rounded-lg">
+            <p className="text-xs text-gray-500 mb-1">Nombre</p>
             <p className="font-medium text-gray-900">{profile.name}</p>
           </div>
-          <div>
-            <p className="text-sm text-gray-600">Email</p>
-            <p className="font-medium text-gray-900">{profile.email}</p>
+          <div className="p-3 bg-gray-50 rounded-lg">
+            <p className="text-xs text-gray-500 mb-1">Email</p>
+            <p className="font-medium text-gray-900 break-all">{profile.email}</p>
           </div>
-          <div>
-            <p className="text-sm text-gray-600">Teléfono</p>
-            <p className="font-medium text-gray-900">{profile.phone || 'No proporcionado'}</p>
+          <div className="p-3 bg-gray-50 rounded-lg">
+            <p className="text-xs text-gray-500 mb-1">Teléfono</p>
+            <p className="font-medium text-gray-900">{profile.phone || (
+              <span className="text-gray-400 italic">No proporcionado</span>
+            )}</p>
           </div>
-          <div>
-            <p className="text-sm text-gray-600">Estado de Suscripción</p>
-            <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${profile.subscriptionStatus === 'active'
-              ? 'bg-green-100 text-green-700'
-              : profile.subscriptionStatus === 'expired'
-                ? 'bg-red-100 text-red-700'
-                : 'bg-gray-100 text-gray-700'
-              }`}>
-              {profile.subscriptionStatus === 'active' && 'Activa'}
-              {profile.subscriptionStatus === 'expired' && 'Expirada'}
-              {profile.subscriptionStatus === 'inactive' && 'Inactiva'}
+          <div className="p-3 bg-gray-50 rounded-lg">
+            <p className="text-xs text-gray-500 mb-1">Estado de Suscripción</p>
+            <span className={`inline-block px-3 py-1.5 rounded-full text-xs font-semibold ${
+              profile.subscriptionStatus === 'active'
+                ? 'bg-green-100 text-green-700'
+                : profile.subscriptionStatus === 'expired'
+                  ? 'bg-red-100 text-red-700'
+                  : 'bg-gray-100 text-gray-700'
+            }`}>
+              {profile.subscriptionStatus === 'active' && '✓ Activa'}
+              {profile.subscriptionStatus === 'expired' && '✗ Expirada'}
+              {profile.subscriptionStatus === 'inactive' && '○ Inactiva'}
             </span>
           </div>
         </div>

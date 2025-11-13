@@ -1,11 +1,11 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { useAuth } from '../../../hooks/useAuth'
-import Modal from '../../../components/ui/Modal'
-import { NotificationHelpers } from '../../../lib/notifications'
-import { getAppointments, updateAppointment, createUser, getCalendarAuthUrl, getNutritionistSchedule, updateNutritionistSchedule } from '../../../lib/api'
-import { formatAppointmentDateTime, formatCreatedDate } from '../../../lib/dateFormatters'
+import { useAuth } from '@/hooks/useAuth'
+import Modal from '@/components/ui/Modal'
+import { NotificationHelpers } from '@/lib/notifications'
+import { getAppointments, updateAppointment, createUser, getCalendarAuthUrl, getNutritionistSchedule, updateNutritionistSchedule } from '@/lib/api'
+import { formatAppointmentDateTime, formatCreatedDate } from '@/lib/dateFormatters'
 
 interface Appointment {
   id: string
@@ -41,10 +41,15 @@ export default function NutricionistaCitasPage() {
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false)
   const [schedule, setSchedule] = useState<any>(null)
   const [savingSchedule, setSavingSchedule] = useState(false)
-  // Estados para crear usuario
-  const [creatingUser, setCreatingUser] = useState(false)
-  const [userPassword, setUserPassword] = useState('')
+  // Estados para crear usuario (unificado con admin)
   const [isCreateUserModalOpen, setIsCreateUserModalOpen] = useState(false)
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'suscriptor' as const,
+    phone: '',
+  })
 
   // Verificar si el calendario está conectado
   const checkCalendarConnection = async () => {
@@ -354,19 +359,21 @@ export default function NutricionistaCitasPage() {
 
   const handleSubmitCreateUser = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedAppointment || !userPassword) {
-      showToast('La contraseña es requerida', true)
+    setError(null)
+
+    if (!formData.name || !formData.email || !formData.password) {
+      setError('Por favor completa todos los campos requeridos')
+      showToast('Por favor completa todos los campos requeridos', true)
       return
     }
 
-    setCreatingUser(true)
-    try {
-      const guestData = extractGuestDataFromNotes(selectedAppointment.notes) || {
-        name: selectedAppointment.name,
-        email: selectedAppointment.email,
-        phone: selectedAppointment.phone,
-      }
+    if (!selectedAppointment) {
+      setError('No hay cita seleccionada')
+      showToast('No hay cita seleccionada', true)
+      return
+    }
 
+    try {
       // Si la cita está completada, crear el usuario con suscripción activa
       // Si no, crear con suscripción inactiva (por defecto)
       const subscriptionStatus = selectedAppointment.status === 'completada' 
@@ -374,11 +381,11 @@ export default function NutricionistaCitasPage() {
         : 'inactive' as const
 
       const newUser = await createUser({
-        name: guestData.name,
-        email: guestData.email,
-        password: userPassword,
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
         role: 'suscriptor',
-        phone: guestData.phone,
+        phone: formData.phone || undefined,
         subscription_status: subscriptionStatus,
       })
 
@@ -397,24 +404,32 @@ export default function NutricionistaCitasPage() {
         }
       }
 
-      showToast('Usuario creado y cita asociada correctamente')
+      // Limpiar formulario
+      setFormData({
+        name: '',
+        email: '',
+        password: '',
+        role: 'suscriptor',
+        phone: '',
+      })
       
       // Cerrar el modal
       setIsCreateUserModalOpen(false)
-      setUserPassword('')
       setSelectedAppointment(null)
       
       // Recargar citas para reflejar los cambios
       await loadAppointments()
       
+      // Notificar actualizaciones
       window.dispatchEvent(new Event('zona_azul_subscribers_updated'))
       window.dispatchEvent(new Event('zona_azul_appointments_updated'))
+      
+      showToast('Usuario creado y cita asociada correctamente')
     } catch (err: any) {
       console.error('Error creating user:', err)
       const errorMessage = err.message || err.error || 'Error al crear usuario'
+      setError(errorMessage)
       showToast(errorMessage, true)
-    } finally {
-      setCreatingUser(false)
     }
   }
 
@@ -470,7 +485,19 @@ export default function NutricionistaCitasPage() {
             filteredAppointments.find(apt => apt.id === appointmentId)
           if (currentAppointment && !currentAppointment.user_id) {
             setTimeout(() => {
+              const guestData = extractGuestDataFromNotes(currentAppointment.notes) || {
+                name: currentAppointment.name,
+                email: currentAppointment.email,
+                phone: currentAppointment.phone,
+              }
               setSelectedAppointment(currentAppointment)
+              setFormData({
+                name: guestData.name || '',
+                email: guestData.email || '',
+                password: '',
+                role: 'suscriptor',
+                phone: guestData.phone || '',
+              })
               setIsCreateUserModalOpen(true)
             }, 500)
           }
@@ -773,44 +800,43 @@ export default function NutricionistaCitasPage() {
                       </div>
                     </div>
 
+                    {/* Botón Crear Usuario - Siempre visible para que el nutricionista pueda crear el usuario en la primera consulta */}
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation()
                         e.preventDefault()
-                        handleViewDetail(appointment)
+                        const guestData = extractGuestDataFromNotes(appointment.notes) || {
+                          name: appointment.name,
+                          email: appointment.email,
+                          phone: appointment.phone,
+                        }
+                        setSelectedAppointment(appointment)
+                        setFormData({
+                          name: guestData.name || '',
+                          email: guestData.email || '',
+                          password: '',
+                          role: 'suscriptor',
+                          phone: guestData.phone || '',
+                        })
+                        setIsCreateUserModalOpen(true)
                       }}
                       style={{ 
                         position: 'relative',
                         zIndex: 11,
-                        minWidth: '80px'
+                        minWidth: '120px'
                       }}
-                      className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap shadow-sm flex-shrink-0"
-                      title="Ver detalle"
-                      aria-label="Ver detalle"
+                      className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap shadow-sm flex-shrink-0 ${
+                        appointment.user_id 
+                          ? 'bg-gray-400 hover:bg-gray-500 cursor-not-allowed' 
+                          : 'bg-primary hover:bg-primary/90'
+                      }`}
+                      aria-label={appointment.user_id ? "Usuario ya creado" : "Crear usuario"}
+                      disabled={!!appointment.user_id}
+                      title={appointment.user_id ? "Este cliente ya tiene usuario creado" : "Crear usuario para iniciar ficha técnica"}
                     >
-                      👁️ Ver
+                      {appointment.user_id ? '✓ Usuario Creado' : '👤 Crear Usuario'}
                     </button>
-                    {!appointment.user_id && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          e.preventDefault()
-                          setSelectedAppointment(appointment)
-                          setIsCreateUserModalOpen(true)
-                        }}
-                        style={{ 
-                          position: 'relative',
-                          zIndex: 11,
-                          minWidth: '120px'
-                        }}
-                        className="px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors whitespace-nowrap shadow-sm flex-shrink-0"
-                        aria-label="Crear usuario"
-                      >
-                        👤 Crear Usuario
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>
@@ -858,17 +884,22 @@ export default function NutricionistaCitasPage() {
                     {selectedAppointment.status === 'completada' && '✓ Completada'}
                   </span>
                 </div>
-                {!selectedAppointment.user_id && (
+                {!selectedAppointment.user_id ? (
                   <div className="sm:col-span-2">
                     <label className="block text-xs font-medium text-gray-500 mb-1">Usuario</label>
                     <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium bg-orange-100 text-orange-800">
                       ⚠️ Sin usuario asociado
                     </span>
-                    {selectedAppointment.status === 'completada' && (
-                      <p className="text-xs text-orange-600 mt-1 italic">
-                        Se recomienda crear un usuario para esta cita completada
-                      </p>
-                    )}
+                    <p className="text-xs text-gray-500 mt-2">
+                      Usa el botón "Crear Usuario" en la lista para iniciar la ficha técnica
+                    </p>
+                  </div>
+                ) : (
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Usuario</label>
+                    <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                      ✓ Usuario creado
+                    </span>
                   </div>
                 )}
               </div>
@@ -903,11 +934,15 @@ export default function NutricionistaCitasPage() {
               </div>
             )}
 
-            {/* Mensaje informativo */}
+            {/* Botón cerrar */}
             <div className="pt-4 border-t">
-              <p className="text-xs text-gray-500 text-center italic">
-                Para editar, cambiar el estado o crear un usuario, usa los botones en la lista de citas
-              </p>
+              <button
+                type="button"
+                onClick={() => setIsDetailModalOpen(false)}
+                className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
+              >
+                Cerrar
+              </button>
             </div>
           </div>
         )}
@@ -950,21 +985,32 @@ export default function NutricionistaCitasPage() {
         </div>
       </Modal>
 
-      {/* Modal Crear Usuario */}
+      {/* Modal Crear Usuario (Unificado con admin) */}
       <Modal
         isOpen={isCreateUserModalOpen}
         onClose={() => {
           setIsCreateUserModalOpen(false)
-          setUserPassword('')
+          setFormData({
+            name: '',
+            email: '',
+            password: '',
+            role: 'suscriptor',
+            phone: '',
+          })
           setSelectedAppointment(null)
+          setError(null)
         }}
-        title="Crear Usuario desde Cita"
+        title="Crear Usuario - Iniciar Ficha Técnica"
         size="md"
       >
-        {selectedAppointment && (
-          <form onSubmit={handleSubmitCreateUser} className="space-y-4">
-            <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-              <h3 className="font-semibold text-gray-900 text-sm uppercase tracking-wide mb-2">Datos del Cliente</h3>
+        <form onSubmit={handleSubmitCreateUser} className="space-y-4">
+          {error && (
+            <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-red-700 text-sm">{error}</div>
+          )}
+          
+          {selectedAppointment && (
+            <div className="bg-gray-50 rounded-lg p-4 space-y-3 mb-4">
+              <h3 className="font-semibold text-gray-900 text-sm uppercase tracking-wide mb-2">Datos de la Cita</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Nombre</label>
@@ -1000,43 +1046,92 @@ export default function NutricionistaCitasPage() {
                 )}
               </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Contraseña <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="password"
-                value={userPassword}
-                onChange={(e) => setUserPassword(e.target.value)}
-                required
-                autoComplete="new-password"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                placeholder="Ingresa la contraseña para el nuevo usuario"
-              />
-            </div>
-            <div className="flex gap-2 pt-4 border-t">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsCreateUserModalOpen(false)
-                  setUserPassword('')
-                  setSelectedAppointment(null)
-                }}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                disabled={creatingUser}
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
-                disabled={creatingUser || !userPassword}
-              >
-                {creatingUser ? 'Creando...' : 'Crear Usuario'}
-              </button>
-            </div>
-          </form>
-        )}
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Nombre completo</label>
+            <input
+              type="text"
+              required
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              placeholder="Ej: María García"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+            <input
+              type="email"
+              required
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              placeholder="usuario@zonaazul.com"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Teléfono (opcional)</label>
+            <input
+              type="tel"
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              placeholder="+34 600 000 000"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Contraseña <span className="text-red-500">*</span></label>
+            <input
+              type="password"
+              required
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              placeholder="Mínimo 6 caracteres"
+              minLength={6}
+              autoComplete="new-password"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Rol</label>
+            <input
+              type="text"
+              value="Suscriptor"
+              disabled
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Los usuarios creados desde citas siempre son suscriptores
+            </p>
+          </div>
+          <div className="flex gap-3 pt-4">
+            <button
+              type="button"
+              onClick={() => {
+                setIsCreateUserModalOpen(false)
+                setFormData({
+                  name: '',
+                  email: '',
+                  password: '',
+                  role: 'suscriptor',
+                  phone: '',
+                })
+                setSelectedAppointment(null)
+                setError(null)
+              }}
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition"
+            >
+              Crear usuario
+            </button>
+          </div>
+        </form>
       </Modal>
 
       {/* Modal Configurar Horarios */}

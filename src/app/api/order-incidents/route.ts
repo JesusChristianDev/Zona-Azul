@@ -3,7 +3,7 @@ import {
   createOrderIncident,
   getOrderIncidentsByRepartidorId,
   getOrderIncidentByOrderId,
-} from '../../../lib/db'
+} from '@/lib/db'
 import { cookies } from 'next/headers'
 
 export const dynamic = 'force-dynamic'

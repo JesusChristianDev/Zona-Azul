@@ -1,12 +1,12 @@
 "use client"
 
 import { useState, useEffect, useRef } from 'react'
-import Modal from '../../../components/ui/Modal'
-import { User } from '../../../lib/types'
-import { assignPlanToSubscriber, hasPlanAssigned } from '../../../lib/planAssignment'
-import { useUsers, useOrders } from '../../../hooks/useApi'
-import * as api from '../../../lib/api'
-import { getSubscribers } from '../../../lib/subscribers'
+import Modal from '@/components/ui/Modal'
+import { User } from '@/lib/types'
+import { assignPlanToSubscriber, hasPlanAssigned } from '@/lib/planAssignment'
+import { useUsers, useOrders } from '@/hooks/useApi'
+import * as api from '@/lib/api'
+import { getSubscribers } from '@/lib/subscribers'
 
 interface TeamMember extends User {
   clients: number

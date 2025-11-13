@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAllOrders, getOrdersByUserId, createOrder } from '../../../lib/db'
+import { getAllOrders, getOrdersByUserId, createOrder } from '@/lib/db'
 import { cookies } from 'next/headers'
 
 export const dynamic = 'force-dynamic'
@@ -18,10 +18,19 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Admin ve todos los pedidos, otros solo los suyos
-    const orders = role === 'admin'
-      ? await getAllOrders()
-      : await getOrdersByUserId(userId)
+    // Filtrar pedidos según rol:
+    // - Admin: ve todos los pedidos
+    // - Repartidor: ve solo los pedidos asignados a él
+    // - Usuario/Suscriptor: ve solo sus propios pedidos
+    let orders
+    if (role === 'admin') {
+      orders = await getAllOrders()
+    } else if (role === 'repartidor') {
+      const { getOrdersByRepartidorId } = await import('@/lib/db')
+      orders = await getOrdersByRepartidorId(userId)
+    } else {
+      orders = await getOrdersByUserId(userId)
+    }
 
     return NextResponse.json({ orders })
   } catch (error: any) {
@@ -52,11 +61,34 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { total_amount, delivery_address, delivery_instructions } = body
+    const { 
+      total_amount, 
+      delivery_address, 
+      delivery_instructions,
+      delivery_mode,
+      delivery_address_id,
+      pickup_location,
+    } = body
 
     if (!total_amount || total_amount <= 0) {
       return NextResponse.json(
         { error: 'El monto total es requerido y debe ser mayor a 0' },
+        { status: 400 }
+      )
+    }
+
+    // Validar que si es delivery, tenga dirección
+    if (delivery_mode === 'delivery' && !delivery_address_id && !delivery_address) {
+      return NextResponse.json(
+        { error: 'Se requiere una dirección de entrega para delivery' },
+        { status: 400 }
+      )
+    }
+
+    // Validar que si es pickup, tenga ubicación
+    if (delivery_mode === 'pickup' && !pickup_location) {
+      return NextResponse.json(
+        { error: 'Se requiere una ubicación de recogida para pickup' },
         { status: 400 }
       )
     }
@@ -67,6 +99,9 @@ export async function POST(request: NextRequest) {
       total_amount: parseFloat(total_amount),
       delivery_address: delivery_address || null,
       delivery_instructions: delivery_instructions || null,
+      delivery_mode: delivery_mode || 'delivery',
+      delivery_address_id: delivery_address_id || null,
+      pickup_location: pickup_location || null,
     })
 
     if (!order) {

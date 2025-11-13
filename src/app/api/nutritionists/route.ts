@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getUsersByRole } from '../../../lib/db'
+import { getUsersByRole } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 

@@ -1,9 +1,9 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import Modal from '../../../components/ui/Modal'
-import { useMeals } from '../../../hooks/useApi'
-import * as api from '../../../lib/api'
+import Modal from '@/components/ui/Modal'
+import { useMeals } from '@/hooks/useApi'
+import * as api from '@/lib/api'
 
 interface MenuItem {
   id: string

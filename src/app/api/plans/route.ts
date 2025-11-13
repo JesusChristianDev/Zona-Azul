@@ -6,7 +6,7 @@ import {
   createMealPlanDay,
   createMealPlanDayMeal,
   getMealById
-} from '../../../lib/db'
+} from '@/lib/db'
 import { cookies } from 'next/headers'
 
 export const dynamic = 'force-dynamic'

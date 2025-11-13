@@ -30,7 +30,7 @@ const ROLE_ROUTES: Record<string, string[]> = {
 
 // Rutas que requieren autenticación (cualquier rol autenticado)
 // Incluye todas las subrutas mediante startsWith()
-const AUTHENTICATED_ROUTES = ['/admin', '/suscriptor', '/nutricionista', '/repartidor']
+const AUTHENTICATED_ROUTES = ['/admin', '/suscriptor', '/nutricionista', '/repartidor', '/notificaciones']
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl

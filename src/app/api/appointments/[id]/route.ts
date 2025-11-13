@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { updateAppointment, getAppointmentById, deleteAppointment, checkAppointmentConflict } from '../../../../lib/db'
+import { updateAppointment, getAppointmentById, deleteAppointment, checkAppointmentConflict } from '@/lib/db'
 import { 
   syncAppointmentToCalendar, 
   updateCalendarEventForAppointment,
   deleteCalendarEventForAppointment 
-} from '../../../../lib/calendarSync'
+} from '@/lib/calendarSync'
 import { cookies } from 'next/headers'
 
 export const dynamic = 'force-dynamic'

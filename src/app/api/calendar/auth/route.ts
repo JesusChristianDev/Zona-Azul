@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthUrl } from '../../../../lib/googleCalendar'
+import { getAuthUrl } from '@/lib/googleCalendar'
 import { cookies } from 'next/headers'
 
 export const dynamic = 'force-dynamic'

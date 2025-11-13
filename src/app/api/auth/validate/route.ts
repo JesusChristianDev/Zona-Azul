@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getUserByEmail } from '../../../../lib/db'
+import { getUserByEmail } from '@/lib/db'
 import bcrypt from 'bcryptjs'
 
 // Forzar renderizado dinámico porque usa cookies

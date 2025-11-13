@@ -1,11 +1,11 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { useAuth } from '../../hooks/useAuth'
-import { getSubscribers } from '../../lib/subscribers'
-import { getOrders } from '../../lib/api'
-import { convertApiOrdersToFrontend } from '../../lib/orderHelpers'
-import InteractiveGreeting from '../../components/ui/InteractiveGreeting'
+import { useAuth } from '@/hooks/useAuth'
+import { getSubscribers } from '@/lib/subscribers'
+import { getOrders } from '@/lib/api'
+import { convertApiOrdersToFrontend } from '@/lib/orderHelpers'
+import InteractiveGreeting from '@/components/ui/InteractiveGreeting'
 
 interface AdminOrder {
   id: string

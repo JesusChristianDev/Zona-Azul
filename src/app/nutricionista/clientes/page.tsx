@@ -1,11 +1,11 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import Modal from '../../../components/ui/Modal'
-import { useAuth } from '../../../hooks/useAuth'
-import * as api from '../../../lib/api'
-import { getSubscribers } from '../../../lib/subscribers'
-import { hasPlanAssigned } from '../../../lib/planAssignment'
+import Modal from '@/components/ui/Modal'
+import { useAuth } from '@/hooks/useAuth'
+import * as api from '@/lib/api'
+import { getSubscribers } from '@/lib/subscribers'
+import { hasPlanAssigned } from '@/lib/planAssignment'
 
 interface Client {
   id: string
@@ -339,6 +339,12 @@ export default function NutricionistaClientesPage() {
                 {client.email && <p className="text-xs text-gray-500 mt-1">{client.email}</p>}
               </div>
               <div className="flex items-center gap-2">
+                <a
+                  href={`/nutricionista/clientes/${client.id}/ficha-tecnica`}
+                  className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition font-medium"
+                >
+                  Ficha Técnica
+                </a>
                 <input
                   type="text"
                   value={client.progress}

@@ -1,13 +1,13 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import Modal from '../../../components/ui/Modal'
-import { useAuth } from '../../../hooks/useAuth'
-import * as api from '../../../lib/api'
-import { getSubscribers, getSubscriberAddress, getSubscriberInstructions } from '../../../lib/subscribers'
-import { getOrders, updateOrder } from '../../../lib/api'
-import { convertApiOrdersToFrontend, mapFrontendStatusToApi } from '../../../lib/orderHelpers'
-import { NotificationHelpers } from '../../../lib/notifications'
+import Modal from '@/components/ui/Modal'
+import { useAuth } from '@/hooks/useAuth'
+import * as api from '@/lib/api'
+import { getSubscribers, getSubscriberAddress, getSubscriberInstructions } from '@/lib/subscribers'
+import { getOrders, updateOrder } from '@/lib/api'
+import { convertApiOrdersToFrontend, mapFrontendStatusToApi } from '@/lib/orderHelpers'
+import { NotificationHelpers } from '@/lib/notifications'
 
 interface AdminOrder {
   id: string
@@ -153,6 +153,41 @@ export default function RepartidorPedidosPage() {
 
   const handleStartRoute = async (deliveryId: string) => {
     try {
+      // Obtener ubicación GPS
+      let latitude: number | undefined
+      let longitude: number | undefined
+
+      if (navigator.geolocation) {
+        try {
+          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: true,
+              timeout: 10000,
+            })
+          })
+          latitude = position.coords.latitude
+          longitude = position.coords.longitude
+        } catch (geoError) {
+          console.warn('Error obteniendo ubicación GPS:', geoError)
+          // Continuar sin GPS
+        }
+      }
+
+      // Actualizar tracking
+      const trackingResponse = await fetch(`/api/orders/${deliveryId}/tracking`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'en_camino',
+          location_latitude: latitude,
+          location_longitude: longitude,
+        }),
+      })
+
+      if (!trackingResponse.ok) {
+        throw new Error('Error al actualizar tracking')
+      }
+
       // Actualizar pedido en la API
       const apiStatus = mapFrontendStatusToApi('En camino')
       await updateOrder(deliveryId, { 
@@ -173,6 +208,40 @@ export default function RepartidorPedidosPage() {
     if (!confirm('¿Confirmas que este pedido fue entregado correctamente?')) return
 
     try {
+      // Obtener ubicación GPS final
+      let latitude: number | undefined
+      let longitude: number | undefined
+
+      if (navigator.geolocation) {
+        try {
+          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: true,
+              timeout: 10000,
+            })
+          })
+          latitude = position.coords.latitude
+          longitude = position.coords.longitude
+        } catch (geoError) {
+          console.warn('Error obteniendo ubicación GPS:', geoError)
+        }
+      }
+
+      // Actualizar tracking
+      const trackingResponse = await fetch(`/api/orders/${deliveryId}/tracking`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'entregado',
+          location_latitude: latitude,
+          location_longitude: longitude,
+        }),
+      })
+
+      if (!trackingResponse.ok) {
+        throw new Error('Error al actualizar tracking')
+      }
+
       // Actualizar pedido en la API
       const apiStatus = mapFrontendStatusToApi('Entregado')
       await updateOrder(deliveryId, { status: apiStatus })
@@ -183,6 +252,32 @@ export default function RepartidorPedidosPage() {
     } catch (error: any) {
       console.error('Error marking as delivered:', error)
       showToast('Error al marcar como entregado', true)
+    }
+  }
+
+  // Función para actualizar ubicación GPS periódicamente cuando está en ruta
+  const updateLocation = async (deliveryId: string) => {
+    if (!navigator.geolocation) return
+
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+        })
+      })
+
+      await fetch(`/api/orders/${deliveryId}/tracking`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'en_camino',
+          location_latitude: position.coords.latitude,
+          location_longitude: position.coords.longitude,
+        }),
+      })
+    } catch (error) {
+      console.error('Error updating location:', error)
     }
   }
 

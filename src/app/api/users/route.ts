@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAllUsers, createUser, getUserById, getUserByEmail, updateUser, deleteUser, getAllAppointments, updateAppointment, createOrUpdateProfile } from '../../../lib/db'
+import { getAllUsers, createUser, getUserById, getUserByEmail, updateUser, deleteUser, getAllAppointments, updateAppointment, createOrUpdateProfile } from '@/lib/db'
 import bcrypt from 'bcryptjs'
 import { cookies } from 'next/headers'
 

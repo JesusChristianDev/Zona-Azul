@@ -1,9 +1,9 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { getOrders } from '../../../lib/api'
-import { convertApiOrdersToFrontend, mapFrontendStatusToApi } from '../../../lib/orderHelpers'
-import { updateOrder } from '../../../lib/api'
+import { getOrders } from '@/lib/api'
+import { convertApiOrdersToFrontend, mapFrontendStatusToApi } from '@/lib/orderHelpers'
+import { updateOrder } from '@/lib/api'
 
 interface Order {
   id: string

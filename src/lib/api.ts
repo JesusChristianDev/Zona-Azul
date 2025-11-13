@@ -149,6 +149,9 @@ export async function createOrder(orderData: {
   total_amount: number
   delivery_address?: string
   delivery_instructions?: string
+  delivery_mode?: 'delivery' | 'pickup'
+  delivery_address_id?: string
+  pickup_location?: string
 }) {
   const response = await apiRequest<{ order: any }>('/api/orders', {
     method: 'POST',
@@ -578,6 +581,12 @@ export async function updateUserSettings(settings: {
   notifications_plan_assignments?: boolean
   notifications_appointments?: boolean
   notifications_new_orders?: boolean
+  notifications_weekly_menu?: boolean
+  notifications_menu_changes_approved?: boolean
+  notifications_order_status?: boolean
+  notifications_renewal_reminder?: boolean
+  notifications_plan_approval?: boolean
+  notifications_consultation_required?: boolean
   preferences_language?: string
   preferences_theme?: 'light' | 'dark' | 'auto'
   preferences_email_notifications?: boolean

@@ -1,9 +1,9 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { useAuth } from '../../../hooks/useAuth'
-import { getOrders } from '../../../lib/api'
-import { NotificationHelpers } from '../../../lib/notifications'
+import { useAuth } from '@/hooks/useAuth'
+import { getOrders } from '@/lib/api'
+import { NotificationHelpers } from '@/lib/notifications'
 
 interface AdminOrder {
   id: string
@@ -27,6 +27,9 @@ interface Order {
   notes: string
   createdAt: string
   day?: string
+  delivery_mode?: 'delivery' | 'pickup'
+  delivery_address?: string
+  pickup_location?: string
 }
 
 // Las funciones de conversión ahora están en loadOrders()
@@ -63,6 +66,9 @@ export default function SuscriptorPedidosPage() {
           items,
           notes: apiOrder.status === 'entregado' ? 'Recibido por el cliente' : 'Entrega sin contacto',
           createdAt: apiOrder.created_at,
+          delivery_mode: apiOrder.delivery_mode || 'delivery',
+          delivery_address: apiOrder.delivery_address,
+          pickup_location: apiOrder.pickup_location,
         }
       })
 
@@ -172,11 +178,48 @@ export default function SuscriptorPedidosPage() {
                   </li>
                 ))}
               </ul>
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-500">
-                <span>
-                  <strong className="text-gray-700">ETA:</strong> {order.eta}
-                </span>
-                <span className="italic">Notas: {order.notes}</span>
+              <div className="mt-4 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-gray-500">
+                  <span>
+                    <strong className="text-gray-700">ETA:</strong> {order.eta}
+                  </span>
+                  <span className="italic">Notas: {order.notes}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-xs text-gray-600">
+                    <span className={`px-2 py-1 rounded-full ${
+                      order.delivery_mode === 'pickup' 
+                        ? 'bg-blue-100 text-blue-700' 
+                        : 'bg-green-100 text-green-700'
+                    }`}>
+                      {order.delivery_mode === 'pickup' ? '📦 Recogida' : '🚚 Delivery'}
+                    </span>
+                    {order.delivery_mode === 'delivery' && order.delivery_address && (
+                      <span className="text-gray-500">📍 {order.delivery_address}</span>
+                    )}
+                    {order.delivery_mode === 'pickup' && order.pickup_location && (
+                      <span className="text-gray-500">📍 {order.pickup_location}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {(order.status === 'En camino' || order.status === 'Preparando') && (
+                      <a
+                        href={`/suscriptor/pedidos/${order.id}/seguimiento`}
+                        className="px-3 py-1 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 transition font-medium"
+                      >
+                        Ver Seguimiento
+                      </a>
+                    )}
+                    {order.status === 'Entregado' && (
+                      <a
+                        href={`/suscriptor/pedidos/${order.id}/valorar`}
+                        className="px-3 py-1 text-xs bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition font-medium"
+                      >
+                        ⭐ Valorar
+                      </a>
+                    )}
+                  </div>
+                </div>
               </div>
             </article>
           ))}

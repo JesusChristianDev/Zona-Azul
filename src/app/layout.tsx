@@ -2,6 +2,7 @@ import './globals.css'
 import { Metadata, Viewport } from 'next'
 import nextDynamic from 'next/dynamic'
 import RegisterServiceWorker from './register-sw'
+import { PanelProvider } from '../contexts/PanelContext'
 
 // Lazy load de componentes pesados para mejorar FCP y TTI
 // Deshabilitar SSR para evitar problemas de hidratación con hooks del cliente
@@ -81,16 +82,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="msapplication-TileColor" content="#1d4ed8" />
       </head>
       <body className="min-h-screen bg-gray-50 text-gray-900 antialiased">
-        <DashboardHeader />
+        <PanelProvider>
+          <DashboardHeader />
 
-        <main className="w-full">{children}</main>
+          <main className="w-full">{children}</main>
 
-        <footer className="mt-12 border-t bg-white">
-          <div className="w-full max-w-6xl mx-auto px-4 py-6 text-xs sm:text-sm text-gray-600 text-center sm:text-left">
-            Demo público — Zona Azul
-          </div>
-        </footer>
-        <RegisterServiceWorker />
+          <footer className="mt-12 border-t bg-white">
+            <div className="w-full max-w-6xl mx-auto px-4 py-6 text-xs sm:text-sm text-gray-600 text-center sm:text-left">
+              Demo público — Zona Azul
+            </div>
+          </footer>
+          <RegisterServiceWorker />
+        </PanelProvider>
       </body>
     </html>
   )

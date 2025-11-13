@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { createMealPlanDayMeal, deleteMealPlanDayMeal, getMealById, getMealPlanByUserId } from '../../../../../../../lib/db'
+import { createMealPlanDayMeal, deleteMealPlanDayMeal, getMealById, getMealPlanByUserId } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,9 +20,7 @@ async function canModifyPlan(planId: string, userId: string, role: string): Prom
     
     // Verificar que sea sábado (6) o domingo (0)
     const day = new Date().getDay() // 0 = Domingo, 1 = Lunes, ..., 5 = Viernes, 6 = Sábado
-    const canModify = day === 6 || day === 0
-    
-    return canModify
+    return day === 6 || day === 0
   }
   
   return false

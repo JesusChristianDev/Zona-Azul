@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { getAllUsers, getNutricionistaByClientId, getClientsByNutricionistaId, getOrderIncidentsByRepartidorId } from '../../../../lib/db'
+import { getAllUsers, getNutricionistaByClientId, getClientsByNutricionistaId, getOrderIncidentsByRepartidorId } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 

@@ -1,12 +1,12 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { useAuth } from '../../hooks/useAuth'
-import * as api from '../../lib/api'
-import { getSubscribers } from '../../lib/subscribers'
-import { getAppointments } from '../../lib/api'
-import InteractiveGreeting from '../../components/ui/InteractiveGreeting'
-import { formatAppointmentDateTime } from '../../lib/dateFormatters'
+import { useAuth } from '@/hooks/useAuth'
+import * as api from '@/lib/api'
+import { getSubscribers } from '@/lib/subscribers'
+import { getAppointments } from '@/lib/api'
+import InteractiveGreeting from '@/components/ui/InteractiveGreeting'
+import { formatAppointmentDateTime } from '@/lib/dateFormatters'
 
 export default function NutricionistaPage() {
   const { userId, userName } = useAuth()

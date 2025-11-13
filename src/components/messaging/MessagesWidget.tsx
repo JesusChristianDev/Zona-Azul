@@ -6,6 +6,7 @@ import { User } from '../../lib/types'
 import { NotificationHelpers } from '../../lib/notifications'
 import { getMessages, sendMessage, getUsers, getUserById, getAvailableContacts, updateMessage } from '../../lib/api'
 import * as api from '../../lib/api'
+import { usePanel } from '../../contexts/PanelContext'
 
 interface Message {
   id: string
@@ -84,7 +85,7 @@ async function getAssignedNutricionista(subscriberId: string): Promise<User | nu
 
 export default function MessagesWidget() {
   const { userId, userName, userEmail, role } = useAuth()
-  const [isOpen, setIsOpen] = useState(false)
+  const { isMessagesOpen, setIsMessagesOpen, setIsNotificationsOpen, setIsSettingsOpen } = usePanel()
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
   const [newMessageText, setNewMessageText] = useState('')
@@ -98,6 +99,7 @@ export default function MessagesWidget() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Scroll al final de los mensajes - optimizado para evitar reflows - memoizado
+  // IMPORTANTE: Este useCallback debe ejecutarse siempre, incluso si no hay userId/role
   const scrollToBottom = useCallback(() => {
     if (messagesEndRef.current) {
       // Usar requestAnimationFrame para evitar forced reflow
@@ -115,7 +117,7 @@ export default function MessagesWidget() {
       }, 100)
       return () => clearTimeout(timeoutId)
     }
-  }, [selectedConversation?.messages.length]) // Solo scroll cuando cambia el número de mensajes
+  }, [selectedConversation?.messages.length, scrollToBottom]) // Solo scroll cuando cambia el número de mensajes
 
   // Función para obtener contactos disponibles para todos los roles - memoizada
   const getAvailableContactsList = useCallback(async (): Promise<User[]> => {
@@ -374,7 +376,7 @@ export default function MessagesWidget() {
 
         // Mostrar notificación para nuevos mensajes no leídos
         // Mostrar notificación si la ventana no está visible O si el widget de mensajes no está abierto
-        if (newMessages.length > 0 && (document.hidden || !isOpen)) {
+        if (newMessages.length > 0 && (document.hidden || !isMessagesOpen)) {
           newMessages.forEach((msg) => {
             NotificationHelpers.newMessage(
               msg.fromName,
@@ -435,7 +437,7 @@ export default function MessagesWidget() {
       clearInterval(interval)
       isProcessing = false
     }
-  }, [userId, role, showArchived, isOpen]) // Agregar isOpen para controlar notificaciones
+  }, [userId, role, showArchived, isMessagesOpen]) // Agregar isMessagesOpen para controlar notificaciones
 
   // Marcar mensajes como leídos al abrir conversación
   useEffect(() => {
@@ -794,22 +796,25 @@ export default function MessagesWidget() {
     }
 
     // Cargar contactos cuando se abre el widget o cuando se está componiendo
-    if (isOpen || isComposing) {
+    if (isMessagesOpen || isComposing) {
       loadContacts()
     }
-  }, [userId, role, isOpen, isComposing])
+  }, [userId, role, isMessagesOpen, isComposing])
 
   if (!userId || !role) return null
 
   return (
     <div className="relative">
-      {/* Botón del widget */}
+      {/* Botón del widget - siempre visible */}
       <button
         onClick={(e) => {
           e.stopPropagation()
-          setIsOpen(!isOpen)
+          // Cerrar otros paneles y abrir/cerrar mensajería
+          setIsNotificationsOpen(false)
+          setIsSettingsOpen(false)
+          setIsMessagesOpen(!isMessagesOpen)
           // Si se está cerrando, limpiar estado
-          if (isOpen) {
+          if (isMessagesOpen) {
             setSelectedConversation(null)
             setIsComposing(false)
             setSelectedRecipient(null)
@@ -834,13 +839,13 @@ export default function MessagesWidget() {
       </button>
 
       {/* Panel completo de mensajería */}
-      {isOpen && (
+      {isMessagesOpen && (
         <>
           <div
-            className="fixed inset-0 bg-black/20 z-40"
+            className="fixed inset-0 bg-black/20 z-[45]"
             onClick={(e) => {
               e.stopPropagation()
-              setIsOpen(false)
+              setIsMessagesOpen(false)
               // Limpiar estado al cerrar
               setSelectedConversation(null)
               setIsComposing(false)
@@ -848,11 +853,11 @@ export default function MessagesWidget() {
               setShowArchived(false)
             }}
             onMouseDown={(e) => e.stopPropagation()}
-            style={{ pointerEvents: isOpen ? 'auto' : 'none' }}
+            style={{ pointerEvents: isMessagesOpen ? 'auto' : 'none' }}
           />
 
           <div
-            className="fixed inset-0 sm:inset-auto sm:top-16 sm:left-auto sm:right-4 sm:bottom-4 sm:w-[calc(100vw-2rem)] sm:max-w-[720px] md:max-w-[800px] sm:h-[calc(100vh-6rem)] sm:rounded-xl bg-white shadow-2xl z-[60] flex flex-col border-0 sm:border border-gray-200 overflow-hidden"
+            className="fixed inset-0 sm:inset-auto sm:top-16 sm:left-auto sm:right-4 sm:bottom-4 sm:w-[calc(100vw-2rem)] sm:max-w-[720px] md:max-w-[800px] sm:h-[calc(100vh-6rem)] sm:rounded-xl bg-white shadow-2xl z-[50] flex flex-col border-0 sm:border border-gray-200 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header profesional */}
@@ -878,7 +883,7 @@ export default function MessagesWidget() {
               <button
                 onClick={(e) => {
                   e.stopPropagation()
-                  setIsOpen(false)
+                  setIsMessagesOpen(false)
                   setSelectedConversation(null)
                   setIsComposing(false)
                   setSelectedRecipient(null)

@@ -1,10 +1,10 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import Modal from '../../../components/ui/Modal'
-import { useAuth } from '../../../hooks/useAuth'
-import * as api from '../../../lib/api'
-import { getMeals } from '../../../lib/api'
+import Modal from '@/components/ui/Modal'
+import { useAuth } from '@/hooks/useAuth'
+import * as api from '@/lib/api'
+import { getMeals } from '@/lib/api'
 
 interface PlanTemplate {
   id: string

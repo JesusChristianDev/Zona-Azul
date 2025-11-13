@@ -4,17 +4,23 @@ import { useState } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useAuth } from '../../hooks/useAuth'
+import { useAuth } from '@/hooks/useAuth'
+import { usePanel } from '@/contexts/PanelContext'
 
 // Lazy load de componentes pesados
 const MobileMenu = dynamic(() => import('../MobileMenu'), { ssr: true })
 const MessagesWidget = dynamic(() => import('../messaging/MessagesWidget'), { ssr: false })
+const NotificationsPanel = dynamic(() => import('../notifications/NotificationsPanel'), { ssr: false })
 
 export default function DashboardHeader() {
   const pathname = usePathname()
   const router = useRouter()
-  const { role, logout } = useAuth()
+  const { role, logout, userId, isAuthenticated } = useAuth()
+  const { isNotificationsOpen, isMessagesOpen, isSettingsOpen, setIsNotificationsOpen, setIsMessagesOpen } = usePanel()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  
+  // Ocultar navbar cuando algún panel está abierto
+  const isAnyPanelOpen = isNotificationsOpen || isMessagesOpen || isSettingsOpen
 
   const handleLogout = async () => {
     // Prevenir múltiples clicks
@@ -96,16 +102,29 @@ export default function DashboardHeader() {
           </div>
         </div>
       )}
-      <header className="bg-white shadow-sm sticky top-0 z-40 border-b w-full">
+      {/* Ocultar header completo solo en móviles cuando cualquier panel está abierto */}
+      {/* En desktop, siempre mostrar el header pero con z-index menor que los paneles */}
+      <header className={`bg-white shadow-sm sticky top-0 z-[40] border-b w-full ${isAnyPanelOpen ? 'hidden sm:block' : ''}`}>
       <div className="max-w-7xl mx-auto w-full">
         {/* Navegación principal */}
         <div className="flex items-center justify-between py-2.5 sm:py-3 md:py-4 px-3 sm:px-4 gap-2 w-full">
-          <Link href="/" className="flex items-center gap-1.5 sm:gap-2 md:gap-3 hover:opacity-80 transition-opacity flex-shrink-0 min-w-0">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-base flex-shrink-0">
-              ZA
+          {isDashboardPage ? (
+            // Logo sin link cuando está en dashboard
+            <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 flex-shrink-0 min-w-0">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-base flex-shrink-0">
+                ZA
+              </div>
+              <h1 className="text-sm sm:text-base md:text-lg font-semibold truncate">Zona Azul</h1>
             </div>
-            <h1 className="text-sm sm:text-base md:text-lg font-semibold truncate">Zona Azul</h1>
-          </Link>
+          ) : (
+            // Logo con link cuando está en páginas públicas
+            <Link href="/" className="flex items-center gap-1.5 sm:gap-2 md:gap-3 hover:opacity-80 transition-opacity flex-shrink-0 min-w-0">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-base flex-shrink-0">
+                ZA
+              </div>
+              <h1 className="text-sm sm:text-base md:text-lg font-semibold truncate">Zona Azul</h1>
+            </Link>
+          )}
 
           {/* Navegación desktop - solo en páginas públicas */}
           {!isDashboardPage && (
@@ -130,9 +149,26 @@ export default function DashboardHeader() {
             <div className="hidden sm:flex items-center gap-3 md:gap-4 flex-shrink-0">
               {role !== 'invitado' && (
                 <>
+                  {/* Indicador de rol */}
+                  <div className="flex items-center gap-2 text-xs flex-shrink-0">
+                    <span className="text-gray-500">Rol:</span>
+                    <span className="px-2 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium capitalize">
+                      {role}
+                    </span>
+                  </div>
+                  
+                  {/* Siempre renderizar los paneles (ellos manejan su propia visibilidad) */}
+                  <NotificationsPanel />
                   <MessagesWidget />
+                  
+                  {/* Siempre mostrar ajustes y logout en desktop (incluso cuando algún panel está abierto) */}
                   <Link
                     href={`/${role}/ajustes`}
+                    onClick={() => {
+                      // Cerrar otros paneles al abrir ajustes
+                      setIsNotificationsOpen(false)
+                      setIsMessagesOpen(false)
+                    }}
                     className="relative p-2 text-gray-600 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors flex-shrink-0"
                     aria-label="Ajustes"
                     title="Ajustes"
@@ -167,15 +203,35 @@ export default function DashboardHeader() {
           )}
 
           {/* Mobile - Dashboard pages */}
+          {/* Ocultar botones del navbar en móvil cuando cualquier panel está abierto */}
           {isDashboardPage && (
-            <div className="sm:hidden flex items-center gap-1.5 flex-shrink-0 ml-auto">
+            <div className={`sm:hidden flex items-center gap-1.5 flex-shrink-0 ml-auto ${isAnyPanelOpen ? 'hidden' : ''}`}>
               {role !== 'invitado' && (
                 <>
+                  {/* Indicador de rol en móvil */}
+                  <div className="flex items-center gap-1.5 text-xs flex-shrink-0">
+                    <span className="text-gray-500 hidden xs:inline">Rol:</span>
+                    <span className="px-1.5 py-0.5 bg-primary/10 text-primary rounded-full text-xs font-medium capitalize">
+                      {role}
+                    </span>
+                  </div>
+                  
+                  {/* Siempre renderizar los paneles (ellos manejan su propia visibilidad) */}
+                  <div className="flex-shrink-0 relative z-10">
+                    <NotificationsPanel />
+                  </div>
                   <div className="flex-shrink-0 relative z-10">
                     <MessagesWidget />
                   </div>
+                  
+                  {/* Siempre mostrar ajustes y logout en móvil (excepto cuando algún panel está abierto, que se oculta todo el navbar) */}
                   <Link
                     href={`/${role}/ajustes`}
+                    onClick={() => {
+                      // Cerrar otros paneles al abrir ajustes
+                      setIsNotificationsOpen(false)
+                      setIsMessagesOpen(false)
+                    }}
                     className="p-1.5 text-gray-700 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors flex-shrink-0 relative z-10"
                     aria-label="Ajustes"
                     title="Ajustes"
@@ -206,29 +262,8 @@ export default function DashboardHeader() {
             </div>
           )}
         </div>
-
-        {/* Breadcrumb integrado - solo en dashboards */}
-        {isDashboardPage && breadcrumbTitle && (
-          <div className="border-t bg-gray-50/50 px-3 sm:px-4 py-1.5 sm:py-2">
-            <div className="flex items-center justify-between gap-2 min-w-0">
-              <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 min-w-0 flex-1">
-                <Link href="/" className="hover:text-primary transition-colors flex-shrink-0">
-                  Inicio
-                </Link>
-                <span className="flex-shrink-0">/</span>
-                <span className="text-gray-900 font-medium truncate">{breadcrumbTitle}</span>
-              </div>
-              <div className="hidden sm:flex items-center gap-2 text-xs flex-shrink-0">
-                <span className="text-gray-500">Rol:</span>
-                <span className="px-2 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium capitalize">
-                  {role}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
-    </header>
+      </header>
     </>
   )
 }

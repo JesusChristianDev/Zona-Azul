@@ -1,10 +1,10 @@
 "use client"
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { useAuth } from '../../../hooks/useAuth'
-import Modal from '../../../components/ui/Modal'
-import { getAppointments, updateAppointment, createUser, deleteAppointment } from '../../../lib/api'
-import { formatAppointmentDateTime, formatCreatedDate } from '../../../lib/dateFormatters'
+import { useAuth } from '@/hooks/useAuth'
+import Modal from '@/components/ui/Modal'
+import { getAppointments, updateAppointment, createUser, deleteAppointment } from '@/lib/api'
+import { formatAppointmentDateTime, formatCreatedDate } from '@/lib/dateFormatters'
 
 interface Appointment {
   id: string

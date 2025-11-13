@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getNutritionistSchedule, createOrUpdateNutritionistSchedule } from '../../../../lib/db'
+import { getNutritionistSchedule, createOrUpdateNutritionistSchedule } from '@/lib/db'
 import { cookies } from 'next/headers'
 
 export const dynamic = 'force-dynamic'

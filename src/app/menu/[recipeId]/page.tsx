@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { getMealById } from '../../../lib/api'
+import { getMealById } from '@/lib/api'
 
 interface MenuItem {
   id: string

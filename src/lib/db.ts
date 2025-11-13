@@ -52,6 +52,9 @@ export interface DatabaseOrder {
   total_amount: number
   delivery_address?: string
   delivery_instructions?: string
+  delivery_mode?: 'delivery' | 'pickup'
+  delivery_address_id?: string
+  pickup_location?: string
   repartidor_id?: string
   estimated_delivery_time?: string
   actual_delivery_time?: string
@@ -1689,6 +1692,12 @@ export interface DatabaseUserSettings {
   notifications_plan_assignments: boolean
   notifications_appointments: boolean
   notifications_new_orders: boolean
+  notifications_weekly_menu?: boolean
+  notifications_menu_changes_approved?: boolean
+  notifications_order_status?: boolean
+  notifications_renewal_reminder?: boolean
+  notifications_plan_approval?: boolean
+  notifications_consultation_required?: boolean
   preferences_language: string
   preferences_theme: 'light' | 'dark' | 'auto'
   preferences_email_notifications: boolean

@@ -1,7 +1,7 @@
 "use client"
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { formatAppointmentDateTime } from '../../../lib/dateFormatters'
+import { formatAppointmentDateTime } from '@/lib/dateFormatters'
 
 interface Appointment {
   id: string

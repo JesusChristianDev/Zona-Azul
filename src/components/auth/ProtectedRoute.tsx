@@ -7,36 +7,34 @@ import DashboardInvitado from '../dashboard/DashboardInvitado'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
-  requiredRole: UserRole
+  requiredRole?: UserRole | null
   redirectTo?: string
 }
 
 export default function ProtectedRoute({ children, requiredRole, redirectTo = '/login' }: ProtectedRouteProps) {
   const { role, isAuthenticated, loading, userId } = useAuth()
   const router = useRouter()
-  const [isChecking, setIsChecking] = useState(true)
 
   useEffect(() => {
-    // Esperar a que termine de cargar la autenticación
+    // Solo validar si no está cargando
     if (loading) {
-      setIsChecking(true)
       return
     }
 
-    setIsChecking(false)
-
-    // Validar acceso solo después de que termine de cargar
+    // Validar acceso solo si no está autenticado o no tiene el rol correcto
     if (!isAuthenticated || !userId) {
       const url = new URL(redirectTo, window.location.origin)
       url.searchParams.set('error', 'access_denied')
-      url.searchParams.set('required', requiredRole)
+      if (requiredRole) {
+        url.searchParams.set('required', requiredRole)
+      }
       url.searchParams.set('redirect', window.location.pathname)
       router.push(url.toString())
       return
     }
 
-    // Validar que el rol coincida
-    if (role !== requiredRole) {
+    // Validar que el rol coincida solo si se especifica un rol requerido
+    if (requiredRole && role !== requiredRole) {
       const url = new URL(redirectTo, window.location.origin)
       url.searchParams.set('error', 'access_denied')
       url.searchParams.set('required', requiredRole)
@@ -47,8 +45,9 @@ export default function ProtectedRoute({ children, requiredRole, redirectTo = '/
     }
   }, [role, isAuthenticated, requiredRole, redirectTo, router, loading, userId])
 
-  // Mostrar loading mientras se verifica la sesión
-  if (loading || isChecking) {
+  // Solo mostrar loading si está cargando Y no está autenticado
+  // Si ya está autenticado, no mostrar spinner (incluso si loading es true por recarga de datos)
+  if (loading && !isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -60,8 +59,8 @@ export default function ProtectedRoute({ children, requiredRole, redirectTo = '/
     )
   }
 
-  // Si no está autenticado o no tiene el rol correcto, mostrar selector de roles
-  if (!isAuthenticated || !userId || role !== requiredRole) {
+  // Si no está autenticado o no tiene el rol correcto (si se requiere), mostrar selector de roles
+  if (!isAuthenticated || !userId || (requiredRole && role !== requiredRole)) {
     return <DashboardInvitado />
   }
 

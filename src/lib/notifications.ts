@@ -10,6 +10,7 @@ interface NotificationData {
   icon?: string
   url?: string
   tag?: string
+  isMandatory?: boolean // Notificaciones obligatorias (legales/seguridad) siempre se envían
 }
 
 interface UserSettings {
@@ -20,6 +21,8 @@ interface UserSettings {
     planAssignments: boolean
     appointments: boolean
     newOrders: boolean
+    weeklyMenu?: boolean
+    renewalReminder?: boolean
   }
 }
 
@@ -32,7 +35,7 @@ async function getUserNotificationSettings(userId: string | null): Promise<UserS
   try {
     const { getUserSettings } = await import('./api')
     const settings = await getUserSettings()
-    
+
     if (settings) {
       return {
         enabled: settings.notifications_enabled ?? true,
@@ -41,6 +44,8 @@ async function getUserNotificationSettings(userId: string | null): Promise<UserS
         planAssignments: settings.notifications_plan_assignments ?? true,
         appointments: settings.notifications_appointments ?? true,
         newOrders: settings.notifications_new_orders ?? true,
+        weeklyMenu: settings.notifications_weekly_menu ?? true,
+        renewalReminder: settings.notifications_renewal_reminder ?? true,
       }
     }
   } catch (error) {
@@ -55,28 +60,43 @@ async function getUserNotificationSettings(userId: string | null): Promise<UserS
     planAssignments: true,
     appointments: true,
     newOrders: true,
+    weeklyMenu: true,
+    renewalReminder: true,
   }
 }
 
 /**
  * Verifica si una notificación específica está habilitada
+ * @param userId - ID del usuario
+ * @param notificationType - Tipo de notificación
+ * @param isMandatory - Si es true, siempre retorna true (notificaciones obligatorias)
  */
 async function isNotificationEnabled(
   userId: string | null,
-  notificationType: 'newMessages' | 'orderUpdates' | 'planAssignments' | 'appointments' | 'newOrders'
+  notificationType: 'newMessages' | 'orderUpdates' | 'planAssignments' | 'appointments' | 'newOrders' | 'weeklyMenu' | 'renewalReminder',
+  isMandatory: boolean = false
 ): Promise<boolean> {
+  // Las notificaciones obligatorias siempre se envían
+  if (isMandatory) return true
+
   const settings = await getUserNotificationSettings(userId)
   if (!settings) return true // Por defecto, habilitado
 
-  // Si las notificaciones generales están deshabilitadas, no mostrar ninguna
+  // Si las notificaciones generales están deshabilitadas, no mostrar ninguna (excepto obligatorias)
   if (!settings.enabled) return false
 
   // Verificar la preferencia específica
+  // Para renewalReminder, verificar la configuración específica
+  if (notificationType === 'renewalReminder') {
+    return settings.renewalReminder !== false
+  }
+
   return settings[notificationType] !== false
 }
 
 /**
  * Muestra una notificación usando el service worker
+ * Las notificaciones obligatorias siempre se intentan enviar, incluso si el usuario tiene las notificaciones deshabilitadas
  */
 export async function showAppNotification(data: NotificationData): Promise<boolean> {
   if (typeof window === 'undefined') {
@@ -89,10 +109,25 @@ export async function showAppNotification(data: NotificationData): Promise<boole
     return false
   }
 
-  // Verificar permisos
+  // Para notificaciones obligatorias, intentar solicitar permiso si no está concedido
+  if (data.isMandatory && Notification.permission === 'default') {
+    try {
+      await Notification.requestPermission()
+    } catch (error) {
+      console.warn('Error al solicitar permiso para notificación obligatoria:', error)
+    }
+  }
+
+  // Verificar permisos (excepto para obligatorias que intentaremos mostrar de todas formas)
   if (Notification.permission !== 'granted') {
-    console.warn('Permiso de notificaciones no concedido')
-    return false
+    if (data.isMandatory) {
+      // Para notificaciones obligatorias, intentar mostrar de todas formas o registrar en log
+      console.warn('Notificación obligatoria no pudo mostrarse: permisos no concedidos')
+      // Aquí podrías registrar en una cola para mostrar cuando se concedan permisos
+    } else {
+      console.warn('Permiso de notificaciones no concedido')
+      return false
+    }
   }
 
   try {
@@ -106,12 +141,13 @@ export async function showAppNotification(data: NotificationData): Promise<boole
           icon: data.icon || '/icon-192x192.png',
           badge: '/icon-192x192.png',
           tag: data.tag || 'zona-azul-notification',
-          requireInteraction: false,
+          requireInteraction: data.isMandatory || false, // Notificaciones obligatorias requieren interacción
           data: {
             url: data.url || '/',
             timestamp: Date.now(),
+            isMandatory: data.isMandatory || false,
           },
-          vibrate: [200, 100, 200],
+          vibrate: data.isMandatory ? [300, 200, 300, 200, 300] : [200, 100, 200], // Más vibrante para obligatorias
           silent: false,
         } as any)
 
@@ -128,10 +164,11 @@ export async function showAppNotification(data: NotificationData): Promise<boole
       icon: data.icon || '/icon-192x192.png',
       badge: '/icon-192x192.png',
       tag: data.tag || 'zona-azul-notification',
-      requireInteraction: false,
+      requireInteraction: data.isMandatory || false, // Notificaciones obligatorias requieren interacción
       data: {
         url: data.url || '/',
         timestamp: Date.now(),
+        isMandatory: data.isMandatory || false,
       },
     } as any)
 
@@ -224,6 +261,86 @@ export const NotificationHelpers = {
       url,
       tag: 'plan-assigned',
       icon: '/icon-192x192.png',
+    })
+  },
+
+  // Notificación de menú semanal generado
+  weeklyMenuGenerated: async (weekStart: string, url: string = '/suscriptor/plan', userId: string | null = null) => {
+    if (!(await isNotificationEnabled(userId, 'weeklyMenu'))) return false
+
+    const weekStartDate = new Date(weekStart)
+    const weekEndDate = new Date(weekStartDate)
+    weekEndDate.setDate(weekStartDate.getDate() + 6)
+
+    return showAppNotification({
+      title: '¡Nuevo menú semanal disponible!',
+      body: `Tu menú para la semana del ${weekStartDate.toLocaleDateString('es-ES')} al ${weekEndDate.toLocaleDateString('es-ES')} está listo`,
+      url,
+      tag: `weekly-menu-${weekStart}`,
+      icon: '/icon-192x192.png',
+    })
+  },
+
+  // Notificaciones obligatorias (legales/seguridad) - siempre se envían
+  legalNotice: async (title: string, message: string, url: string = '/', userId: string | null = null) => {
+    return showAppNotification({
+      title,
+      body: message,
+      url,
+      tag: 'legal-notice',
+      icon: '/icon-192x192.png',
+      isMandatory: true, // Siempre se envía
+    })
+  },
+
+  securityAlert: async (message: string, url: string = '/', userId: string | null = null) => {
+    return showAppNotification({
+      title: '⚠️ Alerta de Seguridad',
+      body: message,
+      url,
+      tag: 'security-alert',
+      icon: '/icon-192x192.png',
+      isMandatory: true, // Siempre se envía
+    })
+  },
+
+  contractUpdate: async (message: string, url: string = '/suscriptor/suscripcion', userId: string | null = null) => {
+    return showAppNotification({
+      title: '📋 Actualización de Contrato',
+      body: message,
+      url,
+      tag: 'contract-update',
+      icon: '/icon-192x192.png',
+      isMandatory: true, // Siempre se envía
+    })
+  },
+
+  paymentRequired: async (message: string, url: string = '/suscriptor/suscripcion', userId: string | null = null) => {
+    return showAppNotification({
+      title: '💳 Pago Requerido',
+      body: message,
+      url,
+      tag: 'payment-required',
+      icon: '/icon-192x192.png',
+      isMandatory: true, // Siempre se envía
+    })
+  },
+
+  // Recordatorio de renovación (respeta preferencias del usuario)
+  renewalReminder: async (planName: string, daysRemaining: number, url: string = '/suscriptor/suscripcion', userId: string | null = null) => {
+    if (!(await isNotificationEnabled(userId, 'renewalReminder', false))) return false
+
+    const message = daysRemaining === 1
+      ? `Tu suscripción ${planName} vence mañana. Renueva ahora para continuar disfrutando de nuestros servicios.`
+      : `Tu suscripción ${planName} vence en ${daysRemaining} días. Renueva ahora para continuar disfrutando de nuestros servicios.`
+
+    return showAppNotification({
+      title: '⏰ Recordatorio de Renovación',
+      body: message,
+      url,
+      tag: 'renewal-reminder',
+      icon: '/icon-192x192.png',
+      isMandatory: false, // Respeta las preferencias del usuario
     })
   },
 }

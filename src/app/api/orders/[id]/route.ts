@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getOrderById, updateOrder } from '../../../../lib/db'
+import { getOrderById, updateOrder } from '@/lib/db'
 import { cookies } from 'next/headers'
 
 export const dynamic = 'force-dynamic'
@@ -67,17 +67,42 @@ export async function PATCH(
     const body = await request.json()
     const updateData: any = {}
 
+    // Verificar que el pedido pertenece al usuario (excepto admin)
+    const existingOrder = await getOrderById(params.id)
+    if (!existingOrder) {
+      return NextResponse.json(
+        { error: 'Pedido no encontrado' },
+        { status: 404 }
+      )
+    }
+
+    if (role !== 'admin' && existingOrder.user_id !== userId) {
+      return NextResponse.json(
+        { error: 'No autorizado' },
+        { status: 403 }
+      )
+    }
+
     // Admin puede cambiar cualquier campo
     if (role === 'admin') {
       if (body.status) updateData.status = body.status
       if (body.repartidor_id !== undefined) updateData.repartidor_id = body.repartidor_id
       if (body.estimated_delivery_time) updateData.estimated_delivery_time = body.estimated_delivery_time
       if (body.actual_delivery_time) updateData.actual_delivery_time = body.actual_delivery_time
+      if (body.delivery_mode) updateData.delivery_mode = body.delivery_mode
+      if (body.delivery_address_id !== undefined) updateData.delivery_address_id = body.delivery_address_id
+      if (body.pickup_location !== undefined) updateData.pickup_location = body.pickup_location
     }
     // Repartidor solo puede actualizar estado y tiempo de entrega
     else if (role === 'repartidor') {
       if (body.status) updateData.status = body.status
       if (body.actual_delivery_time) updateData.actual_delivery_time = body.actual_delivery_time
+    }
+    // Suscriptor puede actualizar método de entrega
+    else if (existingOrder.user_id === userId) {
+      if (body.delivery_mode) updateData.delivery_mode = body.delivery_mode
+      if (body.delivery_address_id !== undefined) updateData.delivery_address_id = body.delivery_address_id
+      if (body.pickup_location !== undefined) updateData.pickup_location = body.pickup_location
     }
 
     const order = await updateOrder(params.id, updateData)
