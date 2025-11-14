@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { checkMealStock, findAutomaticSubstitution, createAutomaticSubstitution, notifyNutritionistAboutSubstitution } from '@/lib/mealStockHelpers'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -180,20 +181,68 @@ export async function POST(request: NextRequest) {
               const planDay = mealPlan.meal_plan_days.find((d: any) => d.day_number === dayNum)
               
               if (planDay && planDay.meal_plan_day_meals) {
-                // Usar comidas del plan
+                // Usar comidas del plan con verificación de stock y sustitución automática
                 for (let mealIndex = 0; mealIndex < Math.min(mealsPerDay, planDay.meal_plan_day_meals.length); mealIndex++) {
                   const planMeal = planDay.meal_plan_day_meals[mealIndex]
                   const meal = planMeal.meals
 
                   if (meal) {
+                    let finalMealId = meal.id
+                    let isOriginal = true
+                    let originalMealId: string | undefined = undefined
+
+                    // Verificar stock de la comida del plan
+                    const hasStock = await checkMealStock(meal.id)
+
+                    if (!hasStock) {
+                      // Buscar sustitución automática
+                      const substituteId = await findAutomaticSubstitution(
+                        meal.id,
+                        meal.type as 'breakfast' | 'lunch' | 'dinner' | 'snack',
+                        meal.calories
+                      )
+
+                      if (substituteId) {
+                        // Crear registro de sustitución
+                        await createAutomaticSubstitution(meal.id, substituteId, weeklyMenu.id)
+
+                        // Obtener nombres para notificación
+                        const { data: originalMeal } = await supabase
+                          .from('meals')
+                          .select('name')
+                          .eq('id', meal.id)
+                          .single()
+
+                        const { data: substituteMeal } = await supabase
+                          .from('meals')
+                          .select('name')
+                          .eq('id', substituteId)
+                          .single()
+
+                        if (originalMeal && substituteMeal) {
+                          await notifyNutritionistAboutSubstitution(
+                            originalMeal.name,
+                            substituteMeal.name,
+                            weeklyMenu.id
+                          )
+                        }
+
+                        finalMealId = substituteId
+                        isOriginal = false
+                        originalMealId = meal.id
+                      }
+                      // Si no se encuentra sustitución, usar la comida original (se notificará al nutricionista)
+                    }
+
                     await supabase
                       .from('weekly_menu_day_meals')
                       .insert({
                         weekly_menu_day_id: menuDay.id,
-                        meal_id: meal.id,
+                        meal_id: finalMealId,
                         meal_type: meal.type,
                         order_index: mealIndex,
-                        is_original: true,
+                        is_original: isOriginal,
+                        original_meal_id: originalMealId || null,
                       })
                   }
                 }
@@ -208,27 +257,51 @@ export async function POST(request: NextRequest) {
                 
                 // Obtener comidas para planes nutricionales (is_menu_item = false)
                 // NO usar comidas del menú del local (is_menu_item = true)
-                const { data: availableMeals } = await supabase
+                // Filtrar también por stock disponible
+                const { data: allMeals } = await supabase
                   .from('meals')
-                  .select('id, type')
+                  .select('id, type, calories')
                   .eq('type', mealType)
                   .eq('available', true)
                   .eq('is_menu_item', false) // Solo comidas para planes, NO del menú del local
-                  .limit(10)
+                  .limit(20)
 
-                if (availableMeals && availableMeals.length > 0) {
-                  // Seleccionar una comida aleatoria
-                  const randomMeal = availableMeals[Math.floor(Math.random() * availableMeals.length)]
-                  
-                  await supabase
-                    .from('weekly_menu_day_meals')
-                    .insert({
-                      weekly_menu_day_id: menuDay.id,
-                      meal_id: randomMeal.id,
-                      meal_type: mealType,
-                      order_index: mealIndex,
-                      is_original: true,
-                    })
+                if (allMeals && allMeals.length > 0) {
+                  // Filtrar comidas con stock disponible
+                  const mealsWithStock = []
+                  for (const meal of allMeals) {
+                    const hasStock = await checkMealStock(meal.id)
+                    if (hasStock) {
+                      mealsWithStock.push(meal)
+                    }
+                  }
+
+                  // Si hay comidas con stock, seleccionar una aleatoria
+                  if (mealsWithStock.length > 0) {
+                    const randomMeal = mealsWithStock[Math.floor(Math.random() * mealsWithStock.length)]
+                    
+                    await supabase
+                      .from('weekly_menu_day_meals')
+                      .insert({
+                        weekly_menu_day_id: menuDay.id,
+                        meal_id: randomMeal.id,
+                        meal_type: mealType,
+                        order_index: mealIndex,
+                        is_original: true,
+                      })
+                  } else {
+                    // Si no hay comidas con stock, usar la primera disponible (se notificará al nutricionista)
+                    const fallbackMeal = allMeals[0]
+                    await supabase
+                      .from('weekly_menu_day_meals')
+                      .insert({
+                        weekly_menu_day_id: menuDay.id,
+                        meal_id: fallbackMeal.id,
+                        meal_type: mealType,
+                        order_index: mealIndex,
+                        is_original: true,
+                      })
+                  }
                 }
               }
             }

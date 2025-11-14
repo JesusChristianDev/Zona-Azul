@@ -50,30 +50,15 @@ export function listenToUpdateEvent(
   }
 }
 
-/**
- * DEPRECATED: Esta función ya no se usa.
- * La sincronización entre pestañas ahora se hace mediante polling de APIs o Supabase Realtime.
- * 
- * @deprecated Usa polling de APIs o Supabase Realtime en su lugar
- */
-export function listenToStorageChange(
-  keys: string[],
-  callback: (key: string, newValue: string | null) => void
-): () => void {
-  if (typeof window === 'undefined') return () => {}
-  // Función deprecada - no hace nada
-  return () => {}
-}
 
 /**
  * Configura listeners combinados (eventos personalizados)
  * 
- * NOTA: Ya no escucha cambios en localStorage, solo eventos personalizados.
- * La sincronización de datos ahora se hace mediante polling de APIs.
+ * NOTA: Solo escucha eventos personalizados.
+ * La sincronización de datos se hace mediante polling de APIs.
  */
 export function setupRealtimeSync(
   eventNames: Array<keyof typeof APP_EVENTS>,
-  storageKeys: string[], // Deprecated: ya no se usa
   callback: () => void
 ): () => void {
   if (typeof window === 'undefined') return () => {}

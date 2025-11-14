@@ -50,7 +50,14 @@ export async function POST(
     try {
         const subscriptionId = params.id
         const body = await request.json()
-        const { signed_by, signature_method, ip_address, user_agent } = body
+        const { signed_by, signature_method, signature_image, ip_address, user_agent } = body
+
+        if (!signed_by) {
+            return NextResponse.json(
+                { error: 'Falta el ID del usuario que firma' },
+                { status: 400 }
+            )
+        }
 
         // Obtener o generar contrato
         let contract = await getOrGenerateContract(subscriptionId)
@@ -62,17 +69,33 @@ export async function POST(
             )
         }
 
+        // Verificar que el contrato no esté ya firmado
+        if (contract.signed) {
+            return NextResponse.json(
+                { error: 'Este contrato ya ha sido firmado' },
+                { status: 400 }
+            )
+        }
+
+        // Preparar datos de actualización
+        const updateData: any = {
+            signed: true,
+            signed_at: new Date().toISOString(),
+            signed_by,
+            signature_method: signature_method || 'checkbox_acceptance',
+            ip_address: ip_address || request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
+            user_agent: user_agent || request.headers.get('user-agent') || 'unknown',
+        }
+
+        // Si hay imagen de firma, agregarla
+        if (signature_image) {
+            updateData.signature_image = signature_image
+        }
+
         // Firmar contrato
         const { data, error } = await supabase
             .from('subscription_contracts')
-            .update({
-                signed: true,
-                signed_at: new Date().toISOString(),
-                signed_by,
-                signature_method: signature_method || 'checkbox_acceptance',
-                ip_address,
-                user_agent,
-            })
+            .update(updateData)
             .eq('id', contract.id)
             .select()
             .single()

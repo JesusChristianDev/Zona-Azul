@@ -6,6 +6,8 @@ import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
 import LoadingState from '@/components/ui/LoadingState'
 import EmptyState from '@/components/ui/EmptyState'
+import ToastMessage from '@/components/ui/ToastMessage'
+import SignaturePad from '@/components/contracts/SignaturePad'
 import type { Subscription, SubscriptionContract, SubscriptionPlan } from '@/lib/types'
 
 export default function SuscripcionPage() {
@@ -16,6 +18,9 @@ export default function SuscripcionPage() {
   const [loading, setLoading] = useState(true)
   const [isContractModalOpen, setIsContractModalOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+  const [signatureData, setSignatureData] = useState<string | null>(null)
+  const [isSigning, setIsSigning] = useState(false)
 
   useEffect(() => {
     if (userId) {
@@ -95,6 +100,54 @@ export default function SuscripcionPage() {
     }
 
     return statusConfig[status] || statusConfig.pending_approval
+  }
+
+  const handleSignContract = async () => {
+    if (!subscription || !signatureData) return
+
+    setIsSigning(true)
+    setError(null)
+    setSuccess(null)
+
+    try {
+      // Obtener IP y User Agent para trazabilidad legal
+      const ipResponse = await fetch('https://api.ipify.org?format=json').catch(() => null)
+      const ipData = ipResponse ? await ipResponse.json() : { ip: 'unknown' }
+      const userAgent = typeof window !== 'undefined' ? window.navigator.userAgent : 'unknown'
+
+      const response = await fetch(`/api/subscriptions/${subscription.id}/contract`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          signed_by: userId,
+          signature_method: 'electronic_signature',
+          signature_image: signatureData,
+          ip_address: ipData.ip || 'unknown',
+          user_agent: userAgent,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Error al firmar contrato')
+      }
+
+      const updatedContract = await response.json()
+      setContract(updatedContract)
+      setSuccess('Contrato firmado correctamente')
+      setSignatureData(null)
+      
+      // Cerrar modal después de 2 segundos
+      setTimeout(() => {
+        setIsContractModalOpen(false)
+        loadSubscription() // Recargar datos
+      }, 2000)
+    } catch (error: any) {
+      console.error('Error signing contract:', error)
+      setError(error.message || 'Error al firmar el contrato')
+    } finally {
+      setIsSigning(false)
+    }
   }
 
   if (loading) {
@@ -329,36 +382,158 @@ export default function SuscripcionPage() {
         </div>
       </div>
 
+      {/* Mensajes */}
+      {error && (
+        <ToastMessage
+          message={error}
+          type="error"
+          onClose={() => setError(null)}
+        />
+      )}
+      {success && (
+        <ToastMessage
+          message={success}
+          type="success"
+          onClose={() => setSuccess(null)}
+        />
+      )}
+
       {/* Modal de contrato */}
       {contract && (
         <Modal
           isOpen={isContractModalOpen}
-          onClose={() => setIsContractModalOpen(false)}
+          onClose={() => {
+            setIsContractModalOpen(false)
+            setSignatureData(null)
+          }}
           title="Contrato de Suscripción"
           size="lg"
         >
-          <div className="space-y-4">
-            <div className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto">
+          <div className="space-y-6">
+            {/* Texto del contrato */}
+            <div className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto border border-gray-200">
               <pre className="whitespace-pre-wrap text-sm text-gray-700 font-mono">
                 {contract.contract_text}
               </pre>
             </div>
-            {contract.signed_at && (
+
+            {/* Estado de firma */}
+            {contract.signed ? (
               <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <p className="text-sm text-green-800">
-                  <strong>✓ Contrato firmado el:</strong> {formatDate(contract.signed_at)}
-                </p>
+                <div className="flex items-start gap-3">
+                  <svg className="w-6 h-6 text-green-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-green-900 mb-1">✓ Contrato Firmado</p>
+                    <p className="text-xs text-green-700">
+                      Firmado el: {formatDate(contract.signed_at)}
+                    </p>
+                    {contract.signature_method === 'electronic_signature' && (
+                      <p className="text-xs text-green-600 mt-1">
+                        Método: Firma electrónica
+                      </p>
+                    )}
+                    {contract.signature_image && (
+                      <div className="mt-3 pt-3 border-t border-green-200">
+                        <p className="text-xs text-green-700 mb-2">Firma capturada:</p>
+                        <div className="overflow-x-auto">
+                          <img
+                            src={contract.signature_image}
+                            alt="Firma del contrato"
+                            className="max-w-full sm:max-w-xs border border-green-300 rounded bg-white p-2"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Componente de firma electrónica */}
+                <div className="border-t border-b border-gray-200 py-4">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-3">Firma Electrónica</h3>
+                  <div className="w-full overflow-x-auto">
+                    <SignaturePad
+                      onSignatureChange={setSignatureData}
+                      width={400}
+                      height={150}
+                      disabled={isSigning}
+                    />
+                  </div>
+                </div>
+
+                {/* Checkbox de aceptación */}
+                <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <input
+                    type="checkbox"
+                    id="accept-terms"
+                    checked={!!signatureData}
+                    onChange={() => {}}
+                    disabled={!signatureData}
+                    className="mt-1 w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                  />
+                  <label htmlFor="accept-terms" className="text-sm text-gray-700 cursor-pointer">
+                    <span className="font-medium">Acepto los términos y condiciones</span> del contrato de suscripción.
+                    Al firmar, confirmo que he leído y comprendido todas las cláusulas establecidas.
+                  </label>
+                </div>
+
+                {/* Botones de acción */}
+                <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsContractModalOpen(false)
+                      setSignatureData(null)
+                    }}
+                    className="w-full sm:w-auto px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSignContract}
+                    disabled={!signatureData || isSigning}
+                    className="w-full sm:w-auto px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isSigning ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Firmando...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                        Firmar Contrato
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             )}
-            <div className="flex justify-end pt-4">
-              <button
-                type="button"
-                onClick={() => setIsContractModalOpen(false)}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
-              >
-                Cerrar
-              </button>
-            </div>
+
+            {/* Botón de cerrar si ya está firmado */}
+            {contract.signed && (
+              <div className="flex justify-end pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsContractModalOpen(false)
+                    setSignatureData(null)
+                  }}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium"
+                >
+                  Cerrar
+                </button>
+              </div>
+            )}
           </div>
         </Modal>
       )}

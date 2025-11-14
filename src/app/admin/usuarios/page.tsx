@@ -142,11 +142,28 @@ export default function AdminUsuariosPage() {
         // Obtener todos los nutricionistas
         const nutritionists = await api.getNutritionists()
         
+        if (!nutritionists || nutritionists.length === 0) {
+          console.warn('No hay nutricionistas disponibles para cargar planes')
+          setAvailablePlans([])
+          return
+        }
+        
         // Obtener planes sin asignar de cada nutricionista
         const allPlans: any[] = []
         for (const nutritionist of nutritionists) {
-          const plans = await api.getMealPlansByNutricionista(nutritionist.id)
-          allPlans.push(...plans)
+          try {
+            const plans = await api.getMealPlansByNutricionista(nutritionist.id)
+            if (plans && Array.isArray(plans)) {
+              // Filtrar solo planes que tengan días y comidas (planes completos)
+              const completePlans = plans.filter((plan: any) => {
+                // Verificar que el plan tenga días con comidas
+                return plan.days && Array.isArray(plan.days) && plan.days.length > 0
+              })
+              allPlans.push(...completePlans)
+            }
+          } catch (error) {
+            console.error(`Error loading plans for nutritionist ${nutritionist.id}:`, error)
+          }
         }
         
         setAvailablePlans(allPlans)
@@ -390,6 +407,8 @@ export default function AdminUsuariosPage() {
 
   const handleSubmitAssignPlan = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError(null)
+    
     if (!selectedUser || !selectedPlanId) {
       setError('Por favor selecciona un plan')
       return
@@ -401,17 +420,39 @@ export default function AdminUsuariosPage() {
       return
     }
 
-    // assignPlanToSubscriber espera un planId (string)
-    const success = await assignPlanToSubscriber(selectedUser.id, selectedPlanId, 'Admin')
-    if (success) {
+    try {
+      // assignPlanToSubscriber ahora lanza errores en lugar de retornar false
+      await assignPlanToSubscriber(selectedUser.id, selectedPlanId, 'Admin')
+      
+      // Si llegamos aquí, la asignación fue exitosa
       // Actualizar el estado de planes asignados
       setUsersWithPlans(prev => new Set([...Array.from(prev), selectedUser.id]))
       showToast(`Plan "${plan.name}" asignado correctamente a ${selectedUser.name}`)
       setIsAssignPlanModalOpen(false)
       setSelectedUser(null)
       setSelectedPlanId('')
-    } else {
-      showToast('Error al asignar el plan', true)
+      
+      // Recargar planes disponibles para actualizar la lista
+      try {
+        const nutritionists = await api.getNutritionists()
+        const allPlans: any[] = []
+        for (const nutritionist of nutritionists) {
+          const plans = await api.getMealPlansByNutricionista(nutritionist.id)
+          if (plans && Array.isArray(plans)) {
+            const completePlans = plans.filter((p: any) => p.days && Array.isArray(p.days) && p.days.length > 0)
+            allPlans.push(...completePlans)
+          }
+        }
+        setAvailablePlans(allPlans)
+      } catch (reloadError) {
+        console.error('Error reloading plans:', reloadError)
+        // No es crítico, solo no actualizamos la lista
+      }
+    } catch (err: any) {
+      console.error('Error assigning plan:', err)
+      const errorMessage = err?.message || 'Error al asignar el plan. Verifica que el plan tenga días y comidas asignadas.'
+      setError(errorMessage)
+      showToast(errorMessage, true)
     }
   }
 
@@ -1038,9 +1079,13 @@ export default function AdminUsuariosPage() {
               Selecciona un plan nutricional
             </label>
             {availablePlans.length === 0 ? (
-              <p className="text-sm text-gray-500 py-4">
-                No hay planes disponibles. Los nutricionistas pueden crear planes desde su dashboard.
-              </p>
+              <div className="text-sm text-gray-500 py-4 space-y-2">
+                <p className="font-medium">No hay planes disponibles para asignar.</p>
+                <p className="text-xs">
+                  Los nutricionistas deben crear planes completos (con días y comidas) desde su dashboard.
+                  Solo se muestran planes que tienen días y comidas asignadas.
+                </p>
+              </div>
             ) : (
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {availablePlans.map((plan) => (
@@ -1067,9 +1112,15 @@ export default function AdminUsuariosPage() {
                           <p className="text-xs text-gray-600 mt-1">{plan.description}</p>
                         )}
                         <div className="flex gap-3 mt-2 text-xs text-gray-500">
+                          {plan.totalCalories && <span>• {plan.totalCalories} kcal/día</span>}
                           {plan.total_calories && <span>• {plan.total_calories} kcal/día</span>}
-                          {plan.days && <span>• {plan.days.length} días</span>}
+                          {plan.days && Array.isArray(plan.days) && (
+                            <span>• {plan.days.length} día{plan.days.length !== 1 ? 's' : ''}</span>
+                          )}
                         </div>
+                        {plan.days && Array.isArray(plan.days) && plan.days.length === 0 && (
+                          <p className="text-xs text-yellow-600 mt-1">⚠️ Este plan no tiene días asignados</p>
+                        )}
                       </div>
                       {selectedPlanId === plan.id && (
                         <svg className="w-5 h-5 text-primary ml-2" fill="currentColor" viewBox="0 0 20 20">

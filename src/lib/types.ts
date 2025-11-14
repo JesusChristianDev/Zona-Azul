@@ -154,6 +154,7 @@ export interface SubscriptionContract {
   signed_at?: string
   signed_by?: string
   signature_method?: 'electronic_signature' | 'checkbox_acceptance'
+  signature_image?: string // Base64 image data
   ip_address?: string
   user_agent?: string
   created_at: string

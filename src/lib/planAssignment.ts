@@ -131,8 +131,11 @@ export async function assignPlanToSubscriber(
     
     if (!subscriber) {
       console.error(`Subscriber ${subscriberId} not found`)
-      return false
+      throw new Error('El suscriptor no existe')
     }
+
+    // Nota: No verificamos el plan aquí porque getPlan() espera un userId, no un planId
+    // La verificación se hará en el backend al intentar copiar el plan
 
     // Calcular fechas (plan de 5 días: lunes a viernes únicamente)
     const startDate = new Date()
@@ -149,7 +152,7 @@ export async function assignPlanToSubscriber(
     
     if (!copiedPlan || !copiedPlan.id) {
       console.error('Error copying plan to subscriber')
-      return false
+      throw new Error('Error al copiar el plan. Verifica que el plan tenga días y comidas asignadas.')
     }
     
     // Mostrar notificación si está disponible
@@ -162,9 +165,10 @@ export async function assignPlanToSubscriber(
     }
     
     return true
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error assigning plan:', error)
-    return false
+    // Re-lanzar el error para que el componente pueda mostrar el mensaje
+    throw error
   }
 }
 

@@ -102,6 +102,41 @@ export default function DashboardAdmin() {
         u.role === 'admin' || u.role === 'nutricionista' || u.role === 'repartidor'
       )
 
+      // Fecha actual (necesaria para múltiples cálculos)
+      // Normalizar a medianoche para comparaciones consistentes
+      const currentDate = new Date()
+      currentDate.setHours(0, 0, 0, 0)
+
+      // Obtener suscripciones activas para cálculos correctos
+      let activeSubscriptions: any[] = []
+      let cancelledSubscriptions: any[] = []
+      let allSubscriptions: any[] = []
+      try {
+        const subscriptionsResponse = await fetch('/api/subscriptions')
+        if (subscriptionsResponse.ok) {
+          allSubscriptions = await subscriptionsResponse.json()
+          activeSubscriptions = allSubscriptions.filter((s: any) => s.status === 'active')
+          cancelledSubscriptions = allSubscriptions.filter((s: any) => s.status === 'cancelled')
+        }
+      } catch (error) {
+        console.error('Error loading subscriptions:', error)
+      }
+
+      // Contar suscriptores activos (con suscripción activa)
+      const activeSubscriberIds = new Set(activeSubscriptions.map((s: any) => s.user_id))
+      const activeSubscribersCount = activeSubscriberIds.size
+
+      // Nuevos suscriptores esta semana (usuarios creados en los últimos 7 días)
+      const sevenDaysAgo = new Date(currentDate)
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+      sevenDaysAgo.setHours(0, 0, 0, 0)
+      const newSubscribersThisWeek = subscribers.filter((u: any) => {
+        if (!u.created_at) return false
+        const createdDate = new Date(u.created_at)
+        createdDate.setHours(0, 0, 0, 0)
+        return createdDate >= sevenDaysAgo && createdDate <= currentDate
+      }).length
+
       // Obtener pedidos desde la API
       let orders: Order[] = []
       try {
@@ -122,11 +157,6 @@ export default function DashboardAdmin() {
 
       // Filtrar pedidos válidos (solo con suscriptores existentes)
       const validOrders = orders.filter((o) => validSubscriberIds.has(o.customerId))
-
-      // Fecha actual (necesaria para múltiples cálculos)
-      // Normalizar a medianoche para comparaciones consistentes
-      const currentDate = new Date()
-      currentDate.setHours(0, 0, 0, 0)
 
       // Calcular métricas financieras
       // Pedidos del mes (entregados) - incluir solo los de los últimos 30 días
@@ -171,8 +201,8 @@ export default function DashboardAdmin() {
       const dailyAverageRevenue = currentDay > 0 ? monthlyRevenue / currentDay : 0
       const projectedMonthlyRevenue = dailyAverageRevenue * daysInMonth
 
-      // Ingresos por suscriptor
-      const revenuePerSubscriber = subscribers.length > 0 ? monthlyRevenue / subscribers.length : 0
+      // Ingresos por suscriptor (solo con suscripción activa)
+      const revenuePerSubscriber = activeSubscribersCount > 0 ? monthlyRevenue / activeSubscribersCount : 0
 
       // Top cliente por valor
       const customerRevenue: Record<string, { total: number; name: string }> = {}
@@ -216,8 +246,12 @@ export default function DashboardAdmin() {
       const mostSoldItem = mostSoldItemEntry?.[0] || 'N/A'
       const mostSoldItemCount = mostSoldItemEntry?.[1] || 0
 
-      // Tasa de crecimiento (simulado: basado en comparación con proyección)
-      const revenueGrowthRate = projectedMonthlyRevenue > 0
+      // Tasa de crecimiento proyectada (basado en proyección vs actual)
+      // Nota: Para una tasa de crecimiento real, se necesitarían datos del mes anterior
+      // Por ahora, mostramos la diferencia entre proyección y actual como indicador de tendencia
+      const revenueGrowthRate = monthlyRevenue > 0 && projectedMonthlyRevenue > monthlyRevenue
+        ? Math.round(((projectedMonthlyRevenue - monthlyRevenue) / monthlyRevenue) * 100)
+        : monthlyRevenue > 0 && projectedMonthlyRevenue < monthlyRevenue
         ? Math.round(((projectedMonthlyRevenue - monthlyRevenue) / monthlyRevenue) * 100)
         : 0
 
@@ -239,26 +273,41 @@ export default function DashboardAdmin() {
       const netMarginPercent = monthlyRevenue > 0 ? (netMargin / monthlyRevenue) * 100 : 0
 
       // Customer Lifetime Value (LTV) - estimado basado en frecuencia y valor promedio
-      const averageOrdersPerMonth = subscribers.length > 0 ? monthlyOrders / subscribers.length : 0
-      const averageMonthsActive = 6 // Estimado
+      // Usar solo suscriptores activos para el cálculo
+      const averageOrdersPerMonth = activeSubscribersCount > 0 ? monthlyOrders / activeSubscribersCount : 0
+      // Calcular meses promedio activos basado en suscripciones activas
+      let averageMonthsActive = 6 // Valor por defecto
+      if (activeSubscriptions.length > 0) {
+        const totalMonths = activeSubscriptions.reduce((sum, sub: any) => {
+          const duration = sub.subscription_plans?.duration_months || 3
+          return sum + duration
+        }, 0)
+        averageMonthsActive = totalMonths / activeSubscriptions.length
+      }
       const customerLifetimeValue = averageOrderValue * averageOrdersPerMonth * averageMonthsActive
 
-      // Contar planes activos desde la API
+      // Contar planes activos desde la API (solo para suscriptores con suscripción activa)
       let activePlans = 0
       try {
         const { getPlan } = await import('../../lib/api')
+        // Solo contar planes de suscriptores con suscripción activa
         for (const subscriber of validSubscribers) {
-          const plan = await getPlan(subscriber.id)
-          if (plan && plan.id) {
-            activePlans++
+          if (activeSubscriberIds.has(subscriber.id)) {
+            const plan = await getPlan(subscriber.id)
+            if (plan && plan.id) {
+              activePlans++
+            }
           }
         }
       } catch (e) {
         // Error al obtener planes, continuar con 0
       }
 
-      // Suscriptores sin plan
-      const subscribersWithoutPlan = subscribers.length - activePlans
+      // Suscriptores sin plan (solo entre los que tienen suscripción activa)
+      const subscribersWithActiveSubscription = subscribers.filter((s: any) => 
+        activeSubscriberIds.has(s.id)
+      )
+      const subscribersWithoutPlan = subscribersWithActiveSubscription.length - activePlans
 
       // Pedidos por estado (necesario antes de otros cálculos)
       const ordersByStatus = {
@@ -269,8 +318,16 @@ export default function DashboardAdmin() {
       }
 
       // Customer Acquisition Cost (CAC) - estimado
+      // Basado en nuevos suscriptores del mes, no en suscriptores sin plan
       const marketingBudget = monthlyRevenue * 0.15 // 15% en marketing
-      const newCustomersThisMonth = subscribersWithoutPlan
+      // Calcular nuevos clientes del mes (suscriptores creados en los últimos 30 días)
+      // Usar la misma variable thirtyDaysAgo que se calculó arriba para pedidos del mes
+      const newCustomersThisMonth = subscribers.filter((u: any) => {
+        if (!u.created_at) return false
+        const createdDate = new Date(u.created_at)
+        createdDate.setHours(0, 0, 0, 0)
+        return createdDate >= thirtyDaysAgo && createdDate <= currentDate
+      }).length
       const customerAcquisitionCost = newCustomersThisMonth > 0 ? marketingBudget / newCustomersThisMonth : 0
 
       // ROI
@@ -287,14 +344,23 @@ export default function DashboardAdmin() {
       // Revenue per Employee
       const revenuePerEmployee = teamMembers.length > 0 ? monthlyRevenue / teamMembers.length : 0
 
-      // Order Frequency (pedidos por cliente por mes)
-      const orderFrequency = subscribers.length > 0 ? monthlyOrders / subscribers.length : 0
+      // Order Frequency (pedidos por cliente por mes) - solo suscriptores activos
+      const orderFrequency = activeSubscribersCount > 0 ? monthlyOrders / activeSubscribersCount : 0
 
-      // Churn Rate (tasa de abandono) - estimado basado en cancelaciones
-      const churnRate = subscribers.length > 0 ? (ordersByStatus.cancelado / subscribers.length) * 100 : 0
+      // Churn Rate (tasa de abandono) - basado en suscripciones canceladas, no pedidos
+      // Calcular churn rate mensual: suscripciones canceladas en el mes / suscripciones activas al inicio del mes
+      const cancelledThisMonth = cancelledSubscriptions.filter((s: any) => {
+        if (!s.updated_at) return false
+        const cancelledDate = new Date(s.updated_at)
+        cancelledDate.setHours(0, 0, 0, 0)
+        return cancelledDate >= thirtyDaysAgo && cancelledDate <= currentDate
+      }).length
+      // Usar suscripciones activas al inicio del mes (aproximado: todas las activas menos las canceladas este mes)
+      const activeAtStartOfMonth = activeSubscriptions.length + cancelledThisMonth
+      const churnRate = activeAtStartOfMonth > 0 ? (cancelledThisMonth / activeAtStartOfMonth) * 100 : 0
 
       // Retention Rate
-      const retentionRate = 100 - churnRate
+      const retentionRate = Math.max(0, 100 - churnRate)
 
       // Datos para gráficos de tendencias (últimos 7 días basados en pedidos reales)
       // Incluir desde hace 6 días hasta hoy (7 días total)
@@ -317,8 +383,10 @@ export default function DashboardAdmin() {
 
       // Filtrar solo pedidos entregados de los últimos 7 días (incluyendo hoy)
       // currentDate ya está normalizado a medianoche
-      const sevenDaysAgo = new Date(currentDate)
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6) // -6 para incluir hoy (7 días total: hoy + 6 anteriores)
+      // Usar variable diferente para evitar conflicto con sevenDaysAgo de arriba
+      const sevenDaysAgoForOrders = new Date(currentDate)
+      sevenDaysAgoForOrders.setDate(sevenDaysAgoForOrders.getDate() - 6) // -6 para incluir hoy (7 días total: hoy + 6 anteriores)
+      sevenDaysAgoForOrders.setHours(0, 0, 0, 0)
 
       const ordersLast7Days = validOrders.filter((order) => {
         // Solo pedidos entregados
@@ -338,7 +406,7 @@ export default function DashboardAdmin() {
         if (orderDate) {
           orderDate.setHours(0, 0, 0, 0)
           // Incluir pedidos desde hace 6 días hasta hoy (7 días total)
-          return orderDate >= sevenDaysAgo && orderDate <= currentDate
+          return orderDate >= sevenDaysAgoForOrders && orderDate <= currentDate
         }
         return false
       })
@@ -369,7 +437,7 @@ export default function DashboardAdmin() {
           const dateObj = new Date(dateKey)
           dateObj.setHours(0, 0, 0, 0)
           // Ambas fechas ya están normalizadas a medianoche
-          if (dateObj.getTime() >= sevenDaysAgo.getTime() && dateObj.getTime() <= currentDate.getTime()) {
+          if (dateObj.getTime() >= sevenDaysAgoForOrders.getTime() && dateObj.getTime() <= currentDate.getTime()) {
             ordersByDay.set(dateKey, { count: 1, revenue: order.total || 0 })
           }
         }
@@ -425,9 +493,10 @@ export default function DashboardAdmin() {
         },
       ].filter((item) => item.value > 0) // Solo mostrar estados con ingresos
 
-      // Tasa de conversión (suscriptores con plan / total suscriptores)
-      const conversionRate = subscribers.length > 0 
-        ? Math.round((activePlans / subscribers.length) * 100) 
+      // Tasa de conversión (suscriptores con plan / suscriptores con suscripción activa)
+      // subscribersWithActiveSubscription ya se calculó arriba
+      const conversionRate = subscribersWithActiveSubscription.length > 0 
+        ? Math.round((activePlans / subscribersWithActiveSubscription.length) * 100) 
         : 0
 
       // Tasa de cancelación
@@ -454,8 +523,7 @@ export default function DashboardAdmin() {
         // Error al obtener comidas
       }
 
-      // Nuevos suscriptores esta semana (simulado: suscriptores sin plan)
-      const newSubscribersThisWeek = subscribersWithoutPlan
+      // newSubscribersThisWeek ya se calculó arriba basado en fecha de creación
 
       setStats({
         monthlyRevenue,
@@ -488,7 +556,7 @@ export default function DashboardAdmin() {
         revenueTrend,
         dailyRevenue,
         revenueByStatus,
-        activeSubscribers: subscribers.length,
+        activeSubscribers: activeSubscribersCount, // Solo suscriptores con suscripción activa
         conversionRate,
         activePlans,
         subscribersWithoutPlan,
@@ -641,7 +709,10 @@ export default function DashboardAdmin() {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" tick={{ fontSize: 10 }} className="sm:text-xs" />
                 <YAxis tick={{ fontSize: 10 }} className="sm:text-xs" />
-                <Tooltip formatter={(value: number) => [`€${value.toFixed(2)}`, 'Ingresos']} contentStyle={{ fontSize: '12px' }} />
+                <Tooltip formatter={(value: number) => {
+                  const numValue = typeof value === 'number' && !isNaN(value) ? value : 0
+                  return [`€${numValue.toFixed(2)}`, 'Ingresos']
+                }} contentStyle={{ fontSize: '12px' }} />
                 <Area type="monotone" dataKey="revenue" stroke="#3b82f6" fillOpacity={1} fill="url(#colorRevenue)" />
               </AreaChart>
             </ResponsiveContainer>
@@ -658,15 +729,15 @@ export default function DashboardAdmin() {
             <ResponsiveContainer width="100%" height={250} className="sm:h-[300px]">
               <PieChart>
                 <Pie
-                  data={stats.revenueByStatus}
+                  data={stats.revenueByStatus || []}
                   cx="50%"
                   cy="50%"
                   labelLine={true}
                   label={(props: any) => {
                     const { label, percent, value } = props
                     if (typeof percent === 'number' && percent < 0.05) return '' // Ocultar etiquetas muy pequeñas
-                    if (typeof percent === 'number' && typeof value === 'number') {
-                      return `${label}\n${(percent * 100).toFixed(0)}%\n€${value.toFixed(2)}`
+                    if (typeof percent === 'number' && !isNaN(percent) && typeof value === 'number' && !isNaN(value)) {
+                      return `${label || ''}\n${(percent * 100).toFixed(0)}%\n€${value.toFixed(2)}`
                     }
                     return ''
                   }}
@@ -674,17 +745,20 @@ export default function DashboardAdmin() {
                   fill="#8884d8"
                   dataKey="value"
                 >
-                  {stats.revenueByStatus.map((entry, index) => {
+                  {(stats.revenueByStatus || []).map((entry, index) => {
                     const colors = ['#10b981', '#f59e0b', '#ef4444'] // Verde: Entregados, Amarillo: En Proceso, Rojo: Cancelados
                     return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
                   })}
                 </Pie>
                 <Tooltip 
                   formatter={(value: number, name: string, props: any) => {
-                    const entry = stats.revenueByStatus.find(e => e.value === value)
+                    if (typeof value !== 'number' || isNaN(value)) {
+                      return ['€0.00', name || '']
+                    }
+                    const entry = stats.revenueByStatus?.find(e => e?.value === value)
                     return [
                       `€${value.toFixed(2)}`,
-                      entry?.description || name
+                      entry?.description || name || ''
                     ]
                   }}
                   labelFormatter={(label, payload: any) => {
@@ -699,10 +773,12 @@ export default function DashboardAdmin() {
                   wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
                   formatter={(value, entry: any) => {
                     const data = entry?.payload
-                    if (data) {
-                      return `${data.label || data.status}: €${data.value.toFixed(2)} (${((data.value / stats.revenueByStatus.reduce((sum, e) => sum + e.value, 0)) * 100).toFixed(0)}%)`
+                    if (data && typeof data.value === 'number' && !isNaN(data.value)) {
+                      const totalRevenue = stats.revenueByStatus?.reduce((sum, e) => sum + (e?.value || 0), 0) || 0
+                      const percentage = totalRevenue > 0 ? ((data.value / totalRevenue) * 100) : 0
+                      return `${data.label || data.status || value}: €${data.value.toFixed(2)} (${percentage.toFixed(0)}%)`
                     }
-                    return value
+                    return value || ''
                   }}
                 />
               </PieChart>
