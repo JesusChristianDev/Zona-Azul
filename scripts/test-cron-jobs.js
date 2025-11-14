@@ -7,7 +7,56 @@
  * - renewal-reminder
  * - nutritionist-reports
  * - delivery-reports
+ * 
+ * Requiere: dotenv (npm install dotenv)
  */
+
+// Cargar variables de entorno desde .env.local
+const fs = require('fs')
+const path = require('path')
+
+// Intentar cargar con dotenv primero
+try {
+  require('dotenv').config({ path: '.env.local' })
+} catch (e) {
+  // Si dotenv no está disponible, cargar manualmente
+  const envPath = path.join(process.cwd(), '.env.local')
+  if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, 'utf8')
+    // Procesar línea por línea, manejando valores multilínea
+    let currentKey = null
+    let currentValue = []
+    
+    envContent.split(/\r?\n/).forEach(line => {
+      // Ignorar comentarios y líneas vacías
+      if (line.trim().startsWith('#') || !line.trim()) {
+        return
+      }
+      
+      // Si la línea contiene un =, es una nueva variable
+      if (line.includes('=')) {
+        // Guardar la variable anterior si existe
+        if (currentKey) {
+          process.env[currentKey] = currentValue.join('').trim()
+        }
+        
+        const match = line.match(/^([^=]+)=(.*)$/)
+        if (match) {
+          currentKey = match[1].trim()
+          currentValue = [match[2].trim()]
+        }
+      } else if (currentKey) {
+        // Continuación de la variable anterior (multilínea)
+        currentValue.push(line.trim())
+      }
+    })
+    
+    // Guardar la última variable
+    if (currentKey) {
+      process.env[currentKey] = currentValue.join('').trim().replace(/^["']|["']$/g, '')
+    }
+  }
+}
 
 const functions = {
   'weekly-menus': {
@@ -50,6 +99,13 @@ async function testCronJob(functionName) {
   console.log(`\n🧪 Probando función: ${functionName}`)
   console.log(`📍 Endpoint: ${baseUrl}${func.endpoint}`)
   console.log(`🔐 Token: ${cronToken.substring(0, 10)}...`)
+  
+  if (cronToken === 'default-secret-token') {
+    console.log('⚠️  ADVERTENCIA: Usando token por defecto. Crea un archivo .env.local con:')
+    console.log('   CRON_SECRET_TOKEN=tu-token-generado')
+    console.log('')
+  }
+  
   console.log('─'.repeat(50))
   
   try {
@@ -75,8 +131,12 @@ async function testCronJob(functionName) {
     console.error('❌ Error de conexión:', error.message)
     console.log('\n💡 Asegúrate de que:')
     console.log('   1. El servidor de desarrollo esté corriendo (npm run dev)')
-    console.log('   2. La variable CRON_SECRET_TOKEN esté configurada')
+    console.log('   2. La variable CRON_SECRET_TOKEN esté configurada en .env.local')
     console.log('   3. La URL NEXT_PUBLIC_APP_URL sea correcta')
+    console.log('\n🔧 Para configurar el token:')
+    console.log('   1. Genera un token: node -e "const crypto = require(\'crypto\'); console.log(crypto.randomBytes(32).toString(\'hex\'))"')
+    console.log('   2. Agrega en .env.local: CRON_SECRET_TOKEN=tu-token-generado')
+    console.log('   3. Asegúrate de que el mismo token esté en el servidor Next.js')
   }
 }
 
