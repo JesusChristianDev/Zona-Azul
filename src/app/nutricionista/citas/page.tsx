@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
@@ -267,6 +267,16 @@ export default function NutricionistaCitasPage() {
     }
   }
 
+  const showToast = useCallback((message: string, isError = false) => {
+    if (isError) {
+      setError(message)
+      setTimeout(() => setError(null), 5000)
+    } else {
+      setSuccess(message)
+      setTimeout(() => setSuccess(null), 3000)
+    }
+  }, [])
+
   useEffect(() => {
     loadAppointments()
     checkCalendarConnection()
@@ -302,7 +312,7 @@ export default function NutricionistaCitasPage() {
       window.removeEventListener('zona_azul_appointments_updated', handleAppointmentsUpdate)
       clearInterval(interval)
     }
-  }, [userId])
+  }, [userId, showToast])
 
   // Filtrar y buscar citas
   useEffect(() => {
@@ -332,16 +342,6 @@ export default function NutricionistaCitasPage() {
 
     setFilteredAppointments(filtered)
   }, [appointments, filter, searchTerm])
-
-  const showToast = (message: string, isError = false) => {
-    if (isError) {
-      setError(message)
-      setTimeout(() => setError(null), 5000)
-    } else {
-      setSuccess(message)
-      setTimeout(() => setSuccess(null), 3000)
-    }
-  }
 
   // Función helper para extraer datos del invitado de las notes
   const extractGuestDataFromNotes = (notes: string | null | undefined): { name: string; email: string; phone?: string } | null => {
@@ -690,44 +690,6 @@ export default function NutricionistaCitasPage() {
           </div>
         }
       />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center"
-              >
-                <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
-          </div>
-          
-          {/* Filtros por estado */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mr-2">Filtrar por:</span>
-            {(['todas', 'pendiente', 'confirmada', 'completada', 'cancelada'] as FilterStatus[]).map((status) => (
-              <button
-                key={status}
-                onClick={() => setFilter(status)}
-                className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-all ${
-                  filter === status
-                    ? 'bg-primary text-white shadow-md scale-105'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:scale-105'
-                }`}
-              >
-                {status === 'todas' ? 'Todas' : status.charAt(0).toUpperCase() + status.slice(1)}
-              </button>
-            ))}
-          </div>
-          
-          {/* Resultados */}
-          {searchTerm && (
-            <div className="text-xs text-gray-500">
-              Mostrando {filteredAppointments.length} de {appointments.length} citas
-            </div>
-          )}
-        </div>
-      </section>
 
       {/* Lista de citas */}
       <div className="bg-white rounded-lg shadow">
@@ -865,8 +827,7 @@ export default function NutricionistaCitasPage() {
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
 
       {/* Modal Detalle */}
       <Modal
