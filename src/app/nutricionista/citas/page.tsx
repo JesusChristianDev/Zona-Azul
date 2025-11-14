@@ -828,6 +828,7 @@ export default function NutricionistaCitasPage() {
             ))}
           </div>
         )}
+      </div>
 
       {/* Modal Detalle */}
       <Modal
