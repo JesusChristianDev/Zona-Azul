@@ -2,6 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import Modal from '@/components/ui/Modal'
+import PageHeader from '@/components/ui/PageHeader'
+import SearchFilters from '@/components/ui/SearchFilters'
+import ActionButton from '@/components/ui/ActionButton'
+import ToastMessage from '@/components/ui/ToastMessage'
+import LoadingState from '@/components/ui/LoadingState'
+import EmptyState from '@/components/ui/EmptyState'
+import ResponsiveGrid from '@/components/ui/ResponsiveGrid'
 import { useAuth } from '@/hooks/useAuth'
 import * as api from '@/lib/api'
 import { getMeals } from '@/lib/api'
@@ -204,6 +211,8 @@ export default function NutricionistaPlanesPage() {
   }
 
   // Función para cargar opciones sugeridas desde la API
+  // Nota: Se cargan solo comidas para PLANES NUTRICIONALES (is_menu_item=false)
+  // NO se incluyen comidas del menú del local (is_menu_item=true)
   const loadSuggestedMeals = async () => {
     if (!userId) return
 
@@ -211,8 +220,9 @@ export default function NutricionistaPlanesPage() {
       const meals = await getMeals()
       if (meals && meals.length > 0) {
         // Convertir meals de API a formato SuggestedMeal
+        // Filtrar solo comidas para planes nutricionales (NO del menú del local)
         const suggested: SuggestedMeal[] = meals
-          .filter((m: any) => m.available)
+          .filter((m: any) => m.available && m.is_menu_item === false)
           .map((m: any) => ({
             id: m.id,
             name: m.name,
@@ -584,27 +594,39 @@ export default function NutricionistaPlanesPage() {
     return labels[category]
   }
 
+  const plusIcon = (
+    <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+      <path
+        fillRule="evenodd"
+        d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"
+        clipRule="evenodd"
+      />
+    </svg>
+  )
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Mensajes */}
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm">{error}</div>
+        <ToastMessage
+          message={error}
+          type="error"
+          onClose={() => setError(null)}
+        />
       )}
       {success && (
-        <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-green-700 text-sm">
-          {success}
-        </div>
+        <ToastMessage
+          message={success}
+          type="success"
+          onClose={() => setSuccess(null)}
+        />
       )}
 
-      <header className="rounded-2xl border border-accent/30 bg-white p-6 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Biblioteca de planes y opciones</h2>
-            <p className="mt-2 text-sm text-gray-600">
-              Crea planes completos con comidas asignadas para cada día (Lunes a Viernes). Estos planes se pueden asignar a tus clientes desde la sección "Clientes".
-            </p>
-          </div>
-        </div>
-      </header>
+      {/* Header */}
+      <PageHeader
+        title="Biblioteca de planes y opciones"
+        description="Crea planes completos con comidas asignadas para cada día (Lunes a Viernes). Estos planes se pueden asignar a tus clientes desde la sección 'Clientes'."
+      />
 
       {/* Tabs */}
       <div className="border-b border-gray-200">
@@ -642,69 +664,46 @@ export default function NutricionistaPlanesPage() {
       {activeTab === 'plans' && (
         <>
           <div className="flex justify-end">
-            <button
-              onClick={handleCreate}
-              className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition"
-            >
+            <ActionButton onClick={handleCreate} icon={plusIcon}>
               Crear nuevo plan
-              <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-                <path
-                  fillRule="evenodd"
-                  d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </button>
+            </ActionButton>
           </div>
 
           {/* Búsqueda para planes */}
           {templates.length > 0 && (
-            <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
-              <div className="space-y-4">
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Buscar por nombre, descripción o características..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition placeholder-gray-400"
-                  />
-                  {searchTerm && (
-                    <button
-                      onClick={() => setSearchTerm('')}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                    >
-                      <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-                {searchTerm && (
-                  <div className="text-xs text-gray-500">
-                    Mostrando {filteredTemplates.length} de {templates.length} planes
-                  </div>
-                )}
-              </div>
-            </section>
+            <SearchFilters
+              searchTerm={searchTerm}
+              onSearchChange={setSearchTerm}
+              searchPlaceholder="Buscar por nombre, descripción o características..."
+              resultsCount={
+                searchTerm
+                  ? { showing: filteredTemplates.length, total: templates.length }
+                  : undefined
+              }
+            />
           )}
 
           {filteredTemplates.length === 0 && templates.length > 0 && (
-            <div className="text-center py-12 text-gray-500 bg-white rounded-2xl border border-gray-200 p-6">
-              <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <p className="text-sm font-medium text-gray-600 mb-1">No se encontraron planes</p>
-              <p className="text-xs text-gray-500">Intenta ajustar la búsqueda</p>
-            </div>
+            <EmptyState
+              title="No se encontraron planes"
+              message="Intenta ajustar la búsqueda."
+            />
           )}
 
-          <section className="grid gap-4 md:grid-cols-3">
+          {templates.length === 0 && (
+            <EmptyState
+              title="No hay planes creados"
+              message="Crea tu primer plan nutricional para comenzar."
+              action={
+                <ActionButton onClick={handleCreate} icon={plusIcon}>
+                  Crear Primer Plan
+                </ActionButton>
+              }
+            />
+          )}
+
+          {filteredTemplates.length > 0 && (
+            <ResponsiveGrid cols={{ mobile: 1, tablet: 2, desktop: 3 }} gap="md">
             {filteredTemplates.map((template) => (
               <article
                 key={template.id}
@@ -734,7 +733,8 @@ export default function NutricionistaPlanesPage() {
                 </div>
               </article>
             ))}
-          </section>
+            </ResponsiveGrid>
+          )}
         </>
       )}
 
@@ -742,55 +742,24 @@ export default function NutricionistaPlanesPage() {
       {activeTab === 'suggestions' && (
         <>
           <div className="flex justify-end">
-            <button
-              onClick={handleCreateMeal}
-              className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition"
-            >
+            <ActionButton onClick={handleCreateMeal} icon={plusIcon}>
               Agregar opción sugerida
-              <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-                <path
-                  fillRule="evenodd"
-                  d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </button>
+            </ActionButton>
           </div>
 
           {/* Búsqueda y filtros para comidas */}
           {suggestedMeals.length > 0 && (
-            <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
-              <div className="space-y-4">
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Buscar por nombre, descripción o calorías..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition placeholder-gray-400"
-                  />
-                  {searchTerm && (
-                    <button
-                      onClick={() => setSearchTerm('')}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                    >
-                      <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Categoría:</span>
+            <SearchFilters
+              searchTerm={searchTerm}
+              onSearchChange={setSearchTerm}
+              searchPlaceholder="Buscar por nombre, descripción o calorías..."
+              filters={
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Categoría</label>
                   <select
                     value={filterCategory}
                     onChange={(e) => setFilterCategory(e.target.value)}
-                    className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
                   >
                     <option value="todas">Todas</option>
                     <option value="breakfast">Desayuno</option>
@@ -799,26 +768,46 @@ export default function NutricionistaPlanesPage() {
                     <option value="snack">Snack</option>
                   </select>
                 </div>
-                {(searchTerm || filterCategory !== 'todas') && (
-                  <div className="text-xs text-gray-500">
-                    Mostrando {filteredMeals.length} de {suggestedMeals.length} opciones
-                  </div>
-                )}
-              </div>
-            </section>
+              }
+              resultsCount={
+                (searchTerm || filterCategory !== 'todas')
+                  ? { showing: filteredMeals.length, total: suggestedMeals.length }
+                  : undefined
+              }
+            />
           )}
 
-          <div className="space-y-6">
-            {['breakfast', 'lunch', 'dinner', 'snack'].map((category) => {
-              const categoryMeals = filteredMeals.filter((m) => m.category === category)
-              if (categoryMeals.length === 0) return null
+          {suggestedMeals.length === 0 && (
+            <EmptyState
+              title="No hay opciones sugeridas"
+              message="Agrega comidas sugeridas para usar en los planes nutricionales."
+              action={
+                <ActionButton onClick={handleCreateMeal} icon={plusIcon}>
+                  Agregar Primera Opción
+                </ActionButton>
+              }
+            />
+          )}
 
-              return (
-                <section key={category}>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 capitalize">
-                    {getCategoryLabel(category as SuggestedMeal['category'])}
-                  </h3>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {filteredMeals.length === 0 && suggestedMeals.length > 0 && (
+            <EmptyState
+              title="No se encontraron opciones"
+              message="Intenta ajustar los filtros o la búsqueda."
+            />
+          )}
+
+          {filteredMeals.length > 0 && (
+            <div className="space-y-6">
+              {['breakfast', 'lunch', 'dinner', 'snack'].map((category) => {
+                const categoryMeals = filteredMeals.filter((m) => m.category === category)
+                if (categoryMeals.length === 0) return null
+
+                return (
+                  <section key={category}>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 capitalize">
+                      {getCategoryLabel(category as SuggestedMeal['category'])}
+                    </h3>
+                    <ResponsiveGrid cols={{ mobile: 1, tablet: 2, desktop: 3 }} gap="md">
                     {categoryMeals.map((meal) => (
                       <article
                         key={meal.id}
@@ -847,11 +836,12 @@ export default function NutricionistaPlanesPage() {
                         </div>
                       </article>
                     ))}
-                  </div>
-                </section>
-              )
-            })}
-          </div>
+                    </ResponsiveGrid>
+                  </section>
+                )
+              })}
+            </div>
+          )}
         </>
       )}
 

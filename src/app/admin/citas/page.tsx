@@ -3,6 +3,10 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import Modal from '@/components/ui/Modal'
+import PageHeader from '@/components/ui/PageHeader'
+import SearchFilters from '@/components/ui/SearchFilters'
+import ToastMessage from '@/components/ui/ToastMessage'
+import EmptyState from '@/components/ui/EmptyState'
 import { getAppointments, updateAppointment, createUser, deleteAppointment } from '@/lib/api'
 import { formatAppointmentDateTime, formatCreatedDate } from '@/lib/dateFormatters'
 
@@ -414,90 +418,69 @@ export default function AdminCitasPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Gestión de Citas</h1>
-          <p className="text-sm text-gray-600 mt-1">Administra todas las citas del sistema</p>
-        </div>
-      </div>
+      <PageHeader
+        title="Gestión de Citas"
+        description="Administra todas las citas del sistema"
+      />
 
-      {/* Filtros y búsqueda mejorados */}
-      <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
-        <div className="space-y-4">
-          {/* Barra de búsqueda */}
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
+      {/* Filtros y búsqueda */}
+      <SearchFilters
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Buscar por nombre, email, teléfono o fecha..."
+        filters={
+          <div className="col-span-full">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Filtrar por estado:</label>
+            <div className="flex flex-wrap items-center gap-2">
+              {(['todas', 'pendiente', 'confirmada', 'cancelada', 'completada', 'sin_usuario'] as FilterStatus[]).map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setFilter(status)}
+                  className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-all ${
+                    filter === status
+                      ? 'bg-primary text-white shadow-md scale-105'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:scale-105'
+                  }`}
+                >
+                  {status === 'todas' ? 'Todas' : status === 'sin_usuario' ? 'Sin Usuario' : status.charAt(0).toUpperCase() + status.slice(1)}
+                </button>
+              ))}
             </div>
-            <input
-              type="text"
-              placeholder="Buscar por nombre, email, teléfono o fecha..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition placeholder-gray-400"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center"
-              >
-                <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
           </div>
-          
-          {/* Filtros por estado */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mr-2">Filtrar por:</span>
-            {(['todas', 'pendiente', 'confirmada', 'cancelada', 'completada', 'sin_usuario'] as FilterStatus[]).map((status) => (
-              <button
-                key={status}
-                onClick={() => setFilter(status)}
-                className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-all ${
-                  filter === status
-                    ? 'bg-primary text-white shadow-md scale-105'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:scale-105'
-                }`}
-              >
-                {status === 'todas' ? 'Todas' : status === 'sin_usuario' ? 'Sin Usuario' : status.charAt(0).toUpperCase() + status.slice(1)}
-              </button>
-            ))}
-          </div>
-          
-          {/* Resultados */}
-          {searchTerm && (
-            <div className="text-xs text-gray-500">
-              Mostrando {filteredAppointments.length} de {appointments.length} citas
-            </div>
-          )}
-        </div>
-      </section>
+        }
+        resultsCount={
+          searchTerm || filter !== 'todas'
+            ? { showing: filteredAppointments.length, total: appointments.length }
+            : undefined
+        }
+      />
 
-      {/* Mensajes de error/éxito */}
+      {/* Mensajes */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
-          {error}
-        </div>
+        <ToastMessage
+          message={error}
+          type="error"
+          onClose={() => setError(null)}
+        />
       )}
       {success && (
-        <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg">
-          {success}
-        </div>
+        <ToastMessage
+          message={success}
+          type="success"
+          onClose={() => setSuccess(null)}
+        />
       )}
 
       {/* Lista de citas */}
-      <div className="bg-white rounded-lg shadow">
-        {filteredAppointments.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
-            {isMounted ? 'No hay citas que coincidan con los filtros seleccionados' : 'Cargando citas...'}
-          </div>
-        ) : (
+      {filteredAppointments.length === 0 ? (
+        <EmptyState
+          title={isMounted ? 'No hay citas que coincidan con los filtros' : 'Cargando citas...'}
+          message={isMounted ? 'Intenta ajustar los filtros o la búsqueda.' : 'Por favor espera...'}
+        />
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="divide-y divide-gray-200">
             {filteredAppointments.map((appointment) => (
               <div
@@ -648,8 +631,8 @@ export default function AdminCitasPage() {
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Modal Unificado */}
       {isModalOpen && selectedAppointment && (
@@ -714,14 +697,66 @@ export default function AdminCitasPage() {
                     {formatAppointmentDateTime(selectedAppointment.slot, selectedAppointment.date_time)}
                   </p>
                 </div>
-                {selectedAppointment.notes && (
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Notas</label>
-                    <div className="text-sm text-gray-900 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg border border-gray-200">
-                      {selectedAppointment.notes.replace(/--- DATOS DEL INVITADO ---[\s\S]*/, '').trim() || 'Sin notas adicionales'}
+                {selectedAppointment.notes && (() => {
+                  const notes = selectedAppointment.notes
+                  const motivoMatch = notes.match(/--- MOTIVO DE LA CITA ---\s*([\s\S]*?)(?=\n\n--- DATOS DEL INVITADO ---|$)/)
+                  const guestDataMatch = notes.match(/--- DATOS DEL INVITADO ---\s*(\{[\s\S]*?\})/)
+                  
+                  let guestData = null
+                  if (guestDataMatch) {
+                    try {
+                      guestData = JSON.parse(guestDataMatch[1])
+                    } catch (e) {
+                      console.error('Error parsing guest data:', e)
+                    }
+                  }
+                  
+                  const motivo = motivoMatch ? motivoMatch[1].trim() : null
+                  
+                  return (
+                    <div className="space-y-3">
+                      {motivo && (
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Motivo de la Cita</label>
+                          <div className="text-sm text-gray-900 whitespace-pre-wrap bg-blue-50 p-3 rounded-lg border border-blue-200">
+                            {motivo}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {guestData && (
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Datos del Solicitante</label>
+                          <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 space-y-2">
+                            <div>
+                              <span className="text-xs font-medium text-gray-500">Nombre:</span>
+                              <p className="text-sm text-gray-900 font-medium">{guestData.name}</p>
+                            </div>
+                            <div>
+                              <span className="text-xs font-medium text-gray-500">Email:</span>
+                              <p className="text-sm text-gray-900">{guestData.email}</p>
+                            </div>
+                            {guestData.phone && (
+                              <div>
+                                <span className="text-xs font-medium text-gray-500">Teléfono:</span>
+                                <p className="text-sm text-gray-900">{guestData.phone}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {!motivo && !guestData && (
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Notas</label>
+                          <div className="text-sm text-gray-900 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg border border-gray-200">
+                            {notes}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
+                  )
+                })()}
                 {selectedAppointment.created_at && (
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Fecha de Creación</label>

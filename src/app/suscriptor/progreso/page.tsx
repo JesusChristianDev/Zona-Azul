@@ -2,6 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
+import PageHeader from '@/components/ui/PageHeader'
+import ActionButton from '@/components/ui/ActionButton'
+import ToastMessage from '@/components/ui/ToastMessage'
+import ResponsiveGrid from '@/components/ui/ResponsiveGrid'
 import { getProgress, saveProgress } from '@/lib/api'
 
 interface ProgressEntry {
@@ -126,43 +130,47 @@ export default function SuscriptorProgresoPage() {
           .reduce((sum, e) => sum + (e.energy || 0), 0) / entries.filter((e) => e.energy).length
       : 0
 
+  const plusIcon = (
+    <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+      <path
+        fillRule="evenodd"
+        d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"
+        clipRule="evenodd"
+      />
+    </svg>
+  )
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Mensajes */}
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm">{error}</div>
+        <ToastMessage
+          message={error}
+          type="error"
+          onClose={() => setError(null)}
+        />
       )}
       {success && (
-        <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-green-700 text-sm">
-          {success}
-        </div>
+        <ToastMessage
+          message={success}
+          type="success"
+          onClose={() => setSuccess(null)}
+        />
       )}
 
-      <header className="rounded-2xl border border-highlight/30 bg-white p-6 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Progreso integral</h2>
-            <p className="mt-2 text-sm text-gray-600">
-              Visualiza cómo evolucionan tus métricas principales. Recuerda registrar tu peso y nivel de energía
-              cada mañana para obtener recomendaciones personalizadas.
-            </p>
-          </div>
-          <button
-            onClick={() => setIsFormOpen(true)}
-            className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition"
-          >
+      {/* Header */}
+      <PageHeader
+        title="Progreso integral"
+        description="Visualiza cómo evolucionan tus métricas principales. Recuerda registrar tu peso y nivel de energía cada mañana para obtener recomendaciones personalizadas."
+        action={
+          <ActionButton onClick={() => setIsFormOpen(true)} icon={plusIcon}>
             Registrar progreso
-            <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-              <path
-                fillRule="evenodd"
-                d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"
-                clipRule="evenodd"
-              />
-            </svg>
-          </button>
-        </div>
-      </header>
+          </ActionButton>
+        }
+      />
 
-      <section className="grid gap-4 md:grid-cols-3">
+      {/* Métricas principales */}
+      <ResponsiveGrid cols={{ mobile: 1, tablet: 2, desktop: 3 }} gap="md">
         <article className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wider text-primary/70">Peso actual</p>
           <p className="mt-3 text-3xl font-bold text-gray-900">
@@ -189,7 +197,7 @@ export default function SuscriptorProgresoPage() {
           <p className="mt-2 text-xs text-gray-500">Promedio: {Math.round(avgEnergy)}/10</p>
           <p className="mt-2 text-sm font-medium text-gray-600">Evalúa tu nivel de energía diario</p>
         </article>
-      </section>
+      </ResponsiveGrid>
 
       {entries.length > 0 && (
         <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">

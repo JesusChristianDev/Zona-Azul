@@ -20,6 +20,11 @@ const DashboardHeader = nextDynamic(() => import('../components/ui/DashboardHead
   ),
 })
 
+// Contenedor de paneles renderizado fuera del header
+const PanelsContainer = nextDynamic(() => import('../components/ui/PanelsContainer'), {
+  ssr: false,
+})
+
 // Forzar renderizado dinámico para evitar errores de prerenderizado con componentes cliente
 export const dynamic = 'force-dynamic'
 
@@ -84,6 +89,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen bg-gray-50 text-gray-900 antialiased">
         <PanelProvider>
           <DashboardHeader />
+          
+          {/* Contenedor de paneles renderizado fuera del header para asegurar visibilidad */}
+          <PanelsContainer />
 
           <main className="w-full">{children}</main>
 

@@ -3,6 +3,11 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import Modal from '@/components/ui/Modal'
+import PageHeader from '@/components/ui/PageHeader'
+import SearchFilters from '@/components/ui/SearchFilters'
+import ToastMessage from '@/components/ui/ToastMessage'
+import LoadingState from '@/components/ui/LoadingState'
+import EmptyState from '@/components/ui/EmptyState'
 import type { MenuModification } from '@/lib/types'
 
 export default function NutricionistaModificacionesPage() {
@@ -142,63 +147,68 @@ export default function NutricionistaModificacionesPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-gray-600">Cargando modificaciones...</p>
-        </div>
-      </div>
-    )
+    return <LoadingState message="Cargando modificaciones..." />
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Mensajes */}
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm">
-          {error}
-        </div>
+        <ToastMessage
+          message={error}
+          type="error"
+          onClose={() => setError(null)}
+        />
       )}
-
       {success && (
-        <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-green-700 text-sm">
-          {success}
-        </div>
+        <ToastMessage
+          message={success}
+          type="success"
+          onClose={() => setSuccess(null)}
+        />
       )}
 
-      <header>
-        <h1 className="text-2xl font-bold text-gray-900">Aprobar Modificaciones de Menú</h1>
-        <p className="text-sm text-gray-600 mt-1">
-          Revisa y aprueba las solicitudes de modificación de menú de tus clientes
-        </p>
-      </header>
+      {/* Header */}
+      <PageHeader
+        title="Aprobar Modificaciones de Menú"
+        description="Revisa y aprueba las solicitudes de modificación de menú de tus clientes"
+      />
 
       {/* Filtros */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <div className="flex gap-2 flex-wrap">
-          {['pending', 'approved', 'rejected', 'all'].map((status) => (
-            <button
-              key={status}
-              onClick={() => setFilterStatus(status)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                filterStatus === status
-                  ? 'bg-primary text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              {status === 'all' ? 'Todas' : getStatusText(status)}
-            </button>
-          ))}
-        </div>
-      </div>
+      <SearchFilters
+        searchTerm=""
+        onSearchChange={() => {}}
+        searchPlaceholder=""
+        filters={
+          <div className="col-span-full">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Filtrar por estado:</label>
+            <div className="flex gap-2 flex-wrap">
+              {['pending', 'approved', 'rejected', 'all'].map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setFilterStatus(status)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    filterStatus === status
+                      ? 'bg-primary text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {status === 'all' ? 'Todas' : getStatusText(status)}
+                </button>
+              ))}
+            </div>
+          </div>
+        }
+      />
 
       {/* Lista de modificaciones */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        {modifications.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
-            No hay modificaciones {filterStatus !== 'all' ? `con estado "${getStatusText(filterStatus)}"` : ''}
-          </div>
-        ) : (
+      {modifications.length === 0 ? (
+        <EmptyState
+          title={`No hay modificaciones ${filterStatus !== 'all' ? `con estado "${getStatusText(filterStatus)}"` : ''}`}
+          message="No se encontraron modificaciones con los filtros seleccionados."
+        />
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="divide-y divide-gray-200">
             {modifications.map((mod) => (
               <div
@@ -257,8 +267,8 @@ export default function NutricionistaModificacionesPage() {
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Modal agregar recomendación */}
       <Modal

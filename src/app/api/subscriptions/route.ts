@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
           name,
           duration_months,
           base_price,
+          price_per_meal_per_month,
           discount_percentage
         ),
         subscription_groups:group_id (
@@ -30,6 +31,11 @@ export async function GET(request: NextRequest) {
           name,
           group_type,
           primary_user_id
+        ),
+        users:user_id (
+          id,
+          name,
+          email
         )
       `)
       .order('created_at', { ascending: false })
@@ -62,11 +68,23 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST: Crear una nueva suscripción
+// POST: Crear una nueva suscripción (solo admin puede activar)
 export async function POST(request: NextRequest) {
   try {
+    const { cookies } = await import('next/headers')
+    const cookieStore = await cookies()
+    const role = cookieStore.get('user_role')?.value
+
+    // Solo el admin puede crear/activar suscripciones
+    if (role !== 'admin') {
+      return NextResponse.json(
+        { error: 'Solo el administrador puede crear y activar suscripciones' },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
-    const { user_id, plan_id, group_id, group_type } = body
+    const { user_id, plan_id, group_id, group_type, meals_per_day } = body
 
     // Validar campos requeridos
     if (!user_id || !plan_id) {
@@ -75,6 +93,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    // Validar meals_per_day
+    const mealsPerDay = meals_per_day === 2 ? 2 : 1
 
     // Obtener el plan para calcular el precio
     const { data: plan, error: planError } = await supabase
@@ -90,9 +111,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Calcular precio base según comidas por día y duración
+    // Precio por comida por mes: 150€
+    // Precio especial para 2 comidas/día por mes: 275€ (no 300€)
+    const pricePerMealPerMonth = plan.price_per_meal_per_month || (plan.base_price / plan.duration_months)
+    
+    let basePrice: number
+    if (mealsPerDay === 2) {
+      // Precio especial: 275€ por mes para 2 comidas (en lugar de 300€)
+      basePrice = 275.00 * plan.duration_months
+    } else {
+      // Precio normal: 150€ por comida por mes
+      basePrice = pricePerMealPerMonth * mealsPerDay * plan.duration_months
+    }
+
     // Calcular precio con descuento
-    const discountAmount = (plan.base_price * plan.discount_percentage) / 100
-    const finalPrice = plan.base_price - discountAmount
+    const discountAmount = (basePrice * plan.discount_percentage) / 100
+    const finalPrice = basePrice - discountAmount
 
     // Si es un grupo, crear o obtener el grupo
     let groupId = group_id || null
@@ -146,6 +181,7 @@ export async function POST(request: NextRequest) {
         end_date: endDate.toISOString().split('T')[0],
         price: finalPrice,
         discount_applied: plan.discount_percentage,
+        meals_per_day: mealsPerDay,
         admin_approved: false,
         nutricionista_approved: false,
         requires_consultation: true,
@@ -158,6 +194,7 @@ export async function POST(request: NextRequest) {
           name,
           duration_months,
           base_price,
+          price_per_meal_per_month,
           discount_percentage
         )
       `)

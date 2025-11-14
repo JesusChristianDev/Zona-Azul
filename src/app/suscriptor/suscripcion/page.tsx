@@ -3,6 +3,9 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import Modal from '@/components/ui/Modal'
+import PageHeader from '@/components/ui/PageHeader'
+import LoadingState from '@/components/ui/LoadingState'
+import EmptyState from '@/components/ui/EmptyState'
 import type { Subscription, SubscriptionContract, SubscriptionPlan } from '@/lib/types'
 
 export default function SuscripcionPage() {
@@ -116,38 +119,27 @@ export default function SuscripcionPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando información de suscripción...</p>
-        </div>
-      </div>
-    )
+    return <LoadingState message="Cargando información de suscripción..." />
   }
 
   // Si no tiene suscripción
   if (!subscription) {
     return (
       <div className="max-w-4xl mx-auto p-4 sm:p-6">
-        <div className="bg-white rounded-xl shadow-md border border-gray-200 p-8 sm:p-12 text-center">
-          <div className="max-w-md mx-auto">
-            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-3">No tienes suscripción aún</h2>
-            <p className="text-gray-600 mb-6">
-              El administrador asignará tu suscripción. Una vez asignada, podrás ver todos los detalles aquí.
-            </p>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left">
-              <p className="text-sm text-blue-800">
-                <strong>ℹ️ Información:</strong> Las suscripciones son asignadas por el administrador después de una reunión presencial. 
-                Recibirás una notificación cuando tu suscripción sea activada.
-              </p>
-            </div>
-          </div>
+        <EmptyState
+          title="No tienes suscripción aún"
+          message="El administrador asignará tu suscripción. Una vez asignada, podrás ver todos los detalles aquí."
+          icon={
+            <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          }
+        />
+        <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <p className="text-sm text-blue-800">
+            <strong>ℹ️ Información:</strong> Las suscripciones son asignadas por el administrador después de una reunión presencial. 
+            Recibirás una notificación cuando tu suscripción sea activada.
+          </p>
         </div>
       </div>
     )
@@ -155,7 +147,7 @@ export default function SuscripcionPage() {
 
   // Si tiene suscripción, mostrar detalles
   return (
-    <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
+    <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
       {error && (
         <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm">
           {error}
@@ -163,17 +155,11 @@ export default function SuscripcionPage() {
       )}
 
       {/* Header con estado */}
-      <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Mi Suscripción</h1>
-            <p className="text-gray-600">
-              {plan?.name || 'Plan de Suscripción'}
-            </p>
-          </div>
-          {getStatusBadge(subscription.status)}
-        </div>
-      </div>
+      <PageHeader
+        title="Mi Suscripción"
+        description={plan?.name || 'Plan de Suscripción'}
+        badge={getStatusBadge(subscription.status)}
+      />
 
       {/* Información del plan */}
       {plan && (
@@ -190,6 +176,12 @@ export default function SuscripcionPage() {
               <p className="text-sm text-gray-500 mb-1">Precio Total</p>
               <p className="font-semibold text-gray-900">
                 €{subscription.price.toFixed(2)}
+              </p>
+            </div>
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <p className="text-sm text-gray-500 mb-1">Comidas por Día</p>
+              <p className="font-semibold text-gray-900">
+                {subscription.meals_per_day === 2 ? 'Comida y Cena' : 'Comida o Cena'}
               </p>
             </div>
             {subscription.discount_applied > 0 && (

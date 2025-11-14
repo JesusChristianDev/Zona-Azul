@@ -69,7 +69,8 @@ export interface SubscriptionPlan {
   id: string
   name: 'Mensual' | 'Trimestral' | 'Anual'
   duration_months: number
-  base_price: number
+  base_price: number // Precio base para 1 comida por día
+  price_per_meal_per_month: number // Precio por comida por mes
   discount_percentage: number
   description?: string
   is_active: boolean
@@ -110,6 +111,7 @@ export interface Subscription {
   end_date?: string
   price: number
   discount_applied: number
+  meals_per_day: 1 | 2 // 1 = comida o cena, 2 = comida y cena
   admin_approved: boolean
   admin_approved_by?: string
   admin_approved_at?: string
@@ -120,6 +122,14 @@ export interface Subscription {
   consultation_completed: boolean
   created_at: string
   updated_at: string
+  // Relaciones expandidas (opcionales, vienen del API)
+  subscription_plans?: SubscriptionPlan
+  subscription_groups?: SubscriptionGroup
+  users?: {
+    id: string
+    name: string
+    email: string
+  }
 }
 
 export interface SubscriptionContract {

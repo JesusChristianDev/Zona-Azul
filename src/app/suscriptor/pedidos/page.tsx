@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { getOrders } from '@/lib/api'
 import { NotificationHelpers } from '@/lib/notifications'
+import PageHeader from '@/components/ui/PageHeader'
+import EmptyState from '@/components/ui/EmptyState'
 
 interface AdminOrder {
   id: string
@@ -122,27 +124,24 @@ export default function SuscriptorPedidosPage() {
   }, [userId])
 
   return (
-    <div className="space-y-6">
-      <header className="rounded-2xl border border-accent/30 bg-white p-6 shadow-sm">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Pedidos programados</h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Tus pedidos se generan automáticamente según tu plan semanal personalizado. Puedes modificar tu plan
-            de Viernes a Domingo para ajustar la semana siguiente.
-          </p>
-          <p className="mt-2 text-xs text-gray-500 italic">
-            Los pedidos se preparan según las comidas de tu plan asignado por el nutricionista.
-          </p>
-        </div>
-      </header>
+    <div className="space-y-4 sm:space-y-6">
+      {/* Header */}
+      <div className="space-y-2">
+        <PageHeader
+          title="Pedidos programados"
+          description="Tus pedidos se generan automáticamente según tu plan semanal personalizado. Puedes modificar tu plan de Viernes a Domingo para ajustar la semana siguiente."
+        />
+        <p className="text-xs sm:text-sm text-gray-500 italic px-4 sm:px-0">
+          Los pedidos se preparan según las comidas de tu plan asignado por el nutricionista.
+        </p>
+      </div>
 
+      {/* Lista de pedidos */}
       {orders.length === 0 ? (
-        <div className="rounded-lg bg-gray-50 border border-gray-200 p-8 text-center">
-          <p className="text-gray-600">No hay pedidos programados aún.</p>
-          <p className="text-sm text-gray-500 mt-2">
-            Los pedidos se generarán automáticamente según tu plan semanal.
-          </p>
-        </div>
+        <EmptyState
+          title="No hay pedidos programados aún"
+          message="Los pedidos se generarán automáticamente según tu plan semanal."
+        />
       ) : (
         <div className="space-y-4">
           {orders.map((order) => (

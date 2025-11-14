@@ -60,11 +60,13 @@ export default function RestaurantMenuGrid() {
 
   const loadMenuItems = async () => {
     try {
+      // Cargar comidas del catálogo y filtrar solo las del MENÚ DEL LOCAL
+      // Nota: Solo las comidas con is_menu_item=true Y available=true aparecen en /menu
       const meals = await getMeals()
       if (meals && meals.length > 0) {
-        // Filtrar solo los disponibles y convertir a Recipe
+        // Filtrar solo las comidas del menú del local (NO las de planes nutricionales)
         const availableItems = meals
-          .filter((meal: any) => meal.available)
+          .filter((meal: any) => meal.available && meal.is_menu_item === true)
           .map((meal: any) => {
             // Convertir meal de API a MenuItem y luego a Recipe
             const menuItem: MenuItem = {

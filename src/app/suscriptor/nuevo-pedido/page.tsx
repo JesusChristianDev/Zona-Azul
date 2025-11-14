@@ -3,6 +3,10 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { useRouter } from 'next/navigation'
+import PageHeader from '@/components/ui/PageHeader'
+import ToastMessage from '@/components/ui/ToastMessage'
+import LoadingState from '@/components/ui/LoadingState'
+import EmptyState from '@/components/ui/EmptyState'
 import type { DeliveryAddress, WeeklyMenu, WeeklyMenuDay } from '@/lib/types'
 
 interface ScheduledOrder {
@@ -314,25 +318,28 @@ export default function ConfigurarEntregaPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
+    <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
+      {/* Mensajes */}
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm">
-          {error}
-        </div>
+        <ToastMessage
+          message={error}
+          type="error"
+          onClose={() => setError(null)}
+        />
       )}
-
       {success && (
-        <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-green-700 text-sm">
-          {success}
-        </div>
+        <ToastMessage
+          message={success}
+          type="success"
+          onClose={() => setSuccess(null)}
+        />
       )}
 
-      <header>
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Configurar Método de Entrega</h1>
-        <p className="text-sm sm:text-base text-gray-600 mt-2">
-          Los pedidos se generan automáticamente según tu plan. Puedes cambiar el método de entrega hasta 1 hora antes.
-        </p>
-      </header>
+      {/* Header */}
+      <PageHeader
+        title="Configurar Método de Entrega"
+        description="Los pedidos se generan automáticamente según tu plan. Puedes cambiar el método de entrega hasta 1 hora antes."
+      />
 
       {/* Información importante */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">

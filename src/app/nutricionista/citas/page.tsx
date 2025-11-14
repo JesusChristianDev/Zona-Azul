@@ -3,6 +3,11 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import Modal from '@/components/ui/Modal'
+import PageHeader from '@/components/ui/PageHeader'
+import SearchFilters from '@/components/ui/SearchFilters'
+import ActionButton from '@/components/ui/ActionButton'
+import ToastMessage from '@/components/ui/ToastMessage'
+import EmptyState from '@/components/ui/EmptyState'
 import { NotificationHelpers } from '@/lib/notifications'
 import { getAppointments, updateAppointment, createUser, getCalendarAuthUrl, getNutritionistSchedule, updateNutritionistSchedule } from '@/lib/api'
 import { formatAppointmentDateTime, formatCreatedDate } from '@/lib/dateFormatters'
@@ -571,38 +576,50 @@ export default function NutricionistaCitasPage() {
     return apt.slot.includes(today) || apt.slot.toLowerCase().includes('hoy')
   })
 
+  const scheduleIcon = (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  )
+
+  const calendarIcon = (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  )
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Mensajes */}
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm animate-in fade-in slide-in-from-top-2">
-          {error}
-        </div>
+        <ToastMessage
+          message={error}
+          type="error"
+          onClose={() => setError(null)}
+        />
       )}
       {success && (
-        <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-green-700 text-sm animate-in fade-in slide-in-from-top-2">
-          {success}
-        </div>
+        <ToastMessage
+          message={success}
+          type="success"
+          onClose={() => setSuccess(null)}
+        />
       )}
 
-      <header className="rounded-2xl border border-accent/30 bg-white p-6 shadow-sm">
-        <div className="flex items-start justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Gestión de citas</h2>
-            <p className="mt-2 text-sm text-gray-600">
-              Administra tus citas nutricionales. Confirma, programa y realiza seguimiento de tus consultas.
-            </p>
-          </div>
-          {!checkingCalendar && (
-            <div className="flex items-center gap-3">
-              <button
+      {/* Header */}
+      <PageHeader
+        title="Gestión de citas"
+        description="Administra tus citas nutricionales. Confirma, programa y realiza seguimiento de tus consultas."
+        action={
+          !checkingCalendar && (
+            <div className="flex items-center gap-3 flex-wrap">
+              <ActionButton
                 onClick={() => setIsScheduleModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent/90 transition text-sm font-medium"
+                icon={scheduleIcon}
+                variant="secondary"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
                 Configurar Horarios
-              </button>
+              </ActionButton>
               {calendarConnected ? (
                 <div className="flex items-center gap-2 text-sm text-green-600">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -611,20 +628,17 @@ export default function NutricionistaCitasPage() {
                   <span>Calendario conectado</span>
                 </div>
               ) : (
-                <button
+                <ActionButton
                   onClick={handleConnectCalendar}
-                  className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition text-sm font-medium"
+                  icon={calendarIcon}
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
                   Conectar Google Calendar
-                </button>
+                </ActionButton>
               )}
             </div>
-          )}
-        </div>
-      </header>
+          )
+        }
+      />
 
       {/* Resumen */}
       <section className="grid gap-4 md:grid-cols-4">
@@ -650,23 +664,32 @@ export default function NutricionistaCitasPage() {
         </article>
       </section>
 
-      {/* Filtros y búsqueda mejorados */}
-      <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
-        <div className="space-y-4">
-          {/* Barra de búsqueda */}
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
+      {/* Filtros y búsqueda */}
+      <SearchFilters
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Buscar por nombre, email, teléfono o fecha..."
+        filters={
+          <div className="col-span-full">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Filtrar por estado:</label>
+            <div className="flex gap-2 flex-wrap">
+              {(['todas', 'pendiente', 'confirmada', 'cancelada', 'completada'] as FilterStatus[]).map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setFilter(status)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    filter === status
+                      ? 'bg-primary text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {status === 'todas' ? 'Todas' : status.charAt(0).toUpperCase() + status.slice(1)}
+                </button>
+              ))}
             </div>
-            <input
-              type="text"
-              placeholder="Buscar por nombre, email, teléfono o fecha..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition placeholder-gray-400"
-            />
+          </div>
+        }
+      />
             {searchTerm && (
               <button
                 onClick={() => setSearchTerm('')}
@@ -842,8 +865,8 @@ export default function NutricionistaCitasPage() {
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Modal Detalle */}
       <Modal
@@ -922,17 +945,67 @@ export default function NutricionistaCitasPage() {
               )}
             </div>
 
-            {/* Notas */}
-            {selectedAppointment.notes && (
-              <div className="space-y-3">
-                <h3 className="font-semibold text-gray-900 text-sm uppercase tracking-wide">Notas</h3>
-                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                  <p className="text-sm text-gray-900 whitespace-pre-wrap">
-                    {selectedAppointment.notes.replace(/--- DATOS DEL INVITADO ---[\s\S]*/, '').trim() || 'Sin notas adicionales'}
-                  </p>
+            {/* Notas y Motivo de la Cita */}
+            {selectedAppointment.notes && (() => {
+              const notes = selectedAppointment.notes
+              const motivoMatch = notes.match(/--- MOTIVO DE LA CITA ---\s*([\s\S]*?)(?=\n\n--- DATOS DEL INVITADO ---|$)/)
+              const guestDataMatch = notes.match(/--- DATOS DEL INVITADO ---\s*(\{[\s\S]*?\})/)
+              
+              let guestData = null
+              if (guestDataMatch) {
+                try {
+                  guestData = JSON.parse(guestDataMatch[1])
+                } catch (e) {
+                  console.error('Error parsing guest data:', e)
+                }
+              }
+              
+              const motivo = motivoMatch ? motivoMatch[1].trim() : null
+              
+              return (
+                <div className="space-y-4">
+                  {motivo && (
+                    <div className="space-y-2">
+                      <h3 className="font-semibold text-gray-900 text-sm uppercase tracking-wide">Motivo de la Cita</h3>
+                      <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                        <p className="text-sm text-gray-900 whitespace-pre-wrap">{motivo}</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {guestData && (
+                    <div className="space-y-2">
+                      <h3 className="font-semibold text-gray-900 text-sm uppercase tracking-wide">Datos del Solicitante</h3>
+                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200 space-y-2">
+                        <div>
+                          <span className="text-xs font-medium text-gray-500">Nombre:</span>
+                          <p className="text-sm text-gray-900 font-medium">{guestData.name}</p>
+                        </div>
+                        <div>
+                          <span className="text-xs font-medium text-gray-500">Email:</span>
+                          <p className="text-sm text-gray-900">{guestData.email}</p>
+                        </div>
+                        {guestData.phone && (
+                          <div>
+                            <span className="text-xs font-medium text-gray-500">Teléfono:</span>
+                            <p className="text-sm text-gray-900">{guestData.phone}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {!motivo && !guestData && (
+                    <div className="space-y-2">
+                      <h3 className="font-semibold text-gray-900 text-sm uppercase tracking-wide">Notas</h3>
+                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                        <p className="text-sm text-gray-900 whitespace-pre-wrap">{notes}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              )
+            })()}
 
             {/* Botón cerrar */}
             <div className="pt-4 border-t">

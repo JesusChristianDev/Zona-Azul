@@ -15,6 +15,7 @@ export interface DatabaseUser {
   name: string
   phone?: string
   avatar_url?: string
+  must_change_password?: boolean
   created_at: string
   updated_at: string
 }
@@ -118,6 +119,8 @@ export async function createUser(userData: {
       role: userData.role,
       name: userData.name,
       phone: userData.phone,
+      // Solo obligar cambio de contraseña para suscriptores (clientes) por seguridad
+      must_change_password: userData.role === 'suscriptor' ? true : false,
     })
     .select()
     .single()
@@ -353,7 +356,10 @@ export async function deleteUser(userId: string): Promise<boolean> {
   return true
 }
 
-// Funciones para meals (menú)
+// Funciones para meals (catálogo general)
+// Nota: Las comidas se separan en:
+// - Menú del local: is_menu_item = true (aparecen en /menu)
+// - Planes nutricionales: is_menu_item = false (solo para planes)
 export interface DatabaseMeal {
   id: string
   name: string
@@ -368,6 +374,7 @@ export interface DatabaseMeal {
   image_url?: string
   price?: number
   available: boolean
+  is_menu_item: boolean // true = menú del local, false = planes nutricionales
   created_at: string
   updated_at: string
 }
@@ -1217,6 +1224,19 @@ export async function copyMealPlanToUser(
   endDate: string
 ): Promise<DatabaseMealPlan | null> {
   try {
+    // Verificar que el usuario tenga suscripción activa
+    const { data: subscriptions, error: subError } = await supabase
+      .from('subscriptions')
+      .select('id, status')
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .limit(1)
+
+    if (subError || !subscriptions || subscriptions.length === 0) {
+      console.error('User does not have an active subscription:', userId)
+      throw new Error('El usuario no tiene una suscripción activa. No se pueden asignar planes nutricionales sin suscripción.')
+    }
+
     // Obtener el plan fuente con días y comidas
     const sourcePlanData = await getMealPlanWithDays(sourcePlanId)
     if (!sourcePlanData || !sourcePlanData.plan) {

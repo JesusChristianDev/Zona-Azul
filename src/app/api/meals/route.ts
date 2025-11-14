@@ -4,7 +4,13 @@ import { cookies } from 'next/headers'
 
 export const dynamic = 'force-dynamic'
 
-// GET - Obtener todos los meals (público, pero solo disponibles si no es admin)
+// GET - Obtener todas las comidas del catálogo general
+// Nota: 
+// - is_menu_item=true: Comidas del menú del local (/menu) - compra individual
+// - is_menu_item=false: Comidas para planes nutricionales - solo para suscriptores
+// - available: Controla disponibilidad general
+// - Para /menu: Se filtran por is_menu_item=true AND available=true
+// - Para planes: Se filtran por is_menu_item=false AND available=true
 export async function GET(request: NextRequest) {
   try {
     const meals = await getAllMeals()
@@ -32,7 +38,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, description, type, calories, protein, carbs, fats, ingredients, instructions, image_url, price, available } = body
+    const { name, description, type, calories, protein, carbs, fats, ingredients, instructions, image_url, price, available, is_menu_item } = body
 
     if (!name || !type || !calories) {
       return NextResponse.json(
@@ -54,6 +60,7 @@ export async function POST(request: NextRequest) {
       image_url: image_url || null,
       price: price ? parseFloat(price) : null,
       available: available !== undefined ? available : true,
+      is_menu_item: is_menu_item !== undefined ? is_menu_item : false, // Por defecto, no es del menú del local
     })
 
     if (!meal) {

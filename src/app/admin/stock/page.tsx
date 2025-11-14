@@ -3,6 +3,11 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import Modal from '@/components/ui/Modal'
+import PageHeader from '@/components/ui/PageHeader'
+import ActionButton from '@/components/ui/ActionButton'
+import ToastMessage from '@/components/ui/ToastMessage'
+import LoadingState from '@/components/ui/LoadingState'
+import EmptyState from '@/components/ui/EmptyState'
 
 interface MealStock {
   id: string
@@ -152,49 +157,48 @@ export default function AdminStockPage() {
     }
   }
 
+  const plusIcon = (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+    </svg>
+  )
+
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-gray-600">Cargando stock...</p>
-        </div>
-      </div>
-    )
+    return <LoadingState message="Cargando stock..." />
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Mensajes */}
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm">
-          {error}
-        </div>
+        <ToastMessage
+          message={error}
+          type="error"
+          onClose={() => setError(null)}
+        />
       )}
-
       {success && (
-        <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-green-700 text-sm">
-          {success}
-        </div>
+        <ToastMessage
+          message={success}
+          type="success"
+          onClose={() => setSuccess(null)}
+        />
       )}
 
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Gestión de Stock</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            Controla el stock de platos. Los platos sin stock se bloquean automáticamente.
-          </p>
-        </div>
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition font-medium"
-        >
-          + Gestionar Stock
-        </button>
-      </header>
+      {/* Header */}
+      <PageHeader
+        title="Gestión de Stock"
+        description="Controla el stock de platos. Los platos sin stock se bloquean automáticamente."
+        action={
+          <ActionButton onClick={() => setIsCreateModalOpen(true)} icon={plusIcon}>
+            Gestionar Stock
+          </ActionButton>
+        }
+      />
 
       {/* Filtros */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <div className="flex gap-2">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setFilterOutOfStock(false)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -219,12 +223,20 @@ export default function AdminStockPage() {
       </div>
 
       {/* Lista de stock */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        {stock.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
-            No hay registros de stock {filterOutOfStock ? 'sin stock' : ''}
-          </div>
-        ) : (
+      {stock.length === 0 ? (
+        <EmptyState
+          title="No hay registros de stock"
+          message={filterOutOfStock ? 'No hay platos sin stock.' : 'Crea el primer registro de stock.'}
+          action={
+            !filterOutOfStock ? (
+              <ActionButton onClick={() => setIsCreateModalOpen(true)} icon={plusIcon}>
+                Crear Registro de Stock
+              </ActionButton>
+            ) : undefined
+          }
+        />
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="divide-y divide-gray-200">
             {stock.map((item) => (
               <div
@@ -299,8 +311,8 @@ export default function AdminStockPage() {
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Modal gestionar stock */}
       <Modal

@@ -36,14 +36,28 @@ Este directorio contiene el esquema de base de datos y documentación para Supab
 ### 4. Ejecutar el esquema SQL
 
 1. En tu proyecto de Supabase, ve a **SQL Editor**
-2. Abre el archivo `supabase/schema.sql`
-3. Copia todo el contenido
+2. Abre el archivo `supabase/schema_completo.sql`
+3. **IMPORTANTE**: Copia SOLO el contenido del archivo SQL (no copies el README.md)
 4. Pégalo en el SQL Editor de Supabase
 5. Ejecuta el script (botón "Run" o Ctrl+Enter)
 
+**⚠️ Nota**: Asegúrate de copiar solo el contenido del archivo `.sql`, no el README.md. El README usa `#` para títulos (Markdown), que no es válido en SQL.
+
 Esto creará todas las tablas, índices, triggers y políticas de seguridad necesarias.
 
-### 5. Verificar la conexión
+### 5. (Opcional) Rellenar con datos de ejemplo
+
+Si quieres rellenar la base de datos con datos de ejemplo para desarrollo:
+
+1. En el **SQL Editor** de Supabase
+2. Abre el archivo `supabase/seed_data.sql`
+3. Copia SOLO el contenido del archivo SQL
+4. Pégalo en el SQL Editor
+5. Ejecuta el script
+
+**⚠️ Advertencia**: Este script inserta datos de ejemplo (usuarios, comidas, pedidos, etc.). Si ya tienes datos en tu base de datos, revisa el script antes de ejecutarlo, ya que puede haber conflictos con IDs existentes.
+
+### 6. Verificar la conexión
 
 Una vez configurado, puedes verificar que la conexión funciona ejecutando:
 

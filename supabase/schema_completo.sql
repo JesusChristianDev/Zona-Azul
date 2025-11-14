@@ -1,4 +1,5 @@
--- Esquema de base de datos para Zona Azul
+-- Esquema de base de datos para Zona Azul (COMPLETO)
+-- Incluye: Schema base + Migración de separación menú/planes
 -- Ejecutar este script en el SQL Editor de Supabase
 
 -- Habilitar extensiones útiles
@@ -13,9 +14,13 @@ CREATE TABLE IF NOT EXISTS users (
   name TEXT NOT NULL,
   phone TEXT,
   avatar_url TEXT,
+  must_change_password BOOLEAN DEFAULT true, -- Obligar cambio de contraseña en primer login
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Agregar columna must_change_password si no existe (para bases de datos existentes)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT true;
 
 -- Tabla de perfiles de usuario (información adicional)
 CREATE TABLE IF NOT EXISTS profiles (
@@ -45,6 +50,8 @@ CREATE TABLE IF NOT EXISTS appointments (
 );
 
 -- Tabla de comidas/meals (debe crearse antes que order_items)
+-- Nota: is_menu_item separa comidas del menú del local de comidas para planes nutricionales
+-- true = menú del local (/menu), false = planes nutricionales
 CREATE TABLE IF NOT EXISTS meals (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT NOT NULL,
@@ -59,9 +66,34 @@ CREATE TABLE IF NOT EXISTS meals (
   image_url TEXT,
   price DECIMAL(10,2),
   available BOOLEAN DEFAULT true,
+  is_menu_item BOOLEAN DEFAULT false, -- true = menú del local (/menu), false = planes nutricionales
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- ============================================
+-- MIGRACIÓN: Separar comidas del menú del local de comidas para planes nutricionales
+-- Esta sección es compatible con bases de datos existentes
+-- ============================================
+
+-- Agregar campo is_menu_item si no existe (para bases de datos existentes)
+ALTER TABLE meals 
+ADD COLUMN IF NOT EXISTS is_menu_item BOOLEAN DEFAULT false;
+
+-- Comentario explicativo
+COMMENT ON COLUMN meals.is_menu_item IS 'Si es true, la comida aparece en el menú del local (/menu). Si es false, es solo para planes nutricionales.';
+
+-- Actualizar comidas existentes: si tienen precio, probablemente son del menú del local
+-- Solo actualiza las que aún no tienen el campo definido (is_menu_item IS NULL o false con precio)
+UPDATE meals 
+SET is_menu_item = true 
+WHERE (is_menu_item IS NULL OR is_menu_item = false)
+  AND price IS NOT NULL 
+  AND price > 0;
+
+-- ============================================
+-- FIN DE MIGRACIÓN
+-- ============================================
 
 -- Tabla de pedidos
 CREATE TABLE IF NOT EXISTS orders (
@@ -220,6 +252,9 @@ CREATE INDEX IF NOT EXISTS idx_orders_repartidor_id ON orders(repartidor_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_meals_type ON meals(type);
 CREATE INDEX IF NOT EXISTS idx_meals_available ON meals(available);
+-- Índices para separación menú/planes (incluidos en migración)
+CREATE INDEX IF NOT EXISTS idx_meals_is_menu_item ON meals(is_menu_item);
+CREATE INDEX IF NOT EXISTS idx_meals_available_menu ON meals(available, is_menu_item);
 CREATE INDEX IF NOT EXISTS idx_meal_plans_user_id ON meal_plans(user_id);
 CREATE INDEX IF NOT EXISTS idx_meal_plans_nutricionista_id ON meal_plans(nutricionista_id);
 CREATE INDEX IF NOT EXISTS idx_progress_user_id ON progress(user_id);
@@ -429,13 +464,21 @@ CREATE TABLE IF NOT EXISTS subscription_plans (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT NOT NULL UNIQUE, -- 'Mensual', 'Trimestral', 'Anual'
   duration_months INTEGER NOT NULL, -- 1, 3, 12
-  base_price DECIMAL(10,2) NOT NULL,
+  base_price DECIMAL(10,2) NOT NULL, -- Precio base para 1 comida por día
+  price_per_meal_per_month DECIMAL(10,2), -- Precio por comida por mes (para cálculo dinámico)
   discount_percentage DECIMAL(5,2) DEFAULT 0, -- Descuento aplicable
   description TEXT,
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Agregar campo price_per_meal_per_month si no existe (para bases de datos existentes)
+ALTER TABLE subscription_plans 
+ADD COLUMN IF NOT EXISTS price_per_meal_per_month DECIMAL(10,2);
+
+-- Comentario explicativo
+COMMENT ON COLUMN subscription_plans.price_per_meal_per_month IS 'Precio base por comida por mes. El precio total se calcula como: price_per_meal_per_month * meals_per_day * duration_months';
 
 -- Tabla de grupos de suscripción (debe crearse antes que subscriptions)
 CREATE TABLE IF NOT EXISTS subscription_groups (
@@ -460,6 +503,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   end_date DATE,
   price DECIMAL(10,2) NOT NULL, -- Precio final con descuentos aplicados
   discount_applied DECIMAL(5,2) DEFAULT 0,
+  meals_per_day INTEGER DEFAULT 1 CHECK (meals_per_day IN (1, 2)), -- 1 = comida o cena, 2 = comida y cena
   admin_approved BOOLEAN DEFAULT false,
   admin_approved_by UUID REFERENCES users(id) ON DELETE SET NULL,
   admin_approved_at TIMESTAMP WITH TIME ZONE,
@@ -471,6 +515,18 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Agregar campo meals_per_day si no existe (para bases de datos existentes)
+ALTER TABLE subscriptions 
+ADD COLUMN IF NOT EXISTS meals_per_day INTEGER DEFAULT 1 CHECK (meals_per_day IN (1, 2));
+
+-- Comentario explicativo
+COMMENT ON COLUMN subscriptions.meals_per_day IS 'Número de comidas por día: 1 = comida o cena, 2 = comida y cena';
+
+-- Actualizar suscripciones existentes a 1 comida por día por defecto
+UPDATE subscriptions 
+SET meals_per_day = 1 
+WHERE meals_per_day IS NULL;
 
 -- Tabla de contratos digitales
 CREATE TABLE IF NOT EXISTS subscription_contracts (
@@ -1077,16 +1133,42 @@ CREATE TRIGGER trigger_sync_payment_with_subscription
     EXECUTE FUNCTION sync_payment_with_subscription();
 
 -- ============================================
+-- ACTUALIZAR PLANES DE SUSCRIPCIÓN EXISTENTES
+-- Los planes ahora representan solo la duración (1, 3, 12 meses)
+-- El precio base se calculará multiplicando:
+-- - Precio base por comida por día
+-- - Número de comidas por día (1 o 2)
+-- - Duración en meses
+-- ============================================
+
+-- Actualizar planes existentes con precios base por comida por mes
+-- Precio por comida por mes: 150€
+-- Precio para 2 comidas/día por mes: 275€ (precio especial)
+UPDATE subscription_plans 
+SET price_per_meal_per_month = 150.00
+WHERE price_per_meal_per_month IS NULL;
+
+-- Actualizar base_price para que sea calculado dinámicamente
+-- base_price ahora será: price_per_meal_per_month * duration_months (para 1 comida)
+UPDATE subscription_plans 
+SET base_price = price_per_meal_per_month * duration_months
+WHERE base_price IS NULL OR base_price = 0;
+
+-- ============================================
 -- DATOS INICIALES (SEEDS)
 -- ============================================
 
 -- Insertar planes de suscripción por defecto
-INSERT INTO subscription_plans (name, duration_months, base_price, discount_percentage, description) VALUES
-    ('Mensual', 1, 275.00, 0, 'Plan mensual de suscripción nutricional'),
-    ('Trimestral', 3, 825.00, 0, 'Plan trimestral (3 meses)'),
-    ('Anual', 12, 3300.00, 0, 'Plan anual (12 meses)')
+-- Precio por comida por mes: 150€
+-- Precio para 2 comidas/día por mes: 275€ (precio especial, no 300€)
+-- base_price representa el precio para 1 comida/día por la duración del plan
+INSERT INTO subscription_plans (name, duration_months, base_price, price_per_meal_per_month, discount_percentage, description) VALUES
+    ('Mensual', 1, 150.00, 150.00, 0, 'Plan mensual de suscripción nutricional (1 comida/día)'),
+    ('Trimestral', 3, 450.00, 150.00, 0, 'Plan trimestral (3 meses, 1 comida/día)'),
+    ('Anual', 12, 1800.00, 150.00, 0, 'Plan anual (12 meses, 1 comida/día)')
 ON CONFLICT (name) DO UPDATE SET
     base_price = EXCLUDED.base_price,
+    price_per_meal_per_month = EXCLUDED.price_per_meal_per_month,
     discount_percentage = EXCLUDED.discount_percentage,
     description = EXCLUDED.description;
 

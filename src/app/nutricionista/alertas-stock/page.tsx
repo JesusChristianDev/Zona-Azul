@@ -2,6 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
+import PageHeader from '@/components/ui/PageHeader'
+import ToastMessage from '@/components/ui/ToastMessage'
+import LoadingState from '@/components/ui/LoadingState'
+import EmptyState from '@/components/ui/EmptyState'
 
 interface MealStock {
   id: string
@@ -64,38 +68,34 @@ export default function NutricionistaAlertasStockPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-gray-600">Cargando alertas...</p>
-        </div>
-      </div>
-    )
+    return <LoadingState message="Cargando alertas..." />
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Mensajes */}
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm">
-          {error}
-        </div>
+        <ToastMessage
+          message={error}
+          type="error"
+          onClose={() => setError(null)}
+        />
       )}
 
-      <header>
-        <h1 className="text-2xl font-bold text-gray-900">Alertas de Stock</h1>
-        <p className="text-sm text-gray-600 mt-1">
-          Platos sin stock que requieren tu atención para aprobar sustituciones
-        </p>
-      </header>
+      {/* Header */}
+      <PageHeader
+        title="Alertas de Stock"
+        description="Platos sin stock que requieren tu atención para aprobar sustituciones"
+      />
 
       {/* Lista de platos sin stock */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        {outOfStockMeals.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
-            No hay platos sin stock en este momento
-          </div>
-        ) : (
+      {outOfStockMeals.length === 0 ? (
+        <EmptyState
+          title="No hay platos sin stock en este momento"
+          message="Todos los platos tienen stock disponible."
+        />
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="divide-y divide-gray-200">
             {outOfStockMeals.map((item) => (
               <div
@@ -131,8 +131,8 @@ export default function NutricionistaAlertasStockPage() {
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Información */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">

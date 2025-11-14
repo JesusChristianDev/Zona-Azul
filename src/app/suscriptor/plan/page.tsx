@@ -3,6 +3,10 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import Modal from '@/components/ui/Modal'
+import PageHeader from '@/components/ui/PageHeader'
+import ToastMessage from '@/components/ui/ToastMessage'
+import LoadingState from '@/components/ui/LoadingState'
+import EmptyState from '@/components/ui/EmptyState'
 import type { MealPlanDay, WeeklyMenu, MenuModification, Meal } from '@/lib/types'
 import { getPlan, getMeals, replaceMealInPlanDay } from '@/lib/api'
 
@@ -97,12 +101,15 @@ export default function PlanComidasPage() {
         }
       }
 
-      // Cargar comidas disponibles
+      // Cargar comidas disponibles para PLANES NUTRICIONALES
+      // Nota: Solo se muestran comidas para planes (is_menu_item=false), NO las del menú del local
       const meals = await getMeals()
       if (meals && meals.length > 0) {
-        setAvailableMeals(meals.filter((m: any) => m.available))
+        // Filtrar solo comidas para planes nutricionales (NO del menú del local)
+        setAvailableMeals(meals.filter((m: any) => m.available && m.is_menu_item === false))
+        // Solo sugerir comidas para planes nutricionales (NO del menú del local)
         const suggested: SuggestedMeal[] = meals
-          .filter((m: any) => m.available)
+          .filter((m: any) => m.available && m.is_menu_item === false)
           .map((m: any) => ({
             id: m.id || `meal-${m.name}`,
             name: m.name,
@@ -279,17 +286,6 @@ export default function PlanComidasPage() {
     return null
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando plan de comidas...</p>
-        </div>
-      </div>
-    )
-  }
-
   const currentMeal = selectedDay && selectedMealIndex !== -1 ? selectedDay.meals[selectedMealIndex] : null
   const currentMealCategory = currentMeal ? detectMealCategory(currentMeal.name) : null
   const availableSuggestions = currentMeal
@@ -300,37 +296,47 @@ export default function PlanComidasPage() {
       })
     : suggestedMeals
 
+  if (loading) {
+    return <LoadingState message="Cargando plan de comidas..." />
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Mensajes */}
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm">{error}</div>
+        <ToastMessage
+          message={error}
+          type="error"
+          onClose={() => setError(null)}
+        />
       )}
       {success && (
-        <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-green-700 text-sm">
-          {success}
-        </div>
+        <ToastMessage
+          message={success}
+          type="success"
+          onClose={() => setSuccess(null)}
+        />
       )}
 
-      <header className="rounded-2xl border border-primary/20 bg-white p-4 sm:p-6 shadow-sm">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="bg-primary/10 px-3 py-1 rounded-full">
-            <span className="text-xs font-semibold text-primary uppercase tracking-wide">📅 Plan de Comidas</span>
-          </div>
-        </div>
-        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Plan y Menú Semanal</h2>
-        <p className="mt-2 text-sm text-gray-600">
-          {planDays.length > 0 
-            ? 'Plan semanal personalizado de lunes a viernes. Puedes modificar platos directamente solo sábado y domingo.'
-            : weeklyMenu
-            ? 'Menú semanal generado. Puedes solicitar modificaciones que requieren aprobación del nutricionista.'
-            : 'No tienes un plan o menú asignado aún. Contacta con tu nutricionista.'}
-        </p>
+      {/* Header */}
+      <div className="space-y-2">
+        <PageHeader
+          title="Plan y Menú Semanal"
+          description={
+            planDays.length > 0 
+              ? 'Plan semanal personalizado de lunes a viernes. Puedes modificar platos directamente solo sábado y domingo.'
+              : weeklyMenu
+              ? 'Menú semanal generado. Puedes solicitar modificaciones que requieren aprobación del nutricionista.'
+              : 'No tienes un plan o menú asignado aún. Contacta con tu nutricionista.'
+          }
+          badge="📅 Plan de Comidas"
+        />
         {canModify && planDays.length > 0 && (
-          <p className="mt-3 text-xs text-primary font-medium">
+          <p className="text-xs sm:text-sm text-primary font-medium px-4 sm:px-0">
             ✓ Puedes modificar tu plan ahora (sábado o domingo)
           </p>
         )}
-      </header>
+      </div>
 
       {/* Modificaciones pendientes del menú semanal */}
       {modifications.length > 0 && (

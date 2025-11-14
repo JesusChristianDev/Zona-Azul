@@ -3,6 +3,11 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import Modal from '@/components/ui/Modal'
+import PageHeader from '@/components/ui/PageHeader'
+import ActionButton from '@/components/ui/ActionButton'
+import ToastMessage from '@/components/ui/ToastMessage'
+import LoadingState from '@/components/ui/LoadingState'
+import EmptyState from '@/components/ui/EmptyState'
 import type { SubscriptionGroup, SubscriptionGroupMember } from '@/lib/types'
 
 export default function MiGrupoPage() {
@@ -94,51 +99,43 @@ export default function MiGrupoPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-gray-600">Cargando información del grupo...</p>
-        </div>
-      </div>
-    )
+    return <LoadingState message="Cargando información del grupo..." />
   }
 
   if (!group || !myMember) {
     return (
-      <div className="max-w-4xl mx-auto p-6">
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
-            No estás en un grupo de suscripción
-          </h2>
-          <p className="text-gray-600">
-            Si deberías estar en un grupo, contacta con el administrador.
-          </p>
-        </div>
+      <div className="max-w-4xl mx-auto p-4 sm:p-6">
+        <EmptyState
+          title="No estás en un grupo de suscripción"
+          message="Si deberías estar en un grupo, contacta con el administrador."
+        />
       </div>
     )
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
+    <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
+      {/* Mensajes */}
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm">
-          {error}
-        </div>
+        <ToastMessage
+          message={error}
+          type="error"
+          onClose={() => setError(null)}
+        />
       )}
-
       {success && (
-        <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-green-700 text-sm">
-          {success}
-        </div>
+        <ToastMessage
+          message={success}
+          type="success"
+          onClose={() => setSuccess(null)}
+        />
       )}
 
-      <header>
-        <h1 className="text-2xl font-bold text-gray-900">Mi Grupo de Suscripción</h1>
-        <p className="text-sm text-gray-600 mt-1">
-          Gestiona tus preferencias y configuración personal
-        </p>
-      </header>
+      {/* Header */}
+      <PageHeader
+        title="Mi Grupo de Suscripción"
+        description="Gestiona tus preferencias y configuración personal"
+      />
 
       {/* Información del grupo */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">

@@ -2,6 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import Modal from '@/components/ui/Modal'
+import PageHeader from '@/components/ui/PageHeader'
+import SearchFilters from '@/components/ui/SearchFilters'
+import ActionButton from '@/components/ui/ActionButton'
+import ToastMessage from '@/components/ui/ToastMessage'
+import LoadingState from '@/components/ui/LoadingState'
+import EmptyState from '@/components/ui/EmptyState'
+import ResponsiveGrid from '@/components/ui/ResponsiveGrid'
 import { useMeals } from '@/hooks/useApi'
 import * as api from '@/lib/api'
 
@@ -58,9 +65,12 @@ export default function AdminMenuPage() {
   const [success, setSuccess] = useState<string | null>(null)
 
   // Convertir meals a items cuando se cargan o cambian
+  // IMPORTANTE: Esta página solo muestra comidas del menú del local (is_menu_item=true)
   useEffect(() => {
     if (meals && meals.length > 0) {
-      setItems(meals.map(mealToMenuItem))
+      // Filtrar solo comidas del menú del local
+      const menuMeals = meals.filter((meal: any) => meal.is_menu_item === true)
+      setItems(menuMeals.map(mealToMenuItem))
     } else if (!loading) {
       setItems([])
     }
@@ -187,6 +197,7 @@ export default function AdminMenuPage() {
         calories: formData.calories,
         price: formData.price,
         available: formData.availability === 'Disponible',
+        is_menu_item: true, // Esta página es para gestionar el menú del local, todas las comidas son del menú
       }
 
       await api.createMeal(mealData)
@@ -226,6 +237,7 @@ export default function AdminMenuPage() {
         calories: formData.calories,
         price: formData.price,
         available: formData.availability === 'Disponible',
+        is_menu_item: true, // Esta página es para gestionar el menú del local, todas las comidas son del menú
       }
 
       await api.updateMeal(selectedItem.id, mealData)
@@ -239,152 +251,136 @@ export default function AdminMenuPage() {
     }
   }
 
+  const plusIcon = (
+    <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+      <path
+        fillRule="evenodd"
+        d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"
+        clipRule="evenodd"
+      />
+    </svg>
+  )
+
+  const categories = ['todas', 'Desayuno', 'Plato principal', 'Cena', 'Bebida funcional', 'On the go']
+  const availabilityOptions = ['todas', 'Disponible', 'No disponible']
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Mensajes */}
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm">{error}</div>
+        <ToastMessage
+          message={error}
+          type="error"
+          onClose={() => setError(null)}
+        />
       )}
       {success && (
-        <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-green-700 text-sm">
-          {success}
-        </div>
+        <ToastMessage
+          message={success}
+          type="success"
+          onClose={() => setSuccess(null)}
+        />
       )}
 
-      <header className="rounded-2xl border border-primary/20 bg-white p-6 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <h2 className="text-2xl font-bold text-gray-900">Gestión de la Carta</h2>
-              <span className="bg-primary/10 text-primary text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wide">
-                📋 Compra Individual
-              </span>
-            </div>
-            <p className="mt-2 text-sm text-gray-600">
-              <strong>Gestiona los platos de la carta (compra individual).</strong> Estos platos son diferentes a los del plan de suscripción. 
-              Ajusta disponibilidad, precios y márgenes para mantener una carta nutritiva y rentable.
-            </p>
-            <div className="mt-3 bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded-lg">
-              <p className="text-xs text-gray-700">
-                <strong>Nota:</strong> Los planes de suscripción se gestionan en el área de Nutricionista → Planes.
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={handleCreate}
-            className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition"
-          >
-            Agregar plato
-            <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-              <path
-                fillRule="evenodd"
-                d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"
-                clipRule="evenodd"
-              />
-            </svg>
-          </button>
+      {/* Header */}
+      <div className="space-y-4">
+        <PageHeader
+          title="Gestión de la Carta"
+          description="Gestiona los platos de la carta (compra individual). Estos platos son diferentes a los del plan de suscripción. Ajusta disponibilidad, precios y márgenes para mantener una carta nutritiva y rentable."
+          badge="📋 Compra Individual"
+          action={
+            <ActionButton onClick={handleCreate} icon={plusIcon}>
+              Agregar plato
+            </ActionButton>
+          }
+        />
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded-lg">
+          <p className="text-xs text-gray-700">
+            <strong>Nota:</strong> Los planes de suscripción se gestionan en el área de Nutricionista → Planes.
+          </p>
         </div>
-      </header>
+      </div>
 
-      {loading && (
-        <div className="text-center py-8 text-gray-500">Cargando menú...</div>
-      )}
-
+      {/* Estados de carga y error */}
+      {loading && <LoadingState message="Cargando menú..." />}
+      
       {apiError && (
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm">
-          Error al cargar el menú: {apiError}
-        </div>
-      )}
-
-      {!loading && !apiError && items.length === 0 && (
-        <div className="text-center py-8 text-gray-500">
-          No hay platos en el menú. Crea el primero haciendo clic en "Agregar plato".
-        </div>
+        <ToastMessage
+          message={`Error al cargar el menú: ${apiError}`}
+          type="error"
+        />
       )}
 
       {/* Búsqueda y filtros */}
       {!loading && !apiError && items.length > 0 && (
-        <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
-          <div className="space-y-4">
-            {/* Barra de búsqueda */}
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-              <input
-                type="text"
-                placeholder="Buscar por nombre, descripción, precio o calorías..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition placeholder-gray-400"
-              />
-              {searchTerm && (
-                <button
-                  onClick={() => setSearchTerm('')}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                >
-                  <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
-            </div>
-            
-            {/* Filtros */}
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Categoría:</span>
+        <SearchFilters
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          searchPlaceholder="Buscar por nombre, descripción, precio o calorías..."
+          filters={
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Categoría</label>
                 <select
                   value={filterCategory}
                   onChange={(e) => setFilterCategory(e.target.value)}
-                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
                 >
-                  <option value="todas">Todas</option>
-                  <option value="Desayuno">Desayuno</option>
-                  <option value="Plato principal">Plato principal</option>
-                  <option value="Cena">Cena</option>
-                  <option value="Bebida funcional">Bebida funcional</option>
-                  <option value="On the go">On the go</option>
+                  {categories.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat === 'todas' ? 'Todas' : cat}
+                    </option>
+                  ))}
                 </select>
               </div>
-              
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Disponibilidad:</span>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Disponibilidad</label>
                 <select
                   value={filterAvailability}
                   onChange={(e) => setFilterAvailability(e.target.value)}
-                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
                 >
-                  <option value="todas">Todas</option>
-                  <option value="Disponible">Disponible</option>
-                  <option value="No disponible">No disponible</option>
+                  {availabilityOptions.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt === 'todas' ? 'Todas' : opt}
+                    </option>
+                  ))}
                 </select>
               </div>
-            </div>
-            
-            {/* Resultados */}
-            {(searchTerm || filterCategory !== 'todas' || filterAvailability !== 'todas') && (
-              <div className="text-xs text-gray-500">
-                Mostrando {filteredItems.length} de {items.length} platos
-              </div>
-            )}
-          </div>
-        </section>
+            </>
+          }
+          resultsCount={
+            filteredItems.length !== items.length
+              ? { showing: filteredItems.length, total: items.length }
+              : undefined
+          }
+        />
       )}
 
+      {/* Estado vacío */}
+      {!loading && !apiError && items.length === 0 && (
+        <EmptyState
+          title="No hay platos en el menú"
+          message="Crea el primero haciendo clic en 'Agregar plato'."
+          action={
+            <ActionButton onClick={handleCreate} icon={plusIcon}>
+              Agregar Primer Plato
+            </ActionButton>
+          }
+        />
+      )}
+
+      {/* Sin resultados con filtros */}
       {!loading && !apiError && filteredItems.length === 0 && items.length > 0 && (
-        <div className="text-center py-12 text-gray-500 bg-white rounded-2xl border border-gray-200 p-6">
-          <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <p className="text-sm font-medium text-gray-600 mb-1">No se encontraron platos</p>
-          <p className="text-xs text-gray-500">Intenta ajustar los filtros o la búsqueda</p>
-        </div>
+        <EmptyState
+          title="No se encontraron platos"
+          message="Intenta ajustar los filtros o la búsqueda."
+        />
       )}
 
+      {/* Lista de platos */}
       {!loading && !apiError && filteredItems.length > 0 && (
-        <section className="grid gap-4 md:grid-cols-3">
+        <ResponsiveGrid cols={{ mobile: 1, tablet: 2, desktop: 3 }} gap="md">
           {filteredItems.map((item) => (
           <article key={item.id} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
             <div className="flex items-start justify-between gap-3">
@@ -432,7 +428,7 @@ export default function AdminMenuPage() {
             </div>
           </article>
           ))}
-        </section>
+        </ResponsiveGrid>
       )}
 
       {/* Modal Crear Plato */}

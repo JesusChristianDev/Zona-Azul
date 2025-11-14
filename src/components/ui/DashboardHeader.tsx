@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -9,8 +9,125 @@ import { usePanel } from '@/contexts/PanelContext'
 
 // Lazy load de componentes pesados
 const MobileMenu = dynamic(() => import('../MobileMenu'), { ssr: true })
-const MessagesWidget = dynamic(() => import('../messaging/MessagesWidget'), { ssr: false })
-const NotificationsPanel = dynamic(() => import('../notifications/NotificationsPanel'), { ssr: false })
+
+// Componente de botón de notificaciones
+function NotificationButton() {
+  const { userId } = useAuth()
+  const { isNotificationsOpen, setIsNotificationsOpen, setIsMessagesOpen, setIsSettingsOpen } = usePanel()
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  // Cargar contador de no leídos
+  useEffect(() => {
+    if (!userId) return
+    const loadUnreadCount = async () => {
+      try {
+        const response = await fetch('/api/notifications?limit=1')
+        if (response.ok) {
+          const data = await response.json()
+          setUnreadCount(data.unread_count || 0)
+        }
+      } catch (error) {
+        console.error('Error loading unread count:', error)
+      }
+    }
+    loadUnreadCount()
+    const interval = setInterval(loadUnreadCount, 30000)
+    return () => clearInterval(interval)
+  }, [userId])
+
+  if (!userId) return null
+
+  return (
+    <button
+      onClick={() => {
+        setIsMessagesOpen(false)
+        setIsSettingsOpen(false)
+        setIsNotificationsOpen(!isNotificationsOpen)
+      }}
+      className="relative p-2 text-gray-600 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors flex-shrink-0"
+      aria-label="Notificaciones"
+      title="Notificaciones"
+    >
+      <svg
+        className="w-5 h-5 sm:w-6 sm:h-6"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+        />
+      </svg>
+      {unreadCount > 0 && (
+        <span className="absolute top-0 right-0 flex items-center justify-center min-w-[18px] h-[18px] sm:min-w-[20px] sm:h-5 px-1 sm:px-0 text-[10px] sm:text-xs font-bold text-white bg-red-500 rounded-full border-2 border-white">
+          {unreadCount > 99 ? '99+' : unreadCount}
+        </span>
+      )}
+    </button>
+  )
+}
+
+// Componente de botón de mensajes
+function MessageButton() {
+  const { userId, role } = useAuth()
+  const { isMessagesOpen, setIsMessagesOpen, setIsNotificationsOpen, setIsSettingsOpen } = usePanel()
+  const [unreadTotal, setUnreadTotal] = useState(0)
+
+  // Cargar contador de no leídos
+  useEffect(() => {
+    if (!userId || !role) return
+    const loadUnreadCount = async () => {
+      try {
+        const response = await fetch('/api/messages')
+        if (response.ok) {
+          const data = await response.json()
+          // La API devuelve { messages: [...] }
+          const messages = Array.isArray(data.messages) ? data.messages : (Array.isArray(data) ? data : [])
+          const unread = messages.filter((msg: any) => msg.to_id === userId && !msg.read).length
+          setUnreadTotal(unread)
+        }
+      } catch (error) {
+        console.error('Error loading unread count:', error)
+      }
+    }
+    loadUnreadCount()
+    const interval = setInterval(loadUnreadCount, 3000)
+    return () => clearInterval(interval)
+  }, [userId, role])
+
+  if (!userId || !role) return null
+
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation()
+        setIsNotificationsOpen(false)
+        setIsSettingsOpen(false)
+        setIsMessagesOpen(!isMessagesOpen)
+      }}
+      className="relative p-2 text-gray-600 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors flex-shrink-0"
+      aria-label="Mensajes"
+      title="Mensajes"
+    >
+      <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+        />
+      </svg>
+      {unreadTotal > 0 && (
+        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-[18px] sm:min-w-[20px] h-[18px] sm:h-5 px-1 sm:px-1.5 flex items-center justify-center shadow-lg animate-pulse z-10">
+          {unreadTotal > 9 ? '9+' : unreadTotal}
+        </span>
+      )}
+    </button>
+  )
+}
 
 export default function DashboardHeader() {
   const pathname = usePathname()
@@ -157,9 +274,9 @@ export default function DashboardHeader() {
                     </span>
                   </div>
                   
-                  {/* Siempre renderizar los paneles (ellos manejan su propia visibilidad) */}
-                  <NotificationsPanel />
-                  <MessagesWidget />
+                  {/* Botones de notificaciones y mensajes - los paneles se renderizan fuera del header */}
+                  <NotificationButton />
+                  <MessageButton />
                   
                   {/* Siempre mostrar ajustes y logout en desktop (incluso cuando algún panel está abierto) */}
                   <Link
@@ -216,12 +333,12 @@ export default function DashboardHeader() {
                     </span>
                   </div>
                   
-                  {/* Siempre renderizar los paneles (ellos manejan su propia visibilidad) */}
+                  {/* Botones de notificaciones y mensajes - los paneles se renderizan fuera del header */}
                   <div className="flex-shrink-0 relative z-10">
-                    <NotificationsPanel />
+                    <NotificationButton />
                   </div>
                   <div className="flex-shrink-0 relative z-10">
-                    <MessagesWidget />
+                    <MessageButton />
                   </div>
                   
                   {/* Siempre mostrar ajustes y logout en móvil (excepto cuando algún panel está abierto, que se oculta todo el navbar) */}

@@ -58,6 +58,7 @@ export async function PATCH(
     if (body.image_url !== undefined) updateData.image_url = body.image_url
     if (body.price !== undefined) updateData.price = parseFloat(body.price)
     if (body.available !== undefined) updateData.available = body.available
+    if (body.is_menu_item !== undefined) updateData.is_menu_item = body.is_menu_item
 
     const meal = await updateMeal(params.id, updateData)
     if (!meal) {

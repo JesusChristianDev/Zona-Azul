@@ -804,41 +804,8 @@ export default function MessagesWidget() {
   if (!userId || !role) return null
 
   return (
-    <div className="relative">
-      {/* Botón del widget - siempre visible */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation()
-          // Cerrar otros paneles y abrir/cerrar mensajería
-          setIsNotificationsOpen(false)
-          setIsSettingsOpen(false)
-          setIsMessagesOpen(!isMessagesOpen)
-          // Si se está cerrando, limpiar estado
-          if (isMessagesOpen) {
-            setSelectedConversation(null)
-            setIsComposing(false)
-            setSelectedRecipient(null)
-          }
-        }}
-        className="relative p-2 text-gray-600 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
-        aria-label="Mensajes"
-      >
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-          />
-        </svg>
-        {unreadTotal > 0 && (
-          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center shadow-lg animate-pulse z-10">
-            {unreadTotal > 9 ? '9+' : unreadTotal}
-          </span>
-        )}
-      </button>
-
-      {/* Panel completo de mensajería */}
+    <>
+      {/* Panel completo de mensajería - renderizado como overlay independiente */}
       {isMessagesOpen && (
         <>
           <div
@@ -854,11 +821,13 @@ export default function MessagesWidget() {
             }}
             onMouseDown={(e) => e.stopPropagation()}
             style={{ pointerEvents: isMessagesOpen ? 'auto' : 'none' }}
+            data-nextjs-scroll-focus-boundary
           />
 
           <div
             className="fixed inset-0 sm:inset-auto sm:top-16 sm:left-auto sm:right-4 sm:bottom-4 sm:w-[calc(100vw-2rem)] sm:max-w-[720px] md:max-w-[800px] sm:h-[calc(100vh-6rem)] sm:rounded-xl bg-white shadow-2xl z-[50] flex flex-col border-0 sm:border border-gray-200 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
+            data-nextjs-scroll-focus-boundary
           >
             {/* Header profesional */}
             <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-primary to-primary/90 text-white sm:rounded-t-xl">
@@ -1312,6 +1281,6 @@ export default function MessagesWidget() {
           </div>
         </>
       )}
-    </div>
+    </>
   )
 }

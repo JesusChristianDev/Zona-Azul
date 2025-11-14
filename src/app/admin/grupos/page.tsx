@@ -3,6 +3,11 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import Modal from '@/components/ui/Modal'
+import PageHeader from '@/components/ui/PageHeader'
+import ActionButton from '@/components/ui/ActionButton'
+import ToastMessage from '@/components/ui/ToastMessage'
+import LoadingState from '@/components/ui/LoadingState'
+import EmptyState from '@/components/ui/EmptyState'
 import type { SubscriptionGroup, SubscriptionGroupMember } from '@/lib/types'
 
 export default function AdminGruposPage() {
@@ -235,53 +240,58 @@ export default function AdminGruposPage() {
     return texts[type as keyof typeof texts] || type
   }
 
+  const plusIcon = (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+    </svg>
+  )
+
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-gray-600">Cargando grupos...</p>
-        </div>
-      </div>
-    )
+    return <LoadingState message="Cargando grupos..." />
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Mensajes */}
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm">
-          {error}
-        </div>
+        <ToastMessage
+          message={error}
+          type="error"
+          onClose={() => setError(null)}
+        />
       )}
-
       {success && (
-        <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-green-700 text-sm">
-          {success}
-        </div>
+        <ToastMessage
+          message={success}
+          type="success"
+          onClose={() => setSuccess(null)}
+        />
       )}
 
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Gestión de Grupos de Suscripción</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            Crear y gestionar grupos (Individual, Pareja, Familiar)
-          </p>
-        </div>
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition font-medium"
-        >
-          + Crear Grupo
-        </button>
-      </header>
+      {/* Header */}
+      <PageHeader
+        title="Gestión de Grupos de Suscripción"
+        description="Crear y gestionar grupos (Individual, Pareja, Familiar)"
+        action={
+          <ActionButton onClick={() => setIsCreateModalOpen(true)} icon={plusIcon}>
+            Crear Grupo
+          </ActionButton>
+        }
+      />
 
       {/* Lista de grupos */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        {groups.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
-            No hay grupos creados. Crea uno para comenzar.
-          </div>
-        ) : (
+      {groups.length === 0 ? (
+        <EmptyState
+          title="No hay grupos creados"
+          message="Crea un grupo para comenzar."
+          action={
+            <ActionButton onClick={() => setIsCreateModalOpen(true)} icon={plusIcon}>
+              Crear Primer Grupo
+            </ActionButton>
+          }
+        />
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="divide-y divide-gray-200">
             {groups.map((group) => (
               <div key={group.id} className="p-6">
@@ -384,8 +394,8 @@ export default function AdminGruposPage() {
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Modal crear grupo */}
       <Modal

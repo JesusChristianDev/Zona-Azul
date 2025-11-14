@@ -200,17 +200,20 @@ export async function POST(request: NextRequest) {
               }
             } else {
               // Si no hay plan, obtener comidas disponibles aleatoriamente
+              // IMPORTANTE: Solo usar comidas para planes nutricionales (NO del menú del local)
               const mealTypes = ['breakfast', 'lunch', 'dinner']
               
               for (let mealIndex = 0; mealIndex < mealsPerDay; mealIndex++) {
                 const mealType = mealTypes[mealIndex % mealTypes.length] || 'lunch'
                 
-                // Obtener comidas disponibles del tipo correspondiente
+                // Obtener comidas para planes nutricionales (is_menu_item = false)
+                // NO usar comidas del menú del local (is_menu_item = true)
                 const { data: availableMeals } = await supabase
                   .from('meals')
                   .select('id, type')
                   .eq('type', mealType)
                   .eq('available', true)
+                  .eq('is_menu_item', false) // Solo comidas para planes, NO del menú del local
                   .limit(10)
 
                 if (availableMeals && availableMeals.length > 0) {

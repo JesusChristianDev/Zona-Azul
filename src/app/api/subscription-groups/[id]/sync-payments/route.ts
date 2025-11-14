@@ -50,10 +50,22 @@ export async function POST(
 
       if (!group) continue
 
-      // Calcular nuevo precio
-      const planDiscount = (plan.base_price * plan.discount_percentage) / 100
-      const groupDiscount = (plan.base_price * group.discount_percentage) / 100
-      const newPrice = plan.base_price - planDiscount - groupDiscount
+      // Calcular nuevo precio según comidas por día
+      const mealsPerDay = subscription.meals_per_day || 1
+      const pricePerMealPerMonth = plan.price_per_meal_per_month || (plan.base_price / plan.duration_months)
+      
+      let basePrice: number
+      if (mealsPerDay === 2) {
+        // Precio especial: 275€ por mes para 2 comidas (en lugar de 300€)
+        basePrice = 275.00 * plan.duration_months
+      } else {
+        // Precio normal: 150€ por comida por mes
+        basePrice = pricePerMealPerMonth * mealsPerDay * plan.duration_months
+      }
+      
+      const planDiscount = (basePrice * plan.discount_percentage) / 100
+      const groupDiscount = (basePrice * group.discount_percentage) / 100
+      const newPrice = basePrice - planDiscount - groupDiscount
       const totalDiscount = plan.discount_percentage + group.discount_percentage
 
       // Actualizar suscripción si el precio cambió

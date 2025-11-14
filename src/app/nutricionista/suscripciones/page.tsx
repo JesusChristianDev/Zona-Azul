@@ -3,6 +3,11 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import Modal from '@/components/ui/Modal'
+import PageHeader from '@/components/ui/PageHeader'
+import SearchFilters from '@/components/ui/SearchFilters'
+import ToastMessage from '@/components/ui/ToastMessage'
+import LoadingState from '@/components/ui/LoadingState'
+import EmptyState from '@/components/ui/EmptyState'
 import type { Subscription } from '@/lib/types'
 
 export default function NutricionistaSuscripcionesPage() {
@@ -97,65 +102,68 @@ export default function NutricionistaSuscripcionesPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-gray-600">Cargando suscripciones...</p>
-        </div>
-      </div>
-    )
+    return <LoadingState message="Cargando suscripciones..." />
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Mensajes */}
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm">
-          {error}
-        </div>
+        <ToastMessage
+          message={error}
+          type="error"
+          onClose={() => setError(null)}
+        />
       )}
-
       {success && (
-        <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-green-700 text-sm">
-          {success}
-        </div>
+        <ToastMessage
+          message={success}
+          type="success"
+          onClose={() => setSuccess(null)}
+        />
       )}
 
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Aprobación de Suscripciones</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            Revisa y aprueba suscripciones pendientes
-          </p>
-        </div>
-      </header>
+      {/* Header */}
+      <PageHeader
+        title="Aprobación de Suscripciones"
+        description="Revisa y aprueba suscripciones pendientes de aprobación"
+      />
 
       {/* Filtros */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <div className="flex gap-2 flex-wrap">
-          {['pending_approval', 'active', 'all'].map((status) => (
-            <button
-              key={status}
-              onClick={() => setFilterStatus(status)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                filterStatus === status
-                  ? 'bg-primary text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              {status === 'all' ? 'Todas' : getStatusText(status)}
-            </button>
-          ))}
-        </div>
-      </div>
+      <SearchFilters
+        searchTerm=""
+        onSearchChange={() => {}}
+        searchPlaceholder=""
+        filters={
+          <div className="col-span-full">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Filtrar por estado:</label>
+            <div className="flex gap-2 flex-wrap">
+              {['pending_approval', 'active', 'all'].map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setFilterStatus(status)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    filterStatus === status
+                      ? 'bg-primary text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {status === 'all' ? 'Todas' : getStatusText(status)}
+                </button>
+              ))}
+            </div>
+          </div>
+        }
+      />
 
       {/* Lista de suscripciones */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        {subscriptions.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
-            No hay suscripciones pendientes de aprobación
-          </div>
-        ) : (
+      {subscriptions.length === 0 ? (
+        <EmptyState
+          title="No hay suscripciones pendientes de aprobación"
+          message="Todas las suscripciones han sido procesadas."
+        />
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="divide-y divide-gray-200">
             {subscriptions.map((subscription) => (
               <div
@@ -170,7 +178,7 @@ export default function NutricionistaSuscripcionesPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       <h3 className="font-semibold text-gray-900">
-                        Usuario: {subscription.user_id}
+                        {(subscription as any).users?.name || subscription.user_id}
                       </h3>
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(subscription.status)}`}>
                         {getStatusText(subscription.status)}
@@ -178,7 +186,9 @@ export default function NutricionistaSuscripcionesPage() {
                     </div>
                     <div className="text-sm text-gray-600 space-y-1">
                       <p>
-                        Plan: {subscription.plan_id} • Precio: €{subscription.price.toFixed(2)}
+                        Plan: {(subscription as any).subscription_plans?.name || subscription.plan_id} • 
+                        Precio: €{subscription.price.toFixed(2)} • 
+                        Comidas/día: {subscription.meals_per_day === 2 ? 'Comida y Cena' : 'Comida o Cena'}
                       </p>
                       <p>
                         Admin: {subscription.admin_approved ? '✓ Aprobado' : '✗ Pendiente'} • 
@@ -213,8 +223,8 @@ export default function NutricionistaSuscripcionesPage() {
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Modal de detalles */}
       <Modal
@@ -239,6 +249,34 @@ export default function NutricionistaSuscripcionesPage() {
                 <label className="block text-xs font-medium text-gray-500 mb-1">Precio</label>
                 <p className="text-sm font-semibold text-gray-900">
                   €{selectedSubscription.price.toFixed(2)}
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Comidas por Día</label>
+                <p className="text-sm font-semibold text-gray-900">
+                  {selectedSubscription.meals_per_day === 2 ? 'Comida y Cena (2)' : 'Comida o Cena (1)'}
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Plan</label>
+                <p className="text-sm text-gray-900">
+                  {(selectedSubscription as any).subscription_plans?.name || selectedSubscription.plan_id}
+                  {(selectedSubscription as any).subscription_plans && (
+                    <span className="text-xs text-gray-500 ml-2">
+                      ({(selectedSubscription as any).subscription_plans.duration_months} meses)
+                    </span>
+                  )}
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Usuario</label>
+                <p className="text-sm text-gray-900">
+                  {(selectedSubscription as any).users?.name || selectedSubscription.user_id}
+                  {(selectedSubscription as any).users && (
+                    <span className="text-xs text-gray-500 ml-2">
+                      ({(selectedSubscription as any).users.email})
+                    </span>
+                  )}
                 </p>
               </div>
               <div>

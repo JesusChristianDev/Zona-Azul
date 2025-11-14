@@ -36,15 +36,17 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Crear nuevo usuario (solo admin)
+// POST - Crear nuevo usuario (admin y nutricionista pueden crear usuarios)
 export async function POST(request: NextRequest) {
   try {
     const cookieStore = await cookies()
     const role = cookieStore.get('user_role')?.value
 
-    if (role !== 'admin') {
+    // Admin puede crear cualquier tipo de usuario
+    // Nutricionista solo puede crear suscriptores
+    if (role !== 'admin' && role !== 'nutricionista') {
       return NextResponse.json(
-        { error: 'No autorizado' },
+        { error: 'No autorizado. Solo administradores y nutricionistas pueden crear usuarios.' },
         { status: 403 }
       )
     }
@@ -56,6 +58,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Email, contraseña, rol y nombre son requeridos' },
         { status: 400 }
+      )
+    }
+
+    // Nutricionista solo puede crear suscriptores
+    if (role === 'nutricionista' && userRole !== 'suscriptor') {
+      return NextResponse.json(
+        { error: 'Los nutricionistas solo pueden crear usuarios con rol suscriptor' },
+        { status: 403 }
       )
     }
 

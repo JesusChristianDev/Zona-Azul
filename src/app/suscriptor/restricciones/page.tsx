@@ -3,6 +3,10 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import Modal from '@/components/ui/Modal'
+import PageHeader from '@/components/ui/PageHeader'
+import ActionButton from '@/components/ui/ActionButton'
+import ToastMessage from '@/components/ui/ToastMessage'
+import EmptyState from '@/components/ui/EmptyState'
 
 interface DietaryRestriction {
   id: string
@@ -191,42 +195,54 @@ export default function RestriccionesPage() {
     )
   }
 
+  const plusIcon = (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+    </svg>
+  )
+
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
+    <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
+      {/* Mensajes */}
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm">
-          {error}
-        </div>
+        <ToastMessage
+          message={error}
+          type="error"
+          onClose={() => setError(null)}
+        />
       )}
-
       {success && (
-        <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-green-700 text-sm">
-          {success}
-        </div>
+        <ToastMessage
+          message={success}
+          type="success"
+          onClose={() => setSuccess(null)}
+        />
       )}
 
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Mis Restricciones Alimentarias</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            Gestiona tus alergias, intolerancias y preferencias alimentarias
-          </p>
-        </div>
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition font-medium"
-        >
-          + Agregar Restricción
-        </button>
-      </header>
+      {/* Header */}
+      <PageHeader
+        title="Mis Restricciones Alimentarias"
+        description="Gestiona tus alergias, intolerancias y preferencias alimentarias"
+        action={
+          <ActionButton onClick={() => setIsCreateModalOpen(true)} icon={plusIcon}>
+            Agregar Restricción
+          </ActionButton>
+        }
+      />
 
       {/* Lista de restricciones */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        {restrictions.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
-            No tienes restricciones alimentarias registradas. Agrega una para personalizar tu menú.
-          </div>
-        ) : (
+      {restrictions.length === 0 ? (
+        <EmptyState
+          title="No tienes restricciones registradas"
+          message="Agrega una restricción alimentaria para personalizar tu menú."
+          action={
+            <ActionButton onClick={() => setIsCreateModalOpen(true)} icon={plusIcon}>
+              Agregar Primera Restricción
+            </ActionButton>
+          }
+        />
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="divide-y divide-gray-200">
             {restrictions.map((restriction) => (
               <div key={restriction.id} className="p-4">
@@ -272,8 +288,8 @@ export default function RestriccionesPage() {
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Modal crear restricción */}
       <Modal

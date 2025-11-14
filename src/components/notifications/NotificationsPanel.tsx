@@ -173,40 +173,8 @@ export default function NotificationsPanel() {
   }
 
   return (
-    <div className="relative" ref={panelRef}>
-      {/* Botón de notificaciones - siempre visible */}
-      <button
-        onClick={() => {
-          // Cerrar otros paneles y abrir/cerrar notificaciones
-          setIsMessagesOpen(false)
-          setIsSettingsOpen(false)
-          setIsNotificationsOpen(!isNotificationsOpen)
-        }}
-        className="relative p-2 text-gray-600 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors flex-shrink-0"
-        aria-label="Notificaciones"
-        title="Notificaciones"
-      >
-        <svg
-          className="w-5 h-5 sm:w-6 sm:h-6"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-          />
-        </svg>
-        {unreadCount > 0 && (
-          <span className="absolute top-0 right-0 flex items-center justify-center min-w-[18px] h-[18px] sm:min-w-[20px] sm:h-5 px-1 sm:px-0 text-[10px] sm:text-xs font-bold text-white bg-red-500 rounded-full border-2 border-white">
-            {unreadCount > 99 ? '99+' : unreadCount}
-          </span>
-        )}
-      </button>
-
-      {/* Panel de notificaciones */}
+    <>
+      {/* Panel de notificaciones - renderizado como overlay independiente */}
       {isNotificationsOpen && (
         <>
           {/* Overlay para móviles */}
@@ -217,9 +185,11 @@ export default function NotificationsPanel() {
               setIsNotificationsOpen(false)
             }}
             onMouseDown={(e) => e.stopPropagation()}
+            data-nextjs-scroll-focus-boundary
           />
           <div 
-            className="fixed sm:absolute inset-x-0 sm:inset-x-auto top-0 sm:top-full right-0 sm:right-0 mt-0 sm:mt-2 w-full sm:w-80 md:w-96 bg-white rounded-none sm:rounded-lg shadow-xl border-0 sm:border border-gray-200 z-[50] flex flex-col"
+            ref={panelRef}
+            className="fixed inset-x-0 sm:inset-x-auto top-0 sm:top-16 right-0 sm:right-4 mt-0 sm:mt-2 w-full sm:w-80 md:w-96 bg-white rounded-none sm:rounded-lg shadow-xl border-0 sm:border border-gray-200 z-[50] flex flex-col"
             style={isMobile ? {
               height: '100dvh',
               maxHeight: '100dvh',
@@ -227,6 +197,7 @@ export default function NotificationsPanel() {
               maxHeight: '600px',
             }}
             onMouseDown={(e) => e.stopPropagation()}
+            data-nextjs-scroll-focus-boundary
           >
             {/* Header */}
             <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-200 flex-shrink-0 bg-white">
@@ -341,7 +312,7 @@ export default function NotificationsPanel() {
           </div>
         </>
       )}
-    </div>
+    </>
   )
 }
 

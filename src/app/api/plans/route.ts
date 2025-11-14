@@ -208,6 +208,28 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Si se proporciona user_id, verificar que tenga suscripción activa
+    if (user_id) {
+      const { createClient } = await import('@supabase/supabase-js')
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+      const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+      const { data: subscriptions, error: subError } = await supabase
+        .from('subscriptions')
+        .select('id, status')
+        .eq('user_id', user_id)
+        .eq('status', 'active')
+        .limit(1)
+
+      if (subError || !subscriptions || subscriptions.length === 0) {
+        return NextResponse.json(
+          { error: 'El usuario no tiene una suscripción activa. No se pueden asignar planes nutricionales sin suscripción.' },
+          { status: 403 }
+        )
+      }
+    }
+
     // user_id es opcional - si no se proporciona, se crea un plan template (sin asignar)
     const plan = await createMealPlan({
       user_id: user_id || null,

@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     let finalUserId: string | null = userId || null
 
     // Crear notas con información del invitado si no está autenticado
-    let notes = body.notes || null
+    let notes = body.notes?.trim() || null
     if (!userId) {
       // Usuario no autenticado - guardar datos en notes para crear usuario después
       if (!body.email || !body.name) {
@@ -66,9 +66,19 @@ export async function POST(request: NextRequest) {
       }
       
       const guestDataJson = JSON.stringify(guestData)
-      notes = notes 
-        ? `${notes}\n\n--- DATOS DEL INVITADO ---\n${guestDataJson}`
-        : `--- DATOS DEL INVITADO ---\n${guestDataJson}`
+      
+      // Si hay notas del usuario, agregarlas primero, luego los datos del invitado
+      if (notes) {
+        notes = `--- MOTIVO DE LA CITA ---\n${notes}\n\n--- DATOS DEL INVITADO ---\n${guestDataJson}`
+      } else {
+        notes = `--- DATOS DEL INVITADO ---\n${guestDataJson}`
+      }
+    } else {
+      // Usuario autenticado - solo guardar las notas si las proporcionó
+      // Las notas pueden contener el motivo de la cita
+      if (notes) {
+        notes = `--- MOTIVO DE LA CITA ---\n${notes}`
+      }
     }
 
     const appointment = await createAppointment({

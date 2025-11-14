@@ -98,7 +98,10 @@ export async function getNutritionists() {
   return response.data?.nutritionists || []
 }
 
-// ==================== MEALS (MENÚ) ====================
+// ==================== MEALS (CATÁLOGO GENERAL) ====================
+// Nota: Las comidas se usan tanto para:
+// - Menú del local (/menu): Solo las con available=true aparecen en la carta pública
+// - Planes nutricionales: Todas las comidas del catálogo pueden usarse en planes
 
 export async function getMeals() {
   const response = await apiRequest<{ meals: any[] }>('/api/meals')

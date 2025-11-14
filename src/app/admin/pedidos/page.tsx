@@ -1,6 +1,9 @@
 "use client"
 
 import { useState, useEffect } from 'react'
+import PageHeader from '@/components/ui/PageHeader'
+import ToastMessage from '@/components/ui/ToastMessage'
+import EmptyState from '@/components/ui/EmptyState'
 import { getOrders } from '@/lib/api'
 import { convertApiOrdersToFrontend, mapFrontendStatusToApi } from '@/lib/orderHelpers'
 import { updateOrder } from '@/lib/api'
@@ -116,26 +119,37 @@ export default function AdminPedidosPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Mensajes */}
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm">{error}</div>
+        <ToastMessage
+          message={error}
+          type="error"
+          onClose={() => setError(null)}
+        />
       )}
       {success && (
-        <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-green-700 text-sm">
-          {success}
-        </div>
+        <ToastMessage
+          message={success}
+          type="success"
+          onClose={() => setSuccess(null)}
+        />
       )}
 
-      <header className="rounded-2xl border border-highlight/30 bg-white p-6 shadow-sm">
-        <h2 className="text-2xl font-bold text-gray-900">Pedidos globales</h2>
-        <p className="mt-2 text-sm text-gray-600">
-          Supervisa pedidos en tiempo real e identifica cuellos de botella entre cocina, nutrición y reparto.
-          Esta vista consolida datos de la app y puntos físicos.
-        </p>
-      </header>
+      {/* Header */}
+      <PageHeader
+        title="Pedidos globales"
+        description="Supervisa pedidos en tiempo real e identifica cuellos de botella entre cocina, nutrición y reparto. Esta vista consolida datos de la app y puntos físicos."
+      />
 
-      <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm space-y-4">
-        {orders.map((order) => (
+      {orders.length === 0 ? (
+        <EmptyState
+          title="No hay pedidos"
+          message="No se han registrado pedidos aún."
+        />
+      ) : (
+        <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm space-y-4">
+          {orders.map((order) => (
           <article key={order.id} className="rounded-2xl border border-gray-100 p-4 transition hover:border-primary/40">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -177,8 +191,9 @@ export default function AdminPedidosPage() {
               </div>
             </div>
           </article>
-        ))}
-      </section>
+          ))}
+        </section>
+      )}
 
       {/* Modal Detalle */}
       {isDetailModalOpen && selectedOrder && (

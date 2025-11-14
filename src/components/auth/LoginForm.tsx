@@ -57,6 +57,17 @@ export default function LoginForm() {
       }
 
       if (data.success) {
+        // Limpiar sessionStorage de cambios de contraseña anteriores al iniciar nueva sesión
+        if (typeof window !== 'undefined' && data.user?.id) {
+          sessionStorage.removeItem(`password_changed_${data.user.id}`)
+        }
+        
+        // Si debe cambiar la contraseña (SOLO para suscriptores), redirigir a la página de cambio obligatorio
+        if (data.user.role === 'suscriptor' && data.must_change_password) {
+          window.location.href = '/change-password?required=true'
+          return
+        }
+        
         // Forzar recarga de la página para actualizar el estado de autenticación
         const redirectTo = searchParams.get('redirect') || `/${data.user.role}`
         window.location.href = redirectTo

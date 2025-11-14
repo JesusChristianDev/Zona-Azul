@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
       email: dbUser.email,
       name: dbUser.name,
       role: dbUser.role,
+      must_change_password: dbUser.must_change_password || false,
     }
 
     // Generar token de sesión
@@ -51,6 +52,7 @@ export async function POST(request: NextRequest) {
     const response = NextResponse.json({
       success: true,
       user,
+      must_change_password: dbUser.must_change_password || false,
     })
 
     // Configurar cookies con opciones de seguridad

@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, duration_months, base_price, discount_percentage, description } = body
+    const { name, duration_months, base_price, price_per_meal_per_month, discount_percentage, description } = body
 
     // Validar campos requeridos
     if (!name || !duration_months || !base_price) {
@@ -57,12 +57,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Calcular price_per_meal_per_month si no se proporciona
+    const pricePerMealPerMonth = price_per_meal_per_month 
+      ? parseFloat(price_per_meal_per_month)
+      : parseFloat(base_price) / parseInt(duration_months)
+
     const { data, error } = await supabase
       .from('subscription_plans')
       .insert({
         name,
         duration_months: parseInt(duration_months),
         base_price: parseFloat(base_price),
+        price_per_meal_per_month: pricePerMealPerMonth,
         discount_percentage: discount_percentage ? parseFloat(discount_percentage) : 0,
         description: description || null,
         is_active: true,

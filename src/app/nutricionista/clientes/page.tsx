@@ -2,6 +2,11 @@
 
 import { useState, useEffect } from 'react'
 import Modal from '@/components/ui/Modal'
+import PageHeader from '@/components/ui/PageHeader'
+import SearchFilters from '@/components/ui/SearchFilters'
+import ToastMessage from '@/components/ui/ToastMessage'
+import EmptyState from '@/components/ui/EmptyState'
+import ResponsiveGrid from '@/components/ui/ResponsiveGrid'
 import { useAuth } from '@/hooks/useAuth'
 import * as api from '@/lib/api'
 import { getSubscribers } from '@/lib/subscribers'
@@ -247,72 +252,56 @@ export default function NutricionistaClientesPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Mensajes */}
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm">{error}</div>
+        <ToastMessage
+          message={error}
+          type="error"
+          onClose={() => setError(null)}
+        />
       )}
       {success && (
-        <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-green-700 text-sm">
-          {success}
-        </div>
+        <ToastMessage
+          message={success}
+          type="success"
+          onClose={() => setSuccess(null)}
+        />
       )}
 
-      <header className="rounded-2xl border border-primary/20 bg-white p-6 shadow-sm">
-        <h2 className="text-2xl font-bold text-gray-900">Clientes activos</h2>
-        <p className="mt-2 text-sm text-gray-600">
-          Visualiza el estado de cada suscriptor, identifica quién necesita soporte adicional y agrega notas
-          para la app móvil.
-        </p>
-      </header>
+      {/* Header */}
+      <PageHeader
+        title="Clientes activos"
+        description="Visualiza el estado de cada suscriptor, identifica quién necesita soporte adicional y agrega notas para la app móvil."
+      />
 
       {/* Búsqueda y filtros */}
       {clients.length > 0 && (
-        <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
-          <div className="space-y-4">
-            {/* Barra de búsqueda */}
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-              <input
-                type="text"
-                placeholder="Buscar por nombre, email o plan..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition placeholder-gray-400"
-              />
-              {searchTerm && (
-                <button
-                  onClick={() => setSearchTerm('')}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                >
-                  <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
-            </div>
-            
-            {/* Resultados */}
-            {searchTerm && (
-              <div className="text-xs text-gray-500">
-                Mostrando {filteredClients.length} de {clients.length} clientes
-              </div>
-            )}
-          </div>
-        </section>
+        <SearchFilters
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          searchPlaceholder="Buscar por nombre, email o plan..."
+          resultsCount={
+            searchTerm
+              ? { showing: filteredClients.length, total: clients.length }
+              : undefined
+          }
+        />
+      )}
+
+      {/* Estado vacío */}
+      {clients.length === 0 && (
+        <EmptyState
+          title="No hay clientes asignados"
+          message="Los clientes se asignan desde el área de administración."
+        />
       )}
 
       {filteredClients.length === 0 && clients.length > 0 && (
-        <div className="text-center py-12 text-gray-500 bg-white rounded-2xl border border-gray-200 p-6">
-          <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <p className="text-sm font-medium text-gray-600 mb-1">No se encontraron clientes</p>
-          <p className="text-xs text-gray-500">Intenta ajustar la búsqueda</p>
-        </div>
+        <EmptyState
+          title="No se encontraron clientes"
+          message="Intenta ajustar la búsqueda."
+        />
       )}
 
       <section className="space-y-3">
