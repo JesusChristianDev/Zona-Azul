@@ -35,6 +35,11 @@ export interface Meal {
   fats: number
   ingredients: string[]
   instructions?: string
+  description?: string
+  image_url?: string
+  price?: number
+  available?: boolean
+  is_menu_item?: boolean
 }
 
 export interface MealPlanDay {
@@ -87,6 +92,14 @@ export interface SubscriptionGroup {
   is_active: boolean
   created_at: string
   updated_at: string
+  // Relaciones expandidas (opcionales, vienen del API)
+  subscription_group_members?: (SubscriptionGroupMember & {
+    users?: {
+      id: string
+      name: string
+      email: string
+    }
+  })[]
 }
 
 export interface SubscriptionGroupMember {
@@ -180,6 +193,37 @@ export interface WeeklyMenu {
   notification_sent_at?: string
   created_at: string
   updated_at: string
+  // Relaciones expandidas (opcionales, vienen del API)
+  days?: (WeeklyMenuDay & {
+    weekly_menu_day_meals?: (WeeklyMenuDayMeal & {
+      meals?: {
+        id: string
+        name: string
+        description?: string
+        type: 'breakfast' | 'lunch' | 'dinner' | 'snack'
+        calories: number
+        protein?: number
+        carbs?: number
+        fats?: number
+        image_url?: string
+      }
+    })[]
+  })[]
+  weekly_menu_days?: (WeeklyMenuDay & {
+    weekly_menu_day_meals?: (WeeklyMenuDayMeal & {
+      meals?: {
+        id: string
+        name: string
+        description?: string
+        type: 'breakfast' | 'lunch' | 'dinner' | 'snack'
+        calories: number
+        protein?: number
+        carbs?: number
+        fats?: number
+        image_url?: string
+      }
+    })[]
+  })[]
 }
 
 export interface WeeklyMenuDay {
@@ -217,6 +261,28 @@ export interface MenuModification {
   rejection_reason?: string
   created_at: string
   updated_at: string
+  // Relaciones expandidas (opcionales, vienen del API)
+  original_meal?: {
+    id: string
+    name: string
+    description?: string
+    type: 'breakfast' | 'lunch' | 'dinner' | 'snack'
+    calories: number
+    image_url?: string
+  }
+  requested_meal?: {
+    id: string
+    name: string
+    description?: string
+    type: 'breakfast' | 'lunch' | 'dinner' | 'snack'
+    calories: number
+    image_url?: string
+  }
+  weekly_menus?: {
+    id: string
+    week_start_date: string
+    week_end_date: string
+  }
 }
 
 // ============================================

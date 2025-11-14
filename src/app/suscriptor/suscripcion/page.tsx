@@ -86,36 +86,15 @@ export default function SuscripcionPage() {
     })
   }
 
-  const getStatusBadge = (status: string) => {
-    const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
-      active: {
-        bg: 'bg-green-100',
-        text: 'text-green-700',
-        label: '✓ Activa'
-      },
-      pending_approval: {
-        bg: 'bg-yellow-100',
-        text: 'text-yellow-700',
-        label: '⏳ Pendiente de Aprobación'
-      },
-      expired: {
-        bg: 'bg-red-100',
-        text: 'text-red-700',
-        label: '✗ Expirada'
-      },
-      cancelled: {
-        bg: 'bg-gray-100',
-        text: 'text-gray-700',
-        label: '✗ Cancelada'
-      }
+  const getStatusBadge = (status: string): string => {
+    const statusConfig: Record<string, string> = {
+      active: '✓ Activa',
+      pending_approval: '⏳ Pendiente de Aprobación',
+      expired: '✗ Expirada',
+      cancelled: '✗ Cancelada'
     }
 
-    const config = statusConfig[status] || statusConfig.pending_approval
-    return (
-      <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold ${config.bg} ${config.text}`}>
-        {config.label}
-      </span>
-    )
+    return statusConfig[status] || statusConfig.pending_approval
   }
 
   if (loading) {
