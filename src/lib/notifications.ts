@@ -8,6 +8,7 @@ interface NotificationData {
   title: string
   body: string
   icon?: string
+  image?: string // Imagen grande opcional para la notificación
   url?: string
   tag?: string
   isMandatory?: boolean // Notificaciones obligatorias (legales/seguridad) siempre se envían
@@ -95,10 +96,54 @@ async function isNotificationEnabled(
 }
 
 /**
+ * Envía notificación push desde el servidor (más rápido, funciona sin app abierta)
+ */
+async function sendPushNotification(data: NotificationData, userId: string | null): Promise<boolean> {
+  if (!userId) return false
+
+  try {
+    const response = await fetch('/api/push/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        user_ids: [userId],
+        title: data.title,
+        message: data.body,
+        url: data.url || '/',
+        icon: data.icon || '/icon-192x192.png',
+        tag: data.tag || 'zona-azul-notification',
+        requireInteraction: data.isMandatory || false,
+        data: {},
+      }),
+    })
+
+    if (response.ok) {
+      const result = await response.json()
+      return result.sent > 0
+    }
+  } catch (error) {
+    console.warn('Error enviando push notification, usando notificación local:', error)
+  }
+
+  return false
+}
+
+/**
  * Muestra una notificación usando el service worker
  * Las notificaciones obligatorias siempre se intentan enviar, incluso si el usuario tiene las notificaciones deshabilitadas
+ * Intenta usar push notifications primero (más rápido) y luego fallback a notificaciones locales
  */
-export async function showAppNotification(data: NotificationData): Promise<boolean> {
+export async function showAppNotification(data: NotificationData, userId: string | null = null): Promise<boolean> {
+  // Intentar enviar push notification primero (más rápido, funciona sin app abierta)
+  if (userId) {
+    const pushSent = await sendPushNotification(data, userId)
+    if (pushSent) {
+      return true // Push notification enviada exitosamente
+    }
+    // Si push falla, continuar con notificación local
+  }
   if (typeof window === 'undefined') {
     return false
   }
@@ -140,15 +185,19 @@ export async function showAppNotification(data: NotificationData): Promise<boole
           body: data.body,
           icon: data.icon || '/icon-192x192.png',
           badge: '/icon-192x192.png',
+          image: data.image, // Imagen grande opcional
           tag: data.tag || 'zona-azul-notification',
           requireInteraction: data.isMandatory || false, // Notificaciones obligatorias requieren interacción
           data: {
             url: data.url || '/',
             timestamp: Date.now(),
             isMandatory: data.isMandatory || false,
+            appName: 'Zona Azul', // Nombre de la aplicación
           },
           vibrate: data.isMandatory ? [300, 200, 300, 200, 300] : [200, 100, 200], // Más vibrante para obligatorias
           silent: false,
+          dir: 'ltr',
+          lang: 'es',
         } as any)
 
         return true
@@ -163,13 +212,17 @@ export async function showAppNotification(data: NotificationData): Promise<boole
       body: data.body,
       icon: data.icon || '/icon-192x192.png',
       badge: '/icon-192x192.png',
+      image: data.image, // Imagen grande opcional
       tag: data.tag || 'zona-azul-notification',
       requireInteraction: data.isMandatory || false, // Notificaciones obligatorias requieren interacción
       data: {
         url: data.url || '/',
         timestamp: Date.now(),
         isMandatory: data.isMandatory || false,
+        appName: 'Zona Azul', // Nombre de la aplicación
       },
+      dir: 'ltr',
+      lang: 'es',
     } as any)
 
     // Manejar clic en la notificación

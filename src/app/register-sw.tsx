@@ -1,18 +1,36 @@
 "use client"
 
 import { useEffect } from 'react'
+import { subscribeToPushNotifications } from '@/lib/pushNotifications'
+import { useAuth } from '@/hooks/useAuth'
 
 export default function RegisterServiceWorker() {
+  const { userId } = useAuth()
+
   useEffect(() => {
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
       // Registrar inmediatamente sin esperar a 'load' para mejor rendimiento
       navigator.serviceWorker
         .register('/sw.js', { scope: '/' })
-        .then((registration) => {
+        .then(async (registration) => {
           // Verificar actualizaciones cada hora
           setInterval(() => {
             registration.update()
           }, 60 * 60 * 1000)
+          
+          // Suscribirse automáticamente a push notifications si hay usuario y ya tiene permisos
+          // NO solicitamos permisos aquí, solo nos suscribimos si ya están concedidos
+          if (userId && 'PushManager' in window && Notification.permission === 'granted') {
+            try {
+              const isSubscribed = await registration.pushManager.getSubscription()
+              if (!isSubscribed) {
+                // Suscribirse automáticamente si tiene permisos pero no está suscrito
+                await subscribeToPushNotifications(userId)
+              }
+            } catch (error) {
+              console.warn('Error al suscribirse a push notifications:', error)
+            }
+          }
           
           // Solicitar permiso de notificaciones de forma inteligente
           if ('Notification' in window && Notification.permission === 'default') {
@@ -28,13 +46,24 @@ export default function RegisterServiceWorker() {
                     const reg = await navigator.serviceWorker.ready
                     // Probar que funciona
                     try {
-                      await reg.showNotification('Notificaciones activadas', {
+                      await reg.showNotification('Zona Azul', {
                         body: 'Ahora recibirás notificaciones de Zona Azul',
                         icon: '/icon-192x192.png',
                         badge: '/icon-192x192.png',
                         tag: 'notification-test',
                         silent: true, // Silenciosa para no molestar
-                      })
+                        dir: 'ltr',
+                        lang: 'es',
+                      } as any)
+                      
+                      // Suscribirse a push notifications automáticamente
+                      if (userId && 'PushManager' in window) {
+                        try {
+                          await subscribeToPushNotifications(userId)
+                        } catch (error) {
+                          console.warn('Error al suscribirse a push:', error)
+                        }
+                      }
                     } catch (testError) {
                       console.warn('Service Worker puede tener problemas con notificaciones:', testError)
                     }
@@ -80,7 +109,7 @@ export default function RegisterServiceWorker() {
           console.error('Error al registrar Service Worker:', error)
         })
     }
-  }, [])
+  }, [userId]) // Incluir userId para re-evaluar suscripción cuando el usuario inicie sesión
 
   return null
 }

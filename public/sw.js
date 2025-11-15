@@ -196,8 +196,9 @@ self.addEventListener('fetch', (event) => {
   )
 })
 
-// Manejar notificaciones push
+// Manejar notificaciones push (funciona incluso cuando la app está cerrada)
 self.addEventListener('push', (event) => {
+  // Optimización: procesar inmediatamente sin esperar
   let notificationData = {
     title: 'Zona Azul',
     body: 'Tienes una nueva notificación',
@@ -208,6 +209,7 @@ self.addEventListener('push', (event) => {
     data: {}
   }
 
+  // Procesar datos del push de forma rápida
   if (event.data) {
     try {
       const data = event.data.json()
@@ -217,22 +219,37 @@ self.addEventListener('push', (event) => {
         data: data.data || {}
       }
     } catch (e) {
+      // Si no es JSON, usar como texto
       notificationData.body = event.data.text() || notificationData.body
     }
   }
 
-  event.waitUntil(
-    self.registration.showNotification(notificationData.title, {
-      body: notificationData.body,
-      icon: notificationData.icon,
-      badge: notificationData.badge,
-      tag: notificationData.tag,
-      requireInteraction: notificationData.requireInteraction,
-      data: notificationData.data,
-      vibrate: [200, 100, 200],
-      actions: notificationData.actions || []
-    })
-  )
+  // Mostrar notificación inmediatamente (no esperar nada)
+  // Esto permite que las notificaciones aparezcan incluso si la app está cerrada
+  const promiseChain = self.registration.showNotification(notificationData.title, {
+    body: notificationData.body,
+    icon: notificationData.icon || '/icon-192x192.png',
+    badge: notificationData.badge || '/icon-192x192.png',
+    image: notificationData.image,
+    tag: notificationData.tag || 'zona-azul-notification',
+    requireInteraction: notificationData.requireInteraction || false,
+    data: {
+      ...notificationData.data,
+      appName: 'Zona Azul',
+      timestamp: Date.now()
+    },
+    vibrate: notificationData.vibrate || [200, 100, 200],
+    actions: notificationData.actions || [],
+    dir: 'ltr',
+    lang: 'es',
+    renotify: false,
+    silent: false,
+    // Optimización: no esperar interacción para notificaciones normales
+    timestamp: Date.now(),
+  })
+
+  // Usar waitUntil para mantener el service worker activo
+  event.waitUntil(promiseChain)
 })
 
 // Manejar clics en notificaciones

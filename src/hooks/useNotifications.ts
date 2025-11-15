@@ -78,9 +78,14 @@ export function useNotifications() {
             badge: options.badge || '/icon-192x192.png',
             tag: options.tag || 'zona-azul-notification',
             requireInteraction: options.requireInteraction || false,
-            data: options.data || {},
+            data: {
+              ...options.data,
+              appName: 'Zona Azul', // Nombre de la aplicación
+            },
             vibrate: [200, 100, 200],
             actions: options.actions || [],
+            dir: 'ltr',
+            lang: 'es',
           } as any)
 
           return true
@@ -89,9 +94,15 @@ export function useNotifications() {
           new Notification(options.title, {
             body: options.body,
             icon: options.icon || '/icon-192x192.png',
+            badge: options.badge || '/icon-192x192.png',
             tag: options.tag || 'zona-azul-notification',
-            data: options.data || {},
-          })
+            data: {
+              ...options.data,
+              appName: 'Zona Azul', // Nombre de la aplicación
+            },
+            dir: 'ltr',
+            lang: 'es',
+          } as any)
 
           return true
         }

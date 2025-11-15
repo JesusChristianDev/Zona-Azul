@@ -8,6 +8,9 @@
   "theme_color": "#1d4ed8",
   "orientation": "portrait-primary",
   "scope": "/",
+  "id": "/",
+  "dir": "ltr",
+  "lang": "es",
   "icons": [
     {
       "src": "/icon-192x192.png",

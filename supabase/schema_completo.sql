@@ -1,5 +1,10 @@
 -- Esquema de base de datos para Zona Azul (COMPLETO)
--- Incluye: Schema base + Migración de separación menú/planes
+-- Incluye: 
+--   - Schema base
+--   - Migración de separación menú/planes
+--   - Tabla de suscripciones push (push_subscriptions)
+--   - Campo signature_image en subscription_contracts
+--   - Scripts opcionales de actualización de datos existentes
 -- Ejecutar este script en el SQL Editor de Supabase
 
 -- Habilitar extensiones útiles
@@ -538,11 +543,24 @@ CREATE TABLE IF NOT EXISTS subscription_contracts (
   signed_at TIMESTAMP WITH TIME ZONE,
   signed_by UUID REFERENCES users(id) ON DELETE SET NULL,
   signature_method TEXT, -- 'electronic_signature', 'checkbox_acceptance'
+  signature_image TEXT, -- Imagen de la firma electrónica en formato base64 (data:image/png;base64,...)
   ip_address TEXT, -- Para trazabilidad legal
   user_agent TEXT, -- Para trazabilidad legal
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Agregar columna signature_image si no existe (para bases de datos existentes)
+ALTER TABLE subscription_contracts 
+ADD COLUMN IF NOT EXISTS signature_image TEXT;
+
+-- Comentario explicativo
+COMMENT ON COLUMN subscription_contracts.signature_image IS 'Imagen de la firma electrónica en formato base64 (data:image/png;base64,...)';
+
+-- Índice para búsquedas rápidas de contratos firmados con firma electrónica
+CREATE INDEX IF NOT EXISTS idx_subscription_contracts_signature_method 
+ON subscription_contracts(signature_method) 
+WHERE signature_method = 'electronic_signature';
 
 -- Tabla de historial de pagos
 CREATE TABLE IF NOT EXISTS payment_history (
@@ -860,6 +878,43 @@ CREATE INDEX IF NOT EXISTS idx_notifications_log_user_id ON notifications_log(us
 CREATE INDEX IF NOT EXISTS idx_notifications_log_sent_at ON notifications_log(sent_at);
 
 -- ============================================
+-- 7. NOTIFICACIONES PUSH
+-- ============================================
+
+-- Tabla para almacenar suscripciones push
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL,
+  p256dh_key TEXT NOT NULL,
+  auth_key TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(user_id, endpoint)
+);
+
+-- Índice para búsquedas rápidas por usuario
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id);
+
+-- Índice para búsquedas por endpoint
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_endpoint ON push_subscriptions(endpoint);
+
+-- Trigger para actualizar updated_at
+CREATE OR REPLACE FUNCTION update_push_subscriptions_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_update_push_subscriptions_updated_at ON push_subscriptions;
+CREATE TRIGGER trigger_update_push_subscriptions_updated_at
+  BEFORE UPDATE ON push_subscriptions
+  FOR EACH ROW
+  EXECUTE FUNCTION update_push_subscriptions_updated_at();
+
+-- ============================================
 -- TRIGGERS PARA ACTUALIZAR updated_at
 -- ============================================
 
@@ -913,6 +968,10 @@ CREATE TRIGGER update_delivery_addresses_updated_at BEFORE UPDATE ON delivery_ad
 
 DROP TRIGGER IF EXISTS update_delivery_ratings_updated_at ON delivery_ratings;
 CREATE TRIGGER update_delivery_ratings_updated_at BEFORE UPDATE ON delivery_ratings
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_push_subscriptions_updated_at ON push_subscriptions;
+CREATE TRIGGER update_push_subscriptions_updated_at BEFORE UPDATE ON push_subscriptions
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================
@@ -1171,4 +1230,32 @@ ON CONFLICT (name) DO UPDATE SET
     price_per_meal_per_month = EXCLUDED.price_per_meal_per_month,
     discount_percentage = EXCLUDED.discount_percentage,
     description = EXCLUDED.description;
+
+-- ============================================
+-- ACTUALIZACIÓN DE DATOS EXISTENTES (OPCIONAL)
+-- ============================================
+-- NOTA: Estos scripts son opcionales y solo deben ejecutarse si tienes usuarios existentes
+-- que necesitan ser actualizados. Para nuevas instalaciones, no son necesarios.
+
+-- Script para actualizar must_change_password en usuarios existentes
+-- (Solo ejecutar si tienes usuarios creados antes de implementar esta funcionalidad)
+-- Descomenta las siguientes líneas si necesitas actualizar usuarios existentes:
+/*
+-- Actualizar todos los usuarios existentes para que no tengan que cambiar la contraseña
+-- Esto es seguro porque estos usuarios ya tienen contraseñas establecidas
+UPDATE users
+SET must_change_password = false,
+    updated_at = NOW()
+WHERE must_change_password = true;
+
+-- Verificar que la actualización se aplicó correctamente
+SELECT 
+    role,
+    COUNT(*) as total,
+    COUNT(*) FILTER (WHERE must_change_password = true) as must_change,
+    COUNT(*) FILTER (WHERE must_change_password = false) as no_must_change
+FROM users
+GROUP BY role
+ORDER BY role;
+*/
 
