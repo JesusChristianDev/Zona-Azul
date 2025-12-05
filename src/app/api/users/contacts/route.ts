@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { getAllUsers, getNutricionistaByClientId, getClientsByNutricionistaId, getOrderIncidentsByRepartidorId } from '@/lib/db'
+import { getAllUsers, getNutricionistaByClientId, getClientsByNutricionistaId, getOrdersByUserId, getOrdersByRepartidorId, getActiveIncidentsByOrderIds } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,7 +39,23 @@ export async function GET(request: NextRequest) {
       }
 
       // 3. Repartidor si hay un incidente activo
-      // TODO: Implementar cuando se tenga la lógica de incidentes
+      const subscriberOrders = await getOrdersByUserId(userId)
+      const activeOrdersWithRepartidor = subscriberOrders.filter(order =>
+        order.repartidor_id && order.status !== 'entregado' && order.status !== 'cancelado'
+      )
+
+      const activeOrderMap = new Map(activeOrdersWithRepartidor.map(order => [order.id, order]))
+      const activeIncidents = await getActiveIncidentsByOrderIds(activeOrdersWithRepartidor.map(order => order.id))
+      const repartidorIdsWithIncident = new Set(
+        activeIncidents
+          .map(incident => activeOrderMap.get(incident.order_id)?.repartidor_id)
+          .filter(Boolean)
+      )
+
+      repartidorIdsWithIncident.forEach(repartidorId => {
+        const repartidor = safeUsers.find(u => u.id === repartidorId)
+        if (repartidor) contacts.push(repartidor)
+      })
     } else if (role === 'nutricionista') {
       // Nutricionista puede contactar a:
       // 1. Admin
@@ -65,9 +81,14 @@ export async function GET(request: NextRequest) {
       if (admin) contacts.push(admin)
 
       // 2. Suscriptores con pedidos asignados
-      // TODO: Implementar cuando se tenga la lógica de pedidos
-      const subscribers = safeUsers.filter(u => u.role === 'suscriptor')
-      contacts.push(...subscribers)
+      const assignedOrders = await getOrdersByRepartidorId(userId)
+      const activeOrders = assignedOrders.filter(order => order.status !== 'entregado' && order.status !== 'cancelado')
+      const subscriberIds = Array.from(new Set(activeOrders.map(order => order.user_id)))
+
+      subscriberIds.forEach(subscriberId => {
+        const subscriber = safeUsers.find(u => u.id === subscriberId)
+        if (subscriber) contacts.push(subscriber)
+      })
 
       // 3. Otros repartidores
       const otherRepartidores = safeUsers.filter(
