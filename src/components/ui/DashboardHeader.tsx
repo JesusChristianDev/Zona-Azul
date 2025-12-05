@@ -219,169 +219,172 @@ export default function DashboardHeader() {
           </div>
         </div>
       )}
+
       {/* Ocultar header completo solo en móviles cuando cualquier panel está abierto */}
       {/* En desktop, siempre mostrar el header pero con z-index menor que los paneles */}
-      <header className={`bg-white dark:bg-slate-800 shadow-sm sticky top-0 z-[40] border-b border-gray-200 dark:border-slate-700 w-full ${isAnyPanelOpen ? 'hidden sm:block' : ''}`}>
-      <div className="max-w-7xl mx-auto w-full">
-        {/* Navegación principal */}
-        <div className="flex items-center justify-between py-2.5 sm:py-3 md:py-4 px-3 sm:px-4 gap-2 w-full">
-          {isDashboardPage ? (
-            // Logo sin link cuando está en dashboard
-            <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 flex-shrink-0 min-w-0">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-base flex-shrink-0">
-                ZA
+      <header
+        className={`bg-white dark:bg-slate-800 shadow-sm sticky top-0 z-[40] border-b border-gray-200 dark:border-slate-700 w-full ${isAnyPanelOpen ? 'hidden sm:block' : ''}`}
+      >
+        <div className="max-w-7xl mx-auto w-full">
+          {/* Navegación principal */}
+          <div className="flex items-center justify-between py-2.5 sm:py-3 md:py-4 px-3 sm:px-4 gap-2 w-full">
+            {isDashboardPage ? (
+              // Logo sin link cuando está en dashboard
+              <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 flex-shrink-0 min-w-0">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-base flex-shrink-0">
+                  ZA
+                </div>
+                <h1 className="text-sm sm:text-base md:text-lg font-semibold truncate text-gray-900 dark:text-gray-100">Zona Azul</h1>
               </div>
-              <h1 className="text-sm sm:text-base md:text-lg font-semibold truncate text-gray-900 dark:text-gray-100">Zona Azul</h1>
-            </div>
-          ) : (
-            // Logo con link cuando está en páginas públicas
-            <Link href="/" className="flex items-center gap-1.5 sm:gap-2 md:gap-3 hover:opacity-80 transition-opacity flex-shrink-0 min-w-0">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-base flex-shrink-0">
-                ZA
-              </div>
-              <h1 className="text-sm sm:text-base md:text-lg font-semibold truncate text-gray-900 dark:text-gray-100">Zona Azul</h1>
-            </Link>
-          )}
-
-          {/* Navegación desktop - solo en páginas públicas */}
-          {!isDashboardPage && (
-            <nav className="hidden sm:flex space-x-4">
-              <Link href="/" className="text-sm text-gray-700 dark:text-gray-300 hover:text-primary transition-colors">
-                Inicio
+            ) : (
+              // Logo con link cuando está en páginas públicas
+              <Link href="/" className="flex items-center gap-1.5 sm:gap-2 md:gap-3 hover:opacity-80 transition-opacity flex-shrink-0 min-w-0">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-base flex-shrink-0">
+                  ZA
+                </div>
+                <h1 className="text-sm sm:text-base md:text-lg font-semibold truncate text-gray-900 dark:text-gray-100">Zona Azul</h1>
               </Link>
-              <Link href="/booking" className="text-sm text-gray-700 hover:text-primary transition-colors">
-                Agendar cita
-              </Link>
-              <Link href="/menu" className="text-sm text-gray-700 hover:text-primary transition-colors">
-                Carta
-              </Link>
-              <Link href="/login" className="text-sm text-gray-700 hover:text-primary transition-colors">
-                Acceso
-              </Link>
-            </nav>
-          )}
+            )}
 
-          {/* Navegación dashboard - Desktop */}
-          {isDashboardPage && (
-            <div className="hidden sm:flex items-center gap-3 md:gap-4 flex-shrink-0">
-              {role !== 'invitado' && (
-                <>
-                  {/* Indicador de rol */}
-                  <div className="flex items-center gap-2 text-xs flex-shrink-0">
-                    <span className="text-gray-500 dark:text-gray-400">Rol:</span>
-                    <span className="px-2 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium capitalize">
-                      {role}
-                    </span>
-                  </div>
-                  
-                  {/* Botones de notificaciones y mensajes - los paneles se renderizan fuera del header */}
-                  <NotificationButton />
-                  <MessageButton />
-                  
-                  {/* Siempre mostrar ajustes y logout en desktop (incluso cuando algún panel está abierto) */}
-                  <button
-                    onClick={() => {
-                      // Cerrar otros paneles al abrir ajustes
-                      setIsNotificationsOpen(false)
-                      setIsMessagesOpen(false)
-                      // Abrir panel de ajustes (sin navegar)
-                      setIsSettingsOpen(!isSettingsOpen)
-                    }}
-                    className={`relative p-2 text-gray-600 dark:text-gray-400 hover:text-primary hover:bg-primary/5 dark:hover:bg-primary/10 rounded-lg transition-colors flex-shrink-0 ${isSettingsOpen ? 'text-primary bg-primary/10' : ''}`}
-                    aria-label="Ajustes"
-                    title="Ajustes"
-                  >
-                    <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                      />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={handleLogout}
-                    disabled={isLoggingOut}
-                    className="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                  >
-                    {isLoggingOut ? 'Saliendo...' : 'Salir'}
-                  </button>
-                </>
-              )}
-            </div>
-          )}
+            {/* Navegación desktop - solo en páginas públicas */}
+            {!isDashboardPage && (
+              <nav className="hidden sm:flex space-x-4">
+                <Link href="/" className="text-sm text-gray-700 dark:text-gray-300 hover:text-primary transition-colors">
+                  Inicio
+                </Link>
+                <Link href="/booking" className="text-sm text-gray-700 hover:text-primary transition-colors">
+                  Agendar cita
+                </Link>
+                <Link href="/menu" className="text-sm text-gray-700 hover:text-primary transition-colors">
+                  Carta
+                </Link>
+                <Link href="/login" className="text-sm text-gray-700 hover:text-primary transition-colors">
+                  Acceso
+                </Link>
+              </nav>
+            )}
 
-          {/* Mobile menu button */}
-          {!isDashboardPage && (
-            <div className="sm:hidden relative">
-              <MobileMenu />
-            </div>
-          )}
+            {/* Navegación dashboard - Desktop */}
+            {isDashboardPage && (
+              <div className="hidden sm:flex items-center gap-3 md:gap-4 flex-shrink-0">
+                {role !== 'invitado' && (
+                  <>
+                    {/* Indicador de rol */}
+                    <div className="flex items-center gap-2 text-xs flex-shrink-0">
+                      <span className="text-gray-500 dark:text-gray-400">Rol:</span>
+                      <span className="px-2 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium capitalize">
+                        {role}
+                      </span>
+                    </div>
 
-          {/* Mobile - Dashboard pages */}
-          {/* Ocultar botones del navbar en móvil cuando cualquier panel está abierto */}
-          {isDashboardPage && (
-            <div className={`sm:hidden flex items-center gap-1.5 flex-shrink-0 ml-auto ${isAnyPanelOpen ? 'hidden' : ''}`}>
-              {role !== 'invitado' && (
-                <>
-                  {/* Indicador de rol en móvil */}
-                  <div className="flex items-center gap-1.5 text-xs flex-shrink-0">
-                    <span className="text-gray-500 hidden xs:inline">Rol:</span>
-                    <span className="px-1.5 py-0.5 bg-primary/10 text-primary rounded-full text-xs font-medium capitalize">
-                      {role}
-                    </span>
-                  </div>
-                  
-                  {/* Botones de notificaciones y mensajes - los paneles se renderizan fuera del header */}
-                  <div className="flex-shrink-0 relative z-10">
+                    {/* Botones de notificaciones y mensajes - los paneles se renderizan fuera del header */}
                     <NotificationButton />
-                  </div>
-                  <div className="flex-shrink-0 relative z-10">
                     <MessageButton />
-                  </div>
-                  
-                  {/* Siempre mostrar ajustes y logout en móvil (excepto cuando algún panel está abierto, que se oculta todo el navbar) */}
-                  <button
-                    onClick={() => {
-                      // Cerrar otros paneles al abrir ajustes
-                      setIsNotificationsOpen(false)
-                      setIsMessagesOpen(false)
-                      // Abrir panel de ajustes (sin navegar)
-                      setIsSettingsOpen(!isSettingsOpen)
-                    }}
-                    className={`p-1.5 text-gray-700 dark:text-gray-300 hover:text-primary hover:bg-primary/5 dark:hover:bg-primary/10 rounded-lg transition-colors flex-shrink-0 relative z-10 ${isSettingsOpen ? 'text-primary bg-primary/10' : ''}`}
-                    aria-label="Ajustes"
-                    title="Ajustes"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                      />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={handleLogout}
-                    disabled={isLoggingOut}
-                    className="p-1.5 text-gray-700 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 relative z-10"
-                    aria-label={isLoggingOut ? 'Saliendo...' : 'Salir'}
-                    title={isLoggingOut ? 'Saliendo...' : 'Salir'}
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
-                  </button>
-                </>
-              )}
-            </div>
-          )}
+
+                    {/* Siempre mostrar ajustes y logout en desktop (incluso cuando algún panel está abierto) */}
+                    <button
+                      onClick={() => {
+                        // Cerrar otros paneles al abrir ajustes
+                        setIsNotificationsOpen(false)
+                        setIsMessagesOpen(false)
+                        // Abrir panel de ajustes (sin navegar)
+                        setIsSettingsOpen(!isSettingsOpen)
+                      }}
+                      className={`relative p-2 text-gray-600 dark:text-gray-400 hover:text-primary hover:bg-primary/5 dark:hover:bg-primary/10 rounded-lg transition-colors flex-shrink-0 ${isSettingsOpen ? 'text-primary bg-primary/10' : ''}`}
+                      aria-label="Ajustes"
+                      title="Ajustes"
+                    >
+                      <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                        />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={handleLogout}
+                      disabled={isLoggingOut}
+                      className="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                    >
+                      {isLoggingOut ? 'Saliendo...' : 'Salir'}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Mobile menu button */}
+            {!isDashboardPage && (
+              <div className="sm:hidden relative">
+                <MobileMenu />
+              </div>
+            )}
+
+            {/* Mobile - Dashboard pages */}
+            {/* Ocultar botones del navbar en móvil cuando cualquier panel está abierto */}
+            {isDashboardPage && (
+              <div className={`sm:hidden flex items-center gap-1.5 flex-shrink-0 ml-auto ${isAnyPanelOpen ? 'hidden' : ''}`}>
+                {role !== 'invitado' && (
+                  <>
+                    {/* Indicador de rol en móvil */}
+                    <div className="flex items-center gap-1.5 text-xs flex-shrink-0">
+                      <span className="text-gray-500 hidden xs:inline">Rol:</span>
+                      <span className="px-1.5 py-0.5 bg-primary/10 text-primary rounded-full text-xs font-medium capitalize">
+                        {role}
+                      </span>
+                    </div>
+
+                    {/* Botones de notificaciones y mensajes - los paneles se renderizan fuera del header */}
+                    <div className="flex-shrink-0 relative z-10">
+                      <NotificationButton />
+                    </div>
+                    <div className="flex-shrink-0 relative z-10">
+                      <MessageButton />
+                    </div>
+
+                    {/* Siempre mostrar ajustes y logout en móvil (excepto cuando algún panel está abierto, que se oculta todo el navbar) */}
+                    <button
+                      onClick={() => {
+                        // Cerrar otros paneles al abrir ajustes
+                        setIsNotificationsOpen(false)
+                        setIsMessagesOpen(false)
+                        // Abrir panel de ajustes (sin navegar)
+                        setIsSettingsOpen(!isSettingsOpen)
+                      }}
+                      className={`p-1.5 text-gray-700 dark:text-gray-300 hover:text-primary hover:bg-primary/5 dark:hover:bg-primary/10 rounded-lg transition-colors flex-shrink-0 relative z-10 ${isSettingsOpen ? 'text-primary bg-primary/10' : ''}`}
+                      aria-label="Ajustes"
+                      title="Ajustes"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                        />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={handleLogout}
+                      disabled={isLoggingOut}
+                      className="p-1.5 text-gray-700 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 relative z-10"
+                      aria-label={isLoggingOut ? 'Saliendo...' : 'Salir'}
+                      title={isLoggingOut ? 'Saliendo...' : 'Salir'}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
       </header>
     </>
   )

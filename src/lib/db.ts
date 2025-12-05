@@ -2739,26 +2739,41 @@ export async function updateUserSettings(
 export interface DatabaseNutritionistSchedule {
   id: string
   user_id: string
+  schedule_mode: 'continuous' | 'split'
   monday_start_hour: number | null
   monday_end_hour: number | null
+  monday_second_start_hour: number | null
+  monday_second_end_hour: number | null
   monday_enabled: boolean
   tuesday_start_hour: number | null
   tuesday_end_hour: number | null
+  tuesday_second_start_hour: number | null
+  tuesday_second_end_hour: number | null
   tuesday_enabled: boolean
   wednesday_start_hour: number | null
   wednesday_end_hour: number | null
+  wednesday_second_start_hour: number | null
+  wednesday_second_end_hour: number | null
   wednesday_enabled: boolean
   thursday_start_hour: number | null
   thursday_end_hour: number | null
+  thursday_second_start_hour: number | null
+  thursday_second_end_hour: number | null
   thursday_enabled: boolean
   friday_start_hour: number | null
   friday_end_hour: number | null
+  friday_second_start_hour: number | null
+  friday_second_end_hour: number | null
   friday_enabled: boolean
   saturday_start_hour: number | null
   saturday_end_hour: number | null
+  saturday_second_start_hour: number | null
+  saturday_second_end_hour: number | null
   saturday_enabled: boolean
   sunday_start_hour: number | null
   sunday_end_hour: number | null
+  sunday_second_start_hour: number | null
+  sunday_second_end_hour: number | null
   sunday_enabled: boolean
   slot_duration_minutes: number
   created_at: string

@@ -26,6 +26,62 @@ interface Appointment {
   user_id?: string | null
 }
 
+const defaultSchedule = {
+  schedule_mode: 'continuous' as 'continuous' | 'split',
+  monday_start_hour: 9,
+  monday_end_hour: 18,
+  monday_second_start_hour: null as number | null,
+  monday_second_end_hour: null as number | null,
+  monday_enabled: true,
+  tuesday_start_hour: 9,
+  tuesday_end_hour: 18,
+  tuesday_second_start_hour: null as number | null,
+  tuesday_second_end_hour: null as number | null,
+  tuesday_enabled: true,
+  wednesday_start_hour: 9,
+  wednesday_end_hour: 18,
+  wednesday_second_start_hour: null as number | null,
+  wednesday_second_end_hour: null as number | null,
+  wednesday_enabled: true,
+  thursday_start_hour: 9,
+  thursday_end_hour: 18,
+  thursday_second_start_hour: null as number | null,
+  thursday_second_end_hour: null as number | null,
+  thursday_enabled: true,
+  friday_start_hour: 9,
+  friday_end_hour: 18,
+  friday_second_start_hour: null as number | null,
+  friday_second_end_hour: null as number | null,
+  friday_enabled: true,
+  saturday_start_hour: null as number | null,
+  saturday_end_hour: null as number | null,
+  saturday_second_start_hour: null as number | null,
+  saturday_second_end_hour: null as number | null,
+  saturday_enabled: false,
+  sunday_start_hour: null as number | null,
+  sunday_end_hour: null as number | null,
+  sunday_second_start_hour: null as number | null,
+  sunday_second_end_hour: null as number | null,
+  sunday_enabled: false,
+  slot_duration_minutes: 60,
+}
+
+const WEEK_DAYS = [
+  { key: 'monday', label: 'Lunes' },
+  { key: 'tuesday', label: 'Martes' },
+  { key: 'wednesday', label: 'Miércoles' },
+  { key: 'thursday', label: 'Jueves' },
+  { key: 'friday', label: 'Viernes' },
+  { key: 'saturday', label: 'Sábado' },
+  { key: 'sunday', label: 'Domingo' },
+]
+
+const SPLIT_DEFAULTS = {
+  morningEnd: 13,
+  afternoonStart: 16,
+  afternoonEnd: 20,
+}
+
 type FilterStatus = 'todas' | 'pendiente' | 'confirmada' | 'cancelada' | 'completada'
 
 export default function NutricionistaCitasPage() {
@@ -95,6 +151,31 @@ export default function NutricionistaCitasPage() {
     }
   }
 
+  const handleScheduleModeChange = (mode: 'continuous' | 'split') => {
+    setSchedule((prev: any) => {
+      if (!prev) return prev
+
+      const updated = { ...prev, schedule_mode: mode }
+
+      if (mode === 'split') {
+        WEEK_DAYS.forEach((day) => {
+          if (updated[`${day.key}_enabled`]) {
+            updated[`${day.key}_end_hour`] = updated[`${day.key}_end_hour`] ?? SPLIT_DEFAULTS.morningEnd
+            updated[`${day.key}_second_start_hour`] = updated[`${day.key}_second_start_hour`] ?? SPLIT_DEFAULTS.afternoonStart
+            updated[`${day.key}_second_end_hour`] = updated[`${day.key}_second_end_hour`] ?? SPLIT_DEFAULTS.afternoonEnd
+          }
+        })
+      } else {
+        WEEK_DAYS.forEach((day) => {
+          updated[`${day.key}_second_start_hour`] = null
+          updated[`${day.key}_second_end_hour`] = null
+        })
+      }
+
+      return updated
+    })
+  }
+
   // Cargar horarios del nutricionista
   const loadSchedule = async () => {
     if (!userId) return
@@ -103,60 +184,14 @@ export default function NutricionistaCitasPage() {
       const nutritionistSchedule = await getNutritionistSchedule()
       // Si no hay horarios configurados, usar valores por defecto
       if (!nutritionistSchedule) {
-        setSchedule({
-          monday_start_hour: 9,
-          monday_end_hour: 18,
-          monday_enabled: true,
-          tuesday_start_hour: 9,
-          tuesday_end_hour: 18,
-          tuesday_enabled: true,
-          wednesday_start_hour: 9,
-          wednesday_end_hour: 18,
-          wednesday_enabled: true,
-          thursday_start_hour: 9,
-          thursday_end_hour: 18,
-          thursday_enabled: true,
-          friday_start_hour: 9,
-          friday_end_hour: 18,
-          friday_enabled: true,
-          saturday_start_hour: null,
-          saturday_end_hour: null,
-          saturday_enabled: false,
-          sunday_start_hour: null,
-          sunday_end_hour: null,
-          sunday_enabled: false,
-          slot_duration_minutes: 60,
-        })
+        setSchedule(defaultSchedule)
       } else {
-        setSchedule(nutritionistSchedule)
+        setSchedule({ ...defaultSchedule, ...nutritionistSchedule })
       }
     } catch (error) {
       console.error('Error loading schedule:', error)
       // Usar valores por defecto en caso de error
-      setSchedule({
-        monday_start_hour: 9,
-        monday_end_hour: 18,
-        monday_enabled: true,
-        tuesday_start_hour: 9,
-        tuesday_end_hour: 18,
-        tuesday_enabled: true,
-        wednesday_start_hour: 9,
-        wednesday_end_hour: 18,
-        wednesday_enabled: true,
-        thursday_start_hour: 9,
-        thursday_end_hour: 18,
-        thursday_enabled: true,
-        friday_start_hour: 9,
-        friday_end_hour: 18,
-        friday_enabled: true,
-        saturday_start_hour: null,
-        saturday_end_hour: null,
-        saturday_enabled: false,
-        sunday_start_hour: null,
-        sunday_end_hour: null,
-        sunday_enabled: false,
-        slot_duration_minutes: 60,
-      })
+      setSchedule(defaultSchedule)
     }
   }
 
@@ -164,9 +199,12 @@ export default function NutricionistaCitasPage() {
   const handleSaveSchedule = async () => {
     if (!userId || !schedule) return
 
+    // Evitar enviar campos de solo lectura (id, user_id, timestamps) que rompen el upsert
+    const { id, user_id, created_at, updated_at, ...editableSchedule } = schedule
+
     setSavingSchedule(true)
     try {
-      const updated = await updateNutritionistSchedule(schedule)
+      const updated = await updateNutritionistSchedule(editableSchedule)
       if (updated) {
         setSchedule(updated)
         setIsScheduleModalOpen(false)
@@ -1177,6 +1215,38 @@ export default function NutricionistaCitasPage() {
               Configura tus horarios de disponibilidad. Los usuarios solo podrán agendar citas en estos horarios.
             </p>
 
+            {/* Tipo de jornada */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">Tipo de horario</label>
+              <div className="flex flex-wrap gap-3">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <input
+                    type="radio"
+                    name="schedule_mode"
+                    value="continuous"
+                    checked={schedule.schedule_mode === 'continuous'}
+                    onChange={() => handleScheduleModeChange('continuous')}
+                    className="w-4 h-4 text-primary border-gray-300"
+                  />
+                  Horario seguido
+                </label>
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <input
+                    type="radio"
+                    name="schedule_mode"
+                    value="split"
+                    checked={schedule.schedule_mode === 'split'}
+                    onChange={() => handleScheduleModeChange('split')}
+                    className="w-4 h-4 text-primary border-gray-300"
+                  />
+                  Horario partido (mañana y tarde)
+                </label>
+              </div>
+              <p className="text-xs text-gray-500">
+                Define si atiendes de forma continua o con pausa al mediodía. Ajusta los tramos de mañana y tarde según necesites.
+              </p>
+            </div>
+
             {/* Duración de las citas */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1195,18 +1265,12 @@ export default function NutricionistaCitasPage() {
 
             {/* Horarios por día */}
             <div className="space-y-4">
-              {[
-                { key: 'monday', label: 'Lunes' },
-                { key: 'tuesday', label: 'Martes' },
-                { key: 'wednesday', label: 'Miércoles' },
-                { key: 'thursday', label: 'Jueves' },
-                { key: 'friday', label: 'Viernes' },
-                { key: 'saturday', label: 'Sábado' },
-                { key: 'sunday', label: 'Domingo' },
-              ].map((day) => {
+              {WEEK_DAYS.map((day) => {
                 const enabled = schedule[`${day.key}_enabled`] as boolean
                 const startHour = schedule[`${day.key}_start_hour`] as number | null
                 const endHour = schedule[`${day.key}_end_hour`] as number | null
+                const secondStartHour = schedule[`${day.key}_second_start_hour`] as number | null
+                const secondEndHour = schedule[`${day.key}_second_end_hour`] as number | null
 
                 return (
                   <div key={day.key} className="border border-gray-200 rounded-lg p-4">
@@ -1216,11 +1280,26 @@ export default function NutricionistaCitasPage() {
                           type="checkbox"
                           checked={enabled}
                           onChange={(e) => {
-                            setSchedule({
-                              ...schedule,
-                              [`${day.key}_enabled`]: e.target.checked,
-                              [`${day.key}_start_hour`]: e.target.checked ? (startHour || 9) : null,
-                              [`${day.key}_end_hour`]: e.target.checked ? (endHour || 18) : null,
+                            const isChecked = e.target.checked
+                            setSchedule((prev: any) => {
+                              if (!prev) return prev
+                              const updated: any = {
+                                ...prev,
+                                [`${day.key}_enabled`]: isChecked,
+                                [`${day.key}_start_hour`]: isChecked ? (startHour ?? defaultSchedule[`${day.key}_start_hour`]) : null,
+                                [`${day.key}_end_hour`]: isChecked
+                                  ? prev.schedule_mode === 'split'
+                                    ? endHour ?? SPLIT_DEFAULTS.morningEnd
+                                    : endHour ?? defaultSchedule[`${day.key}_end_hour`]
+                                  : null,
+                                [`${day.key}_second_start_hour`]: isChecked && prev.schedule_mode === 'split'
+                                  ? secondStartHour ?? SPLIT_DEFAULTS.afternoonStart
+                                  : null,
+                                [`${day.key}_second_end_hour`]: isChecked && prev.schedule_mode === 'split'
+                                  ? secondEndHour ?? SPLIT_DEFAULTS.afternoonEnd
+                                  : null,
+                              }
+                              return updated
                             })
                           }}
                           className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
@@ -1229,39 +1308,75 @@ export default function NutricionistaCitasPage() {
                       </label>
                     </div>
                     {enabled && (
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className={`grid gap-4 ${schedule.schedule_mode === 'split' ? 'md:grid-cols-2' : 'grid-cols-2'}`}>
                         <div>
-                          <label className="block text-xs text-gray-500 mb-1">Hora inicio</label>
+                          <label className="block text-xs text-gray-500 mb-1">Inicio {schedule.schedule_mode === 'split' ? 'mañana' : ''}</label>
                           <input
                             type="number"
                             min="0"
                             max="23"
-                            value={startHour || 9}
+                            value={startHour ?? 9}
                             onChange={(e) => {
                               const hour = parseInt(e.target.value) || 0
                               if (hour >= 0 && hour <= 23) {
-                                setSchedule({ ...schedule, [`${day.key}_start_hour`]: hour })
+                                setSchedule((prev: any) => ({ ...prev, [`${day.key}_start_hour`]: hour }))
                               }
                             }}
                             className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition"
                           />
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-500 mb-1">Hora fin</label>
+                          <label className="block text-xs text-gray-500 mb-1">Fin {schedule.schedule_mode === 'split' ? 'mañana' : ''}</label>
                           <input
                             type="number"
                             min="0"
                             max="23"
-                            value={endHour || 18}
+                            value={endHour ?? 18}
                             onChange={(e) => {
                               const hour = parseInt(e.target.value) || 0
                               if (hour >= 0 && hour <= 23) {
-                                setSchedule({ ...schedule, [`${day.key}_end_hour`]: hour })
+                                setSchedule((prev: any) => ({ ...prev, [`${day.key}_end_hour`]: hour }))
                               }
                             }}
                             className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition"
                           />
                         </div>
+                        {schedule.schedule_mode === 'split' && (
+                          <>
+                            <div>
+                              <label className="block text-xs text-gray-500 mb-1">Inicio tarde</label>
+                              <input
+                                type="number"
+                                min="0"
+                                max="23"
+                                value={secondStartHour ?? SPLIT_DEFAULTS.afternoonStart}
+                                onChange={(e) => {
+                                  const hour = parseInt(e.target.value) || 0
+                                  if (hour >= 0 && hour <= 23) {
+                                    setSchedule((prev: any) => ({ ...prev, [`${day.key}_second_start_hour`]: hour }))
+                                  }
+                                }}
+                                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-500 mb-1">Fin tarde</label>
+                              <input
+                                type="number"
+                                min="0"
+                                max="23"
+                                value={secondEndHour ?? SPLIT_DEFAULTS.afternoonEnd}
+                                onChange={(e) => {
+                                  const hour = parseInt(e.target.value) || 0
+                                  if (hour >= 0 && hour <= 23) {
+                                    setSchedule((prev: any) => ({ ...prev, [`${day.key}_second_end_hour`]: hour }))
+                                  }
+                                }}
+                                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition"
+                              />
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
