@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "check:conflicts": "node scripts/check-merge-conflicts.js",
     "verify-supabase": "node scripts/verificar-supabase.js",
     "verify-deps": "node scripts/verificar-dependencias.js",
     "migrate-mock": "node scripts/migrate-mock-to-supabase.js",
