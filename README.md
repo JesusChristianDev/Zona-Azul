@@ -148,6 +148,14 @@ npm run verify-deps      # Verifica dependencias instaladas
 npm run migrate-mock     # Migra datos mock a Supabase
 ```
 
+## 📈 Escalabilidad
+
+- Reutiliza el cliente de Supabase para minimizar conexiones WebSocket y habilitar canales en tiempo real (`src/lib/supabase.ts`, `src/lib/realtime.ts`).
+- Activa PgBouncer en Supabase (modo `transaction`) y añade índices en columnas usadas para filtros/ordenamiento.
+- Añade `Cache-Control: public, s-maxage=60, stale-while-revalidate=300` en API públicas y protege login/pedidos con rate limiting distribuido (p.ej. Upstash Redis).
+- Usa caché de datos en cliente (SWR/React Query) y prefetch selectivo con `next/link` para reducir solicitudes repetidas.
+- Versiona el service worker/manifest para invalidar caché en despliegues y servir `_next/static` desde CDN/edge con autoescalado.
+
 ## 🎨 Características Técnicas
 
 ### Rendimiento
