@@ -15,13 +15,36 @@ export default function MobileMenu() {
 
   // Cerrar menú al hacer clic fuera y prevenir scroll
   useEffect(() => {
-    if (isOpen) {
-      // Prevenir scroll del body cuando el menú está abierto
-      document.body.style.overflow = 'hidden'
+    // Prevenir scroll del body cuando el menú está abierto
+    document.body.style.overflow = isOpen ? 'hidden' : ''
 
-      return () => {
-        document.body.style.overflow = 'unset'
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [isOpen])
+
+  // Cerrar con tecla Escape o al hacer resize a escritorio
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false)
       }
+    }
+
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setIsOpen(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('resize', handleResize)
     }
   }, [isOpen])
 
