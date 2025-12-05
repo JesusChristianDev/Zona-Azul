@@ -135,9 +135,14 @@ export default function DashboardHeader() {
   const { role, logout, userId, isAuthenticated } = useAuth()
   const { isNotificationsOpen, isMessagesOpen, isSettingsOpen, setIsNotificationsOpen, setIsMessagesOpen, setIsSettingsOpen } = usePanel()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isMobileActionsOpen, setIsMobileActionsOpen] = useState(false)
   
   // Ocultar navbar cuando algún panel está abierto
   const isAnyPanelOpen = isNotificationsOpen || isMessagesOpen || isSettingsOpen
+
+  useEffect(() => {
+    setIsMobileActionsOpen(false)
+  }, [pathname, isAnyPanelOpen])
 
   const handleLogout = async () => {
     // Prevenir múltiples clicks
@@ -333,49 +338,77 @@ export default function DashboardHeader() {
                       {role}
                     </span>
                   </div>
-                  
-                  {/* Botones de notificaciones y mensajes - los paneles se renderizan fuera del header */}
-                  <div className="flex-shrink-0 relative z-10">
-                    <NotificationButton />
+
+                  <div className="relative">
+                    <button
+                      onClick={() => setIsMobileActionsOpen((prev) => !prev)}
+                      className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-primary/10 text-primary font-semibold text-sm transition-colors hover:bg-primary/20 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      aria-label="Abrir menú rápido"
+                      aria-expanded={isMobileActionsOpen}
+                    >
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                      </svg>
+                      <span className="hidden xs:inline">Menú</span>
+                    </button>
+
+                    {isMobileActionsOpen && (
+                      <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-2xl py-2 z-20">
+                        <div className="px-3 pb-2 text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Acciones rápidas</div>
+                        <div className="flex flex-col gap-1 px-2">
+                          <div className="flex items-center justify-between gap-3 px-2 py-2 rounded-xl hover:bg-primary/5 dark:hover:bg-primary/10 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <NotificationButton />
+                              <span className="text-sm text-gray-900 dark:text-gray-100">Notificaciones</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between gap-3 px-2 py-2 rounded-xl hover:bg-primary/5 dark:hover:bg-primary/10 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <MessageButton />
+                              <span className="text-sm text-gray-900 dark:text-gray-100">Mensajes</span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setIsNotificationsOpen(false)
+                              setIsMessagesOpen(false)
+                              setIsSettingsOpen(!isSettingsOpen)
+                              setIsMobileActionsOpen(false)
+                            }}
+                            className={`flex items-center gap-3 px-2 py-2 rounded-xl text-left hover:bg-primary/5 dark:hover:bg-primary/10 transition-colors ${isSettingsOpen ? 'bg-primary/5 dark:bg-primary/10 text-primary' : 'text-gray-900 dark:text-gray-100'}`}
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                              />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                            <span className="text-sm font-medium">Ajustes</span>
+                          </button>
+                          <button
+                            onClick={handleLogout}
+                            disabled={isLoggingOut}
+                            className="flex items-center gap-3 px-2 py-2 rounded-xl text-left text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            aria-label={isLoggingOut ? 'Saliendo...' : 'Salir'}
+                            title={isLoggingOut ? 'Saliendo...' : 'Salir'}
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                            </svg>
+                            <span className="text-sm font-medium">Salir</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex-shrink-0 relative z-10">
-                    <MessageButton />
-                  </div>
-                  
-                  {/* Siempre mostrar ajustes y logout en móvil (excepto cuando algún panel está abierto, que se oculta todo el navbar) */}
-                  <button
-                    onClick={() => {
-                      // Cerrar otros paneles al abrir ajustes
-                      setIsNotificationsOpen(false)
-                      setIsMessagesOpen(false)
-                      // Abrir panel de ajustes (sin navegar)
-                      setIsSettingsOpen(!isSettingsOpen)
-                    }}
-                    className={`p-1.5 text-gray-700 dark:text-gray-300 hover:text-primary hover:bg-primary/5 dark:hover:bg-primary/10 rounded-lg transition-colors flex-shrink-0 relative z-10 ${isSettingsOpen ? 'text-primary bg-primary/10' : ''}`}
-                    aria-label="Ajustes"
-                    title="Ajustes"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                      />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={handleLogout}
-                    disabled={isLoggingOut}
-                    className="p-1.5 text-gray-700 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 relative z-10"
-                    aria-label={isLoggingOut ? 'Saliendo...' : 'Salir'}
-                    title={isLoggingOut ? 'Saliendo...' : 'Salir'}
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
-                  </button>
                 </>
               )}
             </div>
