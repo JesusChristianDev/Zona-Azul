@@ -28,7 +28,7 @@ export default function MobileMenu() {
   return (
     <>
       <button
-        className="sm:hidden p-2 text-gray-700 hover:text-primary transition-colors rounded-lg hover:bg-gray-100"
+        className="lg:hidden p-2 text-gray-700 hover:text-primary transition-colors rounded-lg hover:bg-gray-100"
         aria-label={isOpen ? 'Cerrar menú' : 'Abrir menú'}
         aria-expanded={isOpen}
         onClick={(e) => {
@@ -55,7 +55,7 @@ export default function MobileMenu() {
       {/* Overlay/Backdrop - debe estar detrás del menú */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-[100] sm:hidden transition-opacity duration-300"
+          className="fixed inset-0 bg-black/50 z-[100] lg:hidden transition-opacity duration-300"
           onClick={() => setIsOpen(false)}
           aria-hidden="true"
           style={{ pointerEvents: 'auto' }}
@@ -65,7 +65,7 @@ export default function MobileMenu() {
       {/* Menú deslizante - debe estar encima del overlay */}
       <nav
         data-mobile-menu="menu"
-        className={`fixed top-0 right-0 h-full w-80 max-w-[85vw] bg-white shadow-2xl z-[110] sm:hidden transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-full'
+        className={`fixed top-0 right-0 h-full w-80 max-w-[85vw] bg-white shadow-2xl z-[110] lg:hidden transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-full'
           }`}
         style={{ pointerEvents: 'auto' }}
         onClick={(e) => e.stopPropagation()}
