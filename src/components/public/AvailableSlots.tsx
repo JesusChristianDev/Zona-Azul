@@ -18,6 +18,7 @@ interface Slot {
 }
 
 interface Schedule {
+  schedule_mode?: 'continuous' | 'split'
   monday_start_hour: number
   monday_end_hour: number
   monday_enabled: boolean
@@ -35,10 +36,24 @@ interface Schedule {
   friday_enabled: boolean
   saturday_start_hour: number | null
   saturday_end_hour: number | null
+  saturday_second_start_hour?: number | null
+  saturday_second_end_hour?: number | null
   saturday_enabled: boolean
   sunday_start_hour: number | null
   sunday_end_hour: number | null
+  sunday_second_start_hour?: number | null
+  sunday_second_end_hour?: number | null
   sunday_enabled: boolean
+  monday_second_start_hour?: number | null
+  monday_second_end_hour?: number | null
+  tuesday_second_start_hour?: number | null
+  tuesday_second_end_hour?: number | null
+  wednesday_second_start_hour?: number | null
+  wednesday_second_end_hour?: number | null
+  thursday_second_start_hour?: number | null
+  thursday_second_end_hour?: number | null
+  friday_second_start_hour?: number | null
+  friday_second_end_hour?: number | null
   slot_duration_minutes: number
 }
 
@@ -55,31 +70,46 @@ export default function AvailableSlots({ onSelect, selectedSlot, nutricionistaId
       if (nutricionistaId) {
         try {
           const nutritionistSchedule = await getNutritionistScheduleById(nutricionistaId)
-          setSchedule(nutritionistSchedule)
+          setSchedule({ schedule_mode: 'continuous', ...nutritionistSchedule })
         } catch (error) {
           console.error('❌ Error loading schedule:', error)
           // Usar valores por defecto si hay error
           setSchedule({
+            schedule_mode: 'continuous',
             monday_start_hour: 9,
             monday_end_hour: 18,
+            monday_second_start_hour: null,
+            monday_second_end_hour: null,
             monday_enabled: true,
             tuesday_start_hour: 9,
             tuesday_end_hour: 18,
+            tuesday_second_start_hour: null,
+            tuesday_second_end_hour: null,
             tuesday_enabled: true,
             wednesday_start_hour: 9,
             wednesday_end_hour: 18,
+            wednesday_second_start_hour: null,
+            wednesday_second_end_hour: null,
             wednesday_enabled: true,
             thursday_start_hour: 9,
             thursday_end_hour: 18,
+            thursday_second_start_hour: null,
+            thursday_second_end_hour: null,
             thursday_enabled: true,
             friday_start_hour: 9,
             friday_end_hour: 18,
+            friday_second_start_hour: null,
+            friday_second_end_hour: null,
             friday_enabled: true,
             saturday_start_hour: null,
             saturday_end_hour: null,
+            saturday_second_start_hour: null,
+            saturday_second_end_hour: null,
             saturday_enabled: false,
             sunday_start_hour: null,
             sunday_end_hour: null,
+            sunday_second_start_hour: null,
+            sunday_second_end_hour: null,
             sunday_enabled: false,
             slot_duration_minutes: 60,
           })
@@ -87,26 +117,41 @@ export default function AvailableSlots({ onSelect, selectedSlot, nutricionistaId
       } else {
         // Valores por defecto si no hay nutricionista
         setSchedule({
+          schedule_mode: 'continuous',
           monday_start_hour: 9,
           monday_end_hour: 18,
+          monday_second_start_hour: null,
+          monday_second_end_hour: null,
           monday_enabled: true,
           tuesday_start_hour: 9,
           tuesday_end_hour: 18,
+          tuesday_second_start_hour: null,
+          tuesday_second_end_hour: null,
           tuesday_enabled: true,
           wednesday_start_hour: 9,
           wednesday_end_hour: 18,
+          wednesday_second_start_hour: null,
+          wednesday_second_end_hour: null,
           wednesday_enabled: true,
           thursday_start_hour: 9,
           thursday_end_hour: 18,
+          thursday_second_start_hour: null,
+          thursday_second_end_hour: null,
           thursday_enabled: true,
           friday_start_hour: 9,
           friday_end_hour: 18,
+          friday_second_start_hour: null,
+          friday_second_end_hour: null,
           friday_enabled: true,
           saturday_start_hour: null,
           saturday_end_hour: null,
+          saturday_second_start_hour: null,
+          saturday_second_end_hour: null,
           saturday_enabled: false,
           sunday_start_hour: null,
           sunday_end_hour: null,
+          sunday_second_start_hour: null,
+          sunday_second_end_hour: null,
           sunday_enabled: false,
           slot_duration_minutes: 60,
         })
@@ -125,15 +170,66 @@ export default function AvailableSlots({ onSelect, selectedSlot, nutricionistaId
     const threeMonthsLater = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000)
     const slotDuration = scheduleData.slot_duration_minutes || 60
     
-    // Mapeo de días de la semana (0=domingo, 1=lunes, ..., 6=sábado) a nombres de campos
+    const isSplit = scheduleData.schedule_mode === 'split'
+
+    // Mapeo de días de la semana (0=domingo, 1=lunes, ..., 6=sábado) a nombres de campos con rangos de mañana y tarde
     const dayConfig = [
-      { name: 'sunday', enabled: scheduleData.sunday_enabled, start: scheduleData.sunday_start_hour, end: scheduleData.sunday_end_hour },
-      { name: 'monday', enabled: scheduleData.monday_enabled, start: scheduleData.monday_start_hour, end: scheduleData.monday_end_hour },
-      { name: 'tuesday', enabled: scheduleData.tuesday_enabled, start: scheduleData.tuesday_start_hour, end: scheduleData.tuesday_end_hour },
-      { name: 'wednesday', enabled: scheduleData.wednesday_enabled, start: scheduleData.wednesday_start_hour, end: scheduleData.wednesday_end_hour },
-      { name: 'thursday', enabled: scheduleData.thursday_enabled, start: scheduleData.thursday_start_hour, end: scheduleData.thursday_end_hour },
-      { name: 'friday', enabled: scheduleData.friday_enabled, start: scheduleData.friday_start_hour, end: scheduleData.friday_end_hour },
-      { name: 'saturday', enabled: scheduleData.saturday_enabled, start: scheduleData.saturday_start_hour, end: scheduleData.saturday_end_hour },
+      {
+        name: 'sunday',
+        enabled: scheduleData.sunday_enabled,
+        ranges: [
+          { start: scheduleData.sunday_start_hour, end: scheduleData.sunday_end_hour },
+          ...(isSplit ? [{ start: scheduleData.sunday_second_start_hour ?? null, end: scheduleData.sunday_second_end_hour ?? null }] : []),
+        ],
+      },
+      {
+        name: 'monday',
+        enabled: scheduleData.monday_enabled,
+        ranges: [
+          { start: scheduleData.monday_start_hour, end: scheduleData.monday_end_hour },
+          ...(isSplit ? [{ start: scheduleData.monday_second_start_hour ?? null, end: scheduleData.monday_second_end_hour ?? null }] : []),
+        ],
+      },
+      {
+        name: 'tuesday',
+        enabled: scheduleData.tuesday_enabled,
+        ranges: [
+          { start: scheduleData.tuesday_start_hour, end: scheduleData.tuesday_end_hour },
+          ...(isSplit ? [{ start: scheduleData.tuesday_second_start_hour ?? null, end: scheduleData.tuesday_second_end_hour ?? null }] : []),
+        ],
+      },
+      {
+        name: 'wednesday',
+        enabled: scheduleData.wednesday_enabled,
+        ranges: [
+          { start: scheduleData.wednesday_start_hour, end: scheduleData.wednesday_end_hour },
+          ...(isSplit ? [{ start: scheduleData.wednesday_second_start_hour ?? null, end: scheduleData.wednesday_second_end_hour ?? null }] : []),
+        ],
+      },
+      {
+        name: 'thursday',
+        enabled: scheduleData.thursday_enabled,
+        ranges: [
+          { start: scheduleData.thursday_start_hour, end: scheduleData.thursday_end_hour },
+          ...(isSplit ? [{ start: scheduleData.thursday_second_start_hour ?? null, end: scheduleData.thursday_second_end_hour ?? null }] : []),
+        ],
+      },
+      {
+        name: 'friday',
+        enabled: scheduleData.friday_enabled,
+        ranges: [
+          { start: scheduleData.friday_start_hour, end: scheduleData.friday_end_hour },
+          ...(isSplit ? [{ start: scheduleData.friday_second_start_hour ?? null, end: scheduleData.friday_second_end_hour ?? null }] : []),
+        ],
+      },
+      {
+        name: 'saturday',
+        enabled: scheduleData.saturday_enabled,
+        ranges: [
+          { start: scheduleData.saturday_start_hour, end: scheduleData.saturday_end_hour },
+          ...(isSplit ? [{ start: scheduleData.saturday_second_start_hour ?? null, end: scheduleData.saturday_second_end_hour ?? null }] : []),
+        ],
+      },
     ]
     
     // Empezar desde hoy, pero normalizar a medianoche para evitar problemas de zona horaria
@@ -147,51 +243,52 @@ export default function AvailableSlots({ onSelect, selectedSlot, nutricionistaId
       
       
       // Solo procesar días habilitados
-      if (day.enabled && day.start !== null && day.end !== null) {
-        // Generar slots cada hora (o según slot_duration_minutes)
-        const hours: number[] = []
-        for (let hour = day.start; hour < day.end; hour++) {
-          hours.push(hour)
-        }
-        
-        for (const hour of hours) {
-          const slotDateTime = new Date(currentDate)
-          slotDateTime.setHours(hour, 0, 0, 0)
-          
-          // Solo mostrar slots futuros (comparar con hora actual, no solo fecha)
-          if (slotDateTime > now) {
-            // Verificar si el slot está ocupado
-            const slotEnd = new Date(slotDateTime)
-            slotEnd.setMinutes(slotEnd.getMinutes() + slotDuration)
-            
-            const isBusy = busyTimes.some(busy => {
-              const busyStart = new Date(busy.start)
-              const busyEnd = new Date(busy.end)
-              // Verificar si hay solapamiento
-              return (slotDateTime < busyEnd && slotEnd > busyStart)
-            })
-            
-            const slotId = `slot_${slotIndex}`
-            const formattedDate = slotDateTime.toLocaleDateString('es-ES', {
-              weekday: 'long',
-              day: 'numeric',
-              month: 'long',
-            })
-            const formattedTime = slotDateTime.toLocaleTimeString('es-ES', {
-              hour: '2-digit',
-              minute: '2-digit',
-            })
-            
-            slots.push({
-              id: slotId,
-              label: `${formattedDate} a las ${formattedTime}`,
-              dateTime: slotDateTime.toISOString(),
-              available: !isBusy,
-            })
-            
-            slotIndex++
+      if (day.enabled) {
+        day.ranges.forEach((range) => {
+          if (range.start === null || range.end === null) return
+
+          let minutesFromMidnight = range.start * 60
+          const endMinutes = range.end * 60
+
+          while (minutesFromMidnight + slotDuration <= endMinutes) {
+            const slotDateTime = new Date(currentDate)
+            slotDateTime.setHours(0, 0, 0, 0)
+            slotDateTime.setMinutes(minutesFromMidnight)
+
+            if (slotDateTime > now) {
+              const slotEnd = new Date(slotDateTime)
+              slotEnd.setMinutes(slotEnd.getMinutes() + slotDuration)
+
+              const isBusy = busyTimes.some((busy) => {
+                const busyStart = new Date(busy.start)
+                const busyEnd = new Date(busy.end)
+                return slotDateTime < busyEnd && slotEnd > busyStart
+              })
+
+              const slotId = `slot_${slotIndex}`
+              const formattedDate = slotDateTime.toLocaleDateString('es-ES', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+              })
+              const formattedTime = slotDateTime.toLocaleTimeString('es-ES', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })
+
+              slots.push({
+                id: slotId,
+                label: `${formattedDate} a las ${formattedTime}`,
+                dateTime: slotDateTime.toISOString(),
+                available: !isBusy,
+              })
+
+              slotIndex++
+            }
+
+            minutesFromMidnight += slotDuration
           }
-        }
+        })
       }
       
       // Avanzar al siguiente día

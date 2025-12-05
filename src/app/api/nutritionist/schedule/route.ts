@@ -32,33 +32,48 @@ export async function GET(request: NextRequest) {
     if (!schedule) {
       return NextResponse.json({
         schedule: {
+          schedule_mode: 'continuous',
           monday_start_hour: 9,
           monday_end_hour: 18,
+          monday_second_start_hour: null,
+          monday_second_end_hour: null,
           monday_enabled: true,
           tuesday_start_hour: 9,
           tuesday_end_hour: 18,
+          tuesday_second_start_hour: null,
+          tuesday_second_end_hour: null,
           tuesday_enabled: true,
           wednesday_start_hour: 9,
           wednesday_end_hour: 18,
+          wednesday_second_start_hour: null,
+          wednesday_second_end_hour: null,
           wednesday_enabled: true,
           thursday_start_hour: 9,
           thursday_end_hour: 18,
+          thursday_second_start_hour: null,
+          thursday_second_end_hour: null,
           thursday_enabled: true,
           friday_start_hour: 9,
           friday_end_hour: 18,
+          friday_second_start_hour: null,
+          friday_second_end_hour: null,
           friday_enabled: true,
           saturday_start_hour: null,
           saturday_end_hour: null,
+          saturday_second_start_hour: null,
+          saturday_second_end_hour: null,
           saturday_enabled: false,
           sunday_start_hour: null,
           sunday_end_hour: null,
+          sunday_second_start_hour: null,
+          sunday_second_end_hour: null,
           sunday_enabled: false,
           slot_duration_minutes: 60,
         }
       })
     }
 
-    return NextResponse.json({ schedule })
+    return NextResponse.json({ schedule: { schedule_mode: 'continuous', ...schedule } })
   } catch (error: any) {
     console.error('Error fetching nutritionist schedule:', error)
     return NextResponse.json(
@@ -91,14 +106,17 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json()
+    const scheduleMode = body.schedule_mode || 'continuous'
     
     // Validar que los horarios sean válidos
     const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
     for (const day of days) {
       const startHour = body[`${day}_start_hour`]
       const endHour = body[`${day}_end_hour`]
+      const secondStartHour = body[`${day}_second_start_hour`]
+      const secondEndHour = body[`${day}_second_end_hour`]
       const enabled = body[`${day}_enabled`]
-      
+
       if (enabled && (startHour === undefined || endHour === undefined)) {
         return NextResponse.json(
           { error: `Horarios incompletos para ${day}` },
@@ -112,9 +130,30 @@ export async function PATCH(request: NextRequest) {
           { status: 400 }
         )
       }
+
+      if (scheduleMode === 'split' && enabled) {
+        if (
+          secondStartHour === undefined ||
+          secondEndHour === undefined ||
+          secondStartHour === null ||
+          secondEndHour === null
+        ) {
+          return NextResponse.json(
+            { error: `Completa el horario de tarde para ${day}` },
+            { status: 400 }
+          )
+        }
+
+        if (secondStartHour >= secondEndHour) {
+          return NextResponse.json(
+            { error: `La hora de inicio de la tarde debe ser menor que la hora de fin para ${day}` },
+            { status: 400 }
+          )
+        }
+      }
     }
 
-    const schedule = await createOrUpdateNutritionistSchedule(userId, body)
+    const schedule = await createOrUpdateNutritionistSchedule(userId, { ...body, schedule_mode: scheduleMode })
     
     if (!schedule) {
       return NextResponse.json(
