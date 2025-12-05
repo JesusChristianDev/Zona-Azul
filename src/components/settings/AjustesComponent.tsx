@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { usePanel } from '../../contexts/PanelContext'
 import * as api from '../../lib/api'
 import { useNotifications } from '../../hooks/useNotifications'
+import { applyTheme } from '@/lib/theme'
 
 // Hook para detectar si es móvil
 function useIsMobile() {
@@ -557,21 +558,6 @@ export default function AjustesComponent({ role }: AjustesComponentProps) {
     // Solo aplicar el tema si el usuario lo cambió explícitamente (no al cargar desde BD)
     // El tema ya se aplicó cuando se cargaron los ajustes desde la BD
     applyTheme(settings.preferences.theme)
-
-    // Si el tema es "auto", escuchar cambios en la preferencia del sistema
-    if (settings.preferences.theme === 'auto') {
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-      const handleChange = () => {
-        applyTheme('auto')
-      }
-
-      // Escuchar cambios
-      mediaQuery.addEventListener('change', handleChange)
-
-      return () => {
-        mediaQuery.removeEventListener('change', handleChange)
-      }
-    }
   }, [settings.preferences.theme, themeInitialized])
 
   // Cerrar otros paneles cuando se abre ajustes (solo si se abre como panel)
@@ -656,24 +642,6 @@ export default function AjustesComponent({ role }: AjustesComponentProps) {
         [key]: value,
       },
     }))
-  }
-
-  // Función para aplicar el tema
-  const applyTheme = (theme: 'light' | 'dark' | 'auto') => {
-    const root = document.documentElement
-    if (theme === 'dark') {
-      root.classList.add('dark')
-    } else if (theme === 'light') {
-      root.classList.remove('dark')
-    } else {
-      // Auto: usar preferencia del sistema
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-      if (prefersDark) {
-        root.classList.add('dark')
-      } else {
-        root.classList.remove('dark')
-      }
-    }
   }
 
   const updatePreference = (key: keyof UserSettings['preferences'], value: any) => {
