@@ -199,9 +199,12 @@ export default function NutricionistaCitasPage() {
   const handleSaveSchedule = async () => {
     if (!userId || !schedule) return
 
+    // Evitar enviar campos de solo lectura (id, user_id, timestamps) que rompen el upsert
+    const { id, user_id, created_at, updated_at, ...editableSchedule } = schedule
+
     setSavingSchedule(true)
     try {
-      const updated = await updateNutritionistSchedule(schedule)
+      const updated = await updateNutritionistSchedule(editableSchedule)
       if (updated) {
         setSchedule(updated)
         setIsScheduleModalOpen(false)
