@@ -10,15 +10,17 @@ import { usePanel } from '@/contexts/PanelContext'
 // Lazy load de componentes pesados
 const MobileMenu = dynamic(() => import('../MobileMenu'), { ssr: true })
 
-// Componente de botón de notificaciones
-function NotificationButton({ onToggle }: { onToggle: () => void }) {
+// Hook compartido para cargar el número de notificaciones no leídas
+function useNotificationUnreadCount() {
   const { userId } = useAuth()
-  const { isNotificationsOpen } = usePanel()
   const [unreadCount, setUnreadCount] = useState(0)
 
-  // Cargar contador de no leídos
   useEffect(() => {
-    if (!userId) return
+    if (!userId) {
+      setUnreadCount(0)
+      return
+    }
+
     const loadUnreadCount = async () => {
       try {
         const response = await fetch('/api/notifications?limit=1')
@@ -30,15 +32,57 @@ function NotificationButton({ onToggle }: { onToggle: () => void }) {
         console.error('Error loading unread count:', error)
       }
     }
+
     loadUnreadCount()
     const interval = setInterval(loadUnreadCount, 30000)
     return () => clearInterval(interval)
   }, [userId])
 
+  return unreadCount
+}
+
+// Hook compartido para cargar el número de mensajes no leídos
+function useMessageUnreadCount() {
+  const { userId, role } = useAuth()
+  const [unreadTotal, setUnreadTotal] = useState(0)
+
+  useEffect(() => {
+    if (!userId || !role) {
+      setUnreadTotal(0)
+      return
+    }
+
+    const loadUnreadCount = async () => {
+      try {
+        const response = await fetch('/api/messages')
+        if (response.ok) {
+          const data = await response.json()
+          const messages = Array.isArray(data.messages) ? data.messages : (Array.isArray(data) ? data : [])
+          const unread = messages.filter((msg: any) => msg.to_id === userId && !msg.read).length
+          setUnreadTotal(unread)
+        }
+      } catch (error) {
+        console.error('Error loading unread count:', error)
+      }
+    }
+
+    loadUnreadCount()
+    const interval = setInterval(loadUnreadCount, 3000)
+    return () => clearInterval(interval)
+  }, [userId, role])
+
+  return unreadTotal
+}
+
+// Componente de botón de notificaciones
+function NotificationButton({ onToggle, unreadCount }: { onToggle: () => void; unreadCount: number }) {
+  const { userId } = useAuth()
+
   if (!userId) return null
 
   return (
     <button
+      type="button"
       onClick={(event) => {
         event.stopPropagation()
         onToggle()
@@ -70,37 +114,14 @@ function NotificationButton({ onToggle }: { onToggle: () => void }) {
 }
 
 // Componente de botón de mensajes
-function MessageButton({ onToggle }: { onToggle: () => void }) {
+function MessageButton({ onToggle, unreadTotal }: { onToggle: () => void; unreadTotal: number }) {
   const { userId, role } = useAuth()
-  const { isMessagesOpen } = usePanel()
-  const [unreadTotal, setUnreadTotal] = useState(0)
-
-  // Cargar contador de no leídos
-  useEffect(() => {
-    if (!userId || !role) return
-    const loadUnreadCount = async () => {
-      try {
-        const response = await fetch('/api/messages')
-        if (response.ok) {
-          const data = await response.json()
-          // La API devuelve { messages: [...] }
-          const messages = Array.isArray(data.messages) ? data.messages : (Array.isArray(data) ? data : [])
-          const unread = messages.filter((msg: any) => msg.to_id === userId && !msg.read).length
-          setUnreadTotal(unread)
-        }
-      } catch (error) {
-        console.error('Error loading unread count:', error)
-      }
-    }
-    loadUnreadCount()
-    const interval = setInterval(loadUnreadCount, 3000)
-    return () => clearInterval(interval)
-  }, [userId, role])
 
   if (!userId || !role) return null
 
   return (
     <button
+      type="button"
       onClick={(e) => {
         e.stopPropagation()
         onToggle()
@@ -129,10 +150,12 @@ function MessageButton({ onToggle }: { onToggle: () => void }) {
 export default function DashboardHeader() {
   const pathname = usePathname()
   const router = useRouter()
-  const { role, logout, userId, isAuthenticated } = useAuth()
+  const { role, logout, userId } = useAuth()
   const { isNotificationsOpen, isMessagesOpen, isSettingsOpen, setIsNotificationsOpen, setIsMessagesOpen, setIsSettingsOpen } = usePanel()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [isMobileActionsOpen, setIsMobileActionsOpen] = useState(false)
+  const notificationUnreadCount = useNotificationUnreadCount()
+  const messageUnreadCount = useMessageUnreadCount()
   
   // Ocultar navbar cuando algún panel está abierto
   const isAnyPanelOpen = isNotificationsOpen || isMessagesOpen || isSettingsOpen
@@ -157,6 +180,14 @@ export default function DashboardHeader() {
     if (closeMobileMenu) {
       setIsMobileActionsOpen(false)
     }
+  }
+
+  const handleNotificationsMenuClick = () => {
+    toggleNotifications(true)
+  }
+
+  const handleMessagesMenuClick = () => {
+    toggleMessages(true)
   }
 
   const handleLogout = async () => {
@@ -295,8 +326,8 @@ export default function DashboardHeader() {
                   </div>
                   
                   {/* Botones de notificaciones y mensajes - los paneles se renderizan fuera del header */}
-                  <NotificationButton onToggle={() => toggleNotifications()} />
-                  <MessageButton onToggle={() => toggleMessages()} />
+                  <NotificationButton onToggle={() => toggleNotifications()} unreadCount={notificationUnreadCount} />
+                  <MessageButton onToggle={() => toggleMessages()} unreadTotal={messageUnreadCount} />
                   
                   {/* Siempre mostrar ajustes y logout en desktop (incluso cuando algún panel está abierto) */}
                   <button
@@ -376,40 +407,55 @@ export default function DashboardHeader() {
                       <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-2xl py-2 z-20">
                         <div className="px-3 pb-2 text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Acciones rápidas</div>
                         <div className="flex flex-col gap-1 px-2">
-                          <div
-                            className="flex items-center justify-between gap-3 px-2 py-2 rounded-xl hover:bg-primary/5 dark:hover:bg-primary/10 transition-colors cursor-pointer"
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => toggleNotifications(true)}
-                            onKeyDown={(event) => {
-                              if (event.key === 'Enter' || event.key === ' ') {
-                                event.preventDefault()
-                                handleNotificationsMenuClick()
-                              }
-                            }}
+                          <button
+                            type="button"
+                            onClick={handleNotificationsMenuClick}
+                            className="flex items-center gap-3 px-2 py-2 rounded-xl text-left hover:bg-primary/5 dark:hover:bg-primary/10 transition-colors w-full"
                           >
-                            <div className="flex items-center gap-3">
-                              <NotificationButton onToggle={() => toggleNotifications(true)} />
-                              <span className="text-sm text-gray-900 dark:text-gray-100">Notificaciones</span>
-                            </div>
-                          </div>
-                          <div
-                            className="flex items-center justify-between gap-3 px-2 py-2 rounded-xl hover:bg-primary/5 dark:hover:bg-primary/10 transition-colors cursor-pointer"
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => toggleMessages(true)}
-                            onKeyDown={(event) => {
-                              if (event.key === 'Enter' || event.key === ' ') {
-                                event.preventDefault()
-                                handleMessagesMenuClick()
-                              }
-                            }}
+                            <span className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-primary/5 text-primary">
+                              <svg
+                                className="w-5 h-5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+                                />
+                              </svg>
+                              {notificationUnreadCount > 0 && (
+                                <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-500 rounded-full border-2 border-white">
+                                  {notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}
+                                </span>
+                              )}
+                            </span>
+                            <span className="text-sm text-gray-900 dark:text-gray-100">Notificaciones</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleMessagesMenuClick}
+                            className="flex items-center gap-3 px-2 py-2 rounded-xl text-left hover:bg-primary/5 dark:hover:bg-primary/10 transition-colors w-full"
                           >
-                            <div className="flex items-center gap-3">
-                              <MessageButton onToggle={() => toggleMessages(true)} />
-                              <span className="text-sm text-gray-900 dark:text-gray-100">Mensajes</span>
-                            </div>
-                          </div>
+                            <span className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-primary/5 text-primary">
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                                />
+                              </svg>
+                              {messageUnreadCount > 0 && (
+                                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center shadow-lg">
+                                  {messageUnreadCount > 9 ? '9+' : messageUnreadCount}
+                                </span>
+                              )}
+                            </span>
+                            <span className="text-sm text-gray-900 dark:text-gray-100">Mensajes</span>
+                          </button>
                           <button
                             onClick={() => {
                               setIsNotificationsOpen(false)
