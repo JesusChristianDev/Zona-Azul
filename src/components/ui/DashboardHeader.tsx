@@ -167,7 +167,7 @@ export default function DashboardHeader() {
   const toggleNotifications = (closeMobileMenu = false) => {
     setIsMessagesOpen(false)
     setIsSettingsOpen(false)
-    setIsNotificationsOpen(!isNotificationsOpen)
+    setIsNotificationsOpen((prev) => !prev)
     if (closeMobileMenu) {
       setIsMobileActionsOpen(false)
     }
@@ -176,7 +176,7 @@ export default function DashboardHeader() {
   const toggleMessages = (closeMobileMenu = false) => {
     setIsNotificationsOpen(false)
     setIsSettingsOpen(false)
-    setIsMessagesOpen(!isMessagesOpen)
+    setIsMessagesOpen((prev) => !prev)
     if (closeMobileMenu) {
       setIsMobileActionsOpen(false)
     }
