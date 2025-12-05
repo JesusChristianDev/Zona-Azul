@@ -10,14 +10,10 @@ import { usePanel } from '@/contexts/PanelContext'
 // Lazy load de componentes pesados
 const MobileMenu = dynamic(() => import('../MobileMenu'), { ssr: true })
 
-interface ActionButtonProps {
-  onActivate?: () => void
-}
-
 // Componente de botón de notificaciones
-function NotificationButton({ onActivate }: ActionButtonProps) {
+function NotificationButton({ onToggle }: { onToggle: () => void }) {
   const { userId } = useAuth()
-  const { isNotificationsOpen, setIsNotificationsOpen, setIsMessagesOpen, setIsSettingsOpen } = usePanel()
+  const { isNotificationsOpen } = usePanel()
   const [unreadCount, setUnreadCount] = useState(0)
 
   // Cargar contador de no leídos
@@ -45,10 +41,7 @@ function NotificationButton({ onActivate }: ActionButtonProps) {
     <button
       onClick={(event) => {
         event.stopPropagation()
-        setIsMessagesOpen(false)
-        setIsSettingsOpen(false)
-        setIsNotificationsOpen((prev) => !prev)
-        onActivate?.()
+        onToggle()
       }}
       className="relative p-2 text-gray-600 dark:text-gray-400 hover:text-primary hover:bg-primary/5 dark:hover:bg-primary/10 rounded-lg transition-colors flex-shrink-0"
       aria-label="Notificaciones"
@@ -77,9 +70,9 @@ function NotificationButton({ onActivate }: ActionButtonProps) {
 }
 
 // Componente de botón de mensajes
-function MessageButton({ onActivate }: ActionButtonProps) {
+function MessageButton({ onToggle }: { onToggle: () => void }) {
   const { userId, role } = useAuth()
-  const { isMessagesOpen, setIsMessagesOpen, setIsNotificationsOpen, setIsSettingsOpen } = usePanel()
+  const { isMessagesOpen } = usePanel()
   const [unreadTotal, setUnreadTotal] = useState(0)
 
   // Cargar contador de no leídos
@@ -110,10 +103,7 @@ function MessageButton({ onActivate }: ActionButtonProps) {
     <button
       onClick={(e) => {
         e.stopPropagation()
-        setIsNotificationsOpen(false)
-        setIsSettingsOpen(false)
-        setIsMessagesOpen((prev) => !prev)
-        onActivate?.()
+        onToggle()
       }}
       className="relative p-2 text-gray-600 dark:text-gray-400 hover:text-primary hover:bg-primary/5 dark:hover:bg-primary/10 rounded-lg transition-colors flex-shrink-0"
       aria-label="Mensajes"
@@ -151,18 +141,22 @@ export default function DashboardHeader() {
     setIsMobileActionsOpen(false)
   }, [pathname, isAnyPanelOpen])
 
-  const handleNotificationsMenuClick = () => {
+  const toggleNotifications = (closeMobileMenu = false) => {
     setIsMessagesOpen(false)
     setIsSettingsOpen(false)
     setIsNotificationsOpen((prev) => !prev)
-    setIsMobileActionsOpen(false)
+    if (closeMobileMenu) {
+      setIsMobileActionsOpen(false)
+    }
   }
 
-  const handleMessagesMenuClick = () => {
+  const toggleMessages = (closeMobileMenu = false) => {
     setIsNotificationsOpen(false)
     setIsSettingsOpen(false)
     setIsMessagesOpen((prev) => !prev)
-    setIsMobileActionsOpen(false)
+    if (closeMobileMenu) {
+      setIsMobileActionsOpen(false)
+    }
   }
 
   const handleLogout = async () => {
@@ -301,8 +295,8 @@ export default function DashboardHeader() {
                   </div>
                   
                   {/* Botones de notificaciones y mensajes - los paneles se renderizan fuera del header */}
-                  <NotificationButton />
-                  <MessageButton />
+                  <NotificationButton onToggle={() => toggleNotifications()} />
+                  <MessageButton onToggle={() => toggleMessages()} />
                   
                   {/* Siempre mostrar ajustes y logout en desktop (incluso cuando algún panel está abierto) */}
                   <button
@@ -386,7 +380,7 @@ export default function DashboardHeader() {
                             className="flex items-center justify-between gap-3 px-2 py-2 rounded-xl hover:bg-primary/5 dark:hover:bg-primary/10 transition-colors cursor-pointer"
                             role="button"
                             tabIndex={0}
-                            onClick={handleNotificationsMenuClick}
+                            onClick={() => toggleNotifications(true)}
                             onKeyDown={(event) => {
                               if (event.key === 'Enter' || event.key === ' ') {
                                 event.preventDefault()
@@ -395,7 +389,7 @@ export default function DashboardHeader() {
                             }}
                           >
                             <div className="flex items-center gap-3">
-                              <NotificationButton onActivate={() => setIsMobileActionsOpen(false)} />
+                              <NotificationButton onToggle={() => toggleNotifications(true)} />
                               <span className="text-sm text-gray-900 dark:text-gray-100">Notificaciones</span>
                             </div>
                           </div>
@@ -403,7 +397,7 @@ export default function DashboardHeader() {
                             className="flex items-center justify-between gap-3 px-2 py-2 rounded-xl hover:bg-primary/5 dark:hover:bg-primary/10 transition-colors cursor-pointer"
                             role="button"
                             tabIndex={0}
-                            onClick={handleMessagesMenuClick}
+                            onClick={() => toggleMessages(true)}
                             onKeyDown={(event) => {
                               if (event.key === 'Enter' || event.key === ' ') {
                                 event.preventDefault()
@@ -412,7 +406,7 @@ export default function DashboardHeader() {
                             }}
                           >
                             <div className="flex items-center gap-3">
-                              <MessageButton onActivate={() => setIsMobileActionsOpen(false)} />
+                              <MessageButton onToggle={() => toggleMessages(true)} />
                               <span className="text-sm text-gray-900 dark:text-gray-100">Mensajes</span>
                             </div>
                           </div>
