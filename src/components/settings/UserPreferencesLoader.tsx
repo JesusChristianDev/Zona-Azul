@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { usePathname } from 'next/navigation'
 import * as api from '../../lib/api'
+import { applyTheme, resetTheme } from '@/lib/theme'
 import { isPublicRoute as checkIfPublicRoute } from '@/constants/routes'
 
 /**
@@ -87,7 +88,8 @@ export default function UserPreferencesLoader() {
       setPreferencesLoaded(false)
       // Resetear a valores por defecto (modo claro, sin accesibilidad)
       document.documentElement.style.fontSize = ''
-      document.documentElement.classList.remove('high-contrast', 'reduce-motion', 'dark')
+      document.documentElement.classList.remove('high-contrast', 'reduce-motion')
+      resetTheme()
       applyTheme('light')
     }
   }, [isAuthenticated, preferencesLoaded, isPublicRoute])
@@ -108,29 +110,6 @@ export default function UserPreferencesLoader() {
 
   // Este componente no renderiza nada
   return null
-}
-
-/**
- * Función para aplicar el tema al documento
- */
-function applyTheme(theme: 'light' | 'dark' | 'auto') {
-  if (typeof window === 'undefined') return
-
-  const htmlElement = document.documentElement
-
-  if (theme === 'auto') {
-    // Detectar preferencia del sistema
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    if (prefersDark) {
-      htmlElement.classList.add('dark')
-    } else {
-      htmlElement.classList.remove('dark')
-    }
-  } else if (theme === 'dark') {
-    htmlElement.classList.add('dark')
-  } else {
-    htmlElement.classList.remove('dark')
-  }
 }
 
 

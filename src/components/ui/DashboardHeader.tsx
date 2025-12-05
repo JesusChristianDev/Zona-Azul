@@ -245,7 +245,7 @@ export default function DashboardHeader() {
 
           {/* Navegación desktop - solo en páginas públicas */}
           {!isDashboardPage && (
-            <nav className="hidden sm:flex space-x-4">
+            <nav className="hidden lg:flex space-x-4">
               <Link href="/" className="text-sm text-gray-700 dark:text-gray-300 hover:text-primary transition-colors">
                 Inicio
               </Link>
@@ -315,7 +315,7 @@ export default function DashboardHeader() {
 
           {/* Mobile menu button */}
           {!isDashboardPage && (
-            <div className="sm:hidden relative">
+            <div className="lg:hidden relative">
               <MobileMenu />
             </div>
           )}
