@@ -4,6 +4,7 @@
  */
 
 import { supabase } from './supabase'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import type { User } from './types'
 
 // Tipos de base de datos (basados en el esquema SQL)
@@ -365,8 +366,12 @@ export interface DatabaseRutaLogisticaParada {
 }
 
 // Funciones para usuarios
-export async function getUserByEmail(email: string): Promise<DatabaseUser | null> {
-  const { data, error } = await supabase
+export async function getUserByEmail(
+  email: string,
+  client?: SupabaseClient
+): Promise<DatabaseUser | null> {
+  const db = client ?? supabase
+  const { data, error } = await db
     .from('users')
     .select('*')
     .eq('email', email.toLowerCase())
@@ -385,6 +390,75 @@ export async function getUserById(id: string): Promise<DatabaseUser | null> {
 
   if (error || !data) return null
   return data as DatabaseUser
+}
+
+export async function activateUserAccount(
+  userId: string,
+  passwordHash: string,
+  client?: SupabaseClient
+): Promise<{ user: DatabaseUser | null; profile: DatabaseProfile | null }> {
+  const now = new Date().toISOString()
+  const db = client ?? supabase
+
+  const { data: updatedUser, error: userError } = await db
+    .from('users')
+    .update({
+      password_hash: passwordHash,
+      must_change_password: false,
+      updated_at: now,
+    })
+    .eq('id', userId)
+    .select()
+    .single()
+
+  if (userError || !updatedUser) {
+    console.error('Error activating user account:', userError)
+    return { user: null, profile: null }
+  }
+
+  const { data: existingProfile } = await db
+    .from('profiles')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (existingProfile) {
+    const { data: updatedProfile, error: profileError } = await db
+      .from('profiles')
+      .update({
+        subscription_status: 'active',
+        updated_at: now,
+      })
+      .eq('user_id', userId)
+      .select()
+      .single()
+
+    if (profileError) {
+      console.error('Error updating profile during activation:', profileError)
+    }
+
+    return { user: updatedUser as DatabaseUser, profile: (updatedProfile || existingProfile) as DatabaseProfile }
+  }
+
+  const { data: createdProfile, error: createProfileError } = await db
+    .from('profiles')
+    .insert({
+      user_id: userId,
+      subscription_status: 'active',
+      created_at: now,
+      updated_at: now,
+    })
+    .select()
+    .single()
+
+  if (createProfileError) {
+    console.error('Error creating profile during activation:', createProfileError)
+  }
+
+  return {
+    user: updatedUser as DatabaseUser,
+    profile: createdProfile as DatabaseProfile | null,
+  }
 }
 
 export async function createUser(userData: {
@@ -2665,6 +2739,26 @@ export async function getOrderIncidentByOrderId(
 
   if (error || !data) return null
   return data as DatabaseOrderIncident
+}
+
+export async function getActiveIncidentsByOrderIds(
+  orderIds: string[]
+): Promise<DatabaseOrderIncident[]> {
+  if (!orderIds.length) return []
+
+  const { data, error } = await supabase
+    .from('order_incidents')
+    .select('*')
+    .in('order_id', orderIds)
+    .eq('status', 'reported')
+    .order('created_at', { ascending: false })
+
+  if (error || !data) {
+    console.error('Error fetching incidents by order ids:', error)
+    return []
+  }
+
+  return data as DatabaseOrderIncident[]
 }
 
 // ==================== CONFIGURACIONES DE USUARIO ====================

@@ -54,6 +54,11 @@ Si quieres rellenar la base de datos con datos de ejemplo para desarrollo:
 3. Copia SOLO el contenido del archivo SQL
 4. Pégalo en el SQL Editor
 5. Ejecuta el script
+6. (Opcional) Genera el token de activación base64 para `cliente-demo@zonaazul.com` con:
+   ```bash
+   echo -n "cliente-demo@zonaazul.com" | base64
+   ```
+   Usa ese token en `/activate` para probar el flujo real de activación.
 
 **⚠️ Advertencia**: Este script inserta datos de ejemplo (usuarios, comidas, pedidos, etc.). Si ya tienes datos en tu base de datos, revisa el script antes de ejecutarlo, ya que puede haber conflictos con IDs existentes.
 
