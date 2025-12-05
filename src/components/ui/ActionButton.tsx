@@ -18,7 +18,7 @@ type ButtonVariant =
   | 'link'
 
 interface ActionButtonProps {
-  onClick?: () => void
+  onClick?: (e?: React.MouseEvent<HTMLButtonElement>) => void
   children: ReactNode
   variant?: ButtonVariant
   size?: 'sm' | 'md' | 'lg'
@@ -27,6 +27,9 @@ interface ActionButtonProps {
   className?: string
   type?: 'button' | 'submit' | 'reset'
   disabled?: boolean
+  style?: React.CSSProperties
+  title?: string
+  'aria-label'?: string
 }
 
 /**
@@ -42,6 +45,9 @@ export default function ActionButton({
   className = '',
   type = 'button',
   disabled = false,
+  style,
+  title,
+  'aria-label': ariaLabel,
 }: ActionButtonProps) {
   const variantClasses: Record<ButtonVariant, string> = {
     primary: 'btn-primary',
@@ -72,6 +78,9 @@ export default function ActionButton({
       type={type}
       onClick={onClick}
       disabled={disabled}
+      style={style}
+      title={title}
+      aria-label={ariaLabel}
       className={['btn', variantClasses[variant], sizeClasses[size], widthClass, className].filter(Boolean).join(' ')}
     >
       {icon && <span className="flex-shrink-0">{icon}</span>}

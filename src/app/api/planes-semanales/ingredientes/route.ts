@@ -86,9 +86,15 @@ export async function GET(request: NextRequest) {
     for (const row of data) {
       const key = row.ingrediente_id
       if (!summaryMap.has(key)) {
+        // Handle both array and object responses from Supabase relation
+        const ingrediente = Array.isArray(row.ingredientes) 
+          ? row.ingredientes[0] 
+          : row.ingredientes
+        const nombre = (ingrediente as any)?.nombre || 'Ingrediente'
+        
         summaryMap.set(key, {
           ingrediente_id: row.ingrediente_id,
-          nombre: row.ingredientes?.nombre || 'Ingrediente',
+          nombre,
           unidad: row.unidad,
           total_cantidad: 0,
           detalles: includeDetails ? [] : undefined,
