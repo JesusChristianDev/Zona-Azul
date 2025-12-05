@@ -9,6 +9,10 @@ export function isSupabaseConfigured(): boolean {
   return !!(supabaseUrl && supabaseAnonKey && supabaseUrl !== '' && supabaseAnonKey !== '')
 }
 
+const globalForSupabase = globalThis as unknown as {
+  supabaseClient?: SupabaseClient
+}
+
 // Función para crear el cliente de Supabase de forma segura
 function createSupabaseClient(): SupabaseClient {
   if (!isSupabaseConfigured()) {
@@ -18,12 +22,28 @@ function createSupabaseClient(): SupabaseClient {
     throw new Error(errorMessage)
   }
 
-  return createClient(supabaseUrl, supabaseAnonKey, {
+  const existingClient = globalForSupabase.supabaseClient
+  if (existingClient) return existingClient
+
+  const client = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
     },
+    // Configuración para escenarios en tiempo real sin abrir demasiadas conexiones
+    realtime: {
+      params: {
+        eventsPerSecond: 5,
+      },
+    },
   })
+
+  // Reutilizar el cliente en desarrollo para evitar múltiples instancias y conexiones
+  if (process.env.NODE_ENV === 'development') {
+    globalForSupabase.supabaseClient = client
+  }
+
+  return client
 }
 
 // Cliente de Supabase para uso en el cliente (browser)
