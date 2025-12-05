@@ -1,14 +1,14 @@
 "use client"
 
-import { createContext, useContext, useState, ReactNode, Dispatch, SetStateAction } from 'react'
+import { createContext, useContext, useState, ReactNode } from 'react'
 
 interface PanelContextType {
   isNotificationsOpen: boolean
-  setIsNotificationsOpen: Dispatch<SetStateAction<boolean>>
+  setIsNotificationsOpen: (value: boolean) => void
   isMessagesOpen: boolean
-  setIsMessagesOpen: Dispatch<SetStateAction<boolean>>
+  setIsMessagesOpen: (value: boolean) => void
   isSettingsOpen: boolean
-  setIsSettingsOpen: Dispatch<SetStateAction<boolean>>
+  setIsSettingsOpen: (value: boolean) => void
 }
 
 const PanelContext = createContext<PanelContextType | undefined>(undefined)
