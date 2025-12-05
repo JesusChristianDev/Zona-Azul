@@ -21,20 +21,44 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const decodedEmail = decodeActivationToken(token)
-    if (!decodedEmail) {
+    const supabase = createServerClient()
+
+    const { data: tokenUser, error: tokenError } = await supabase.auth.getUser(token)
+    if (tokenError || !tokenUser?.user) {
+      console.error('Invalid activation token:', tokenError)
       return NextResponse.json(
         { error: 'Token inválido o expirado' },
+        { status: 401 }
+      )
+    }
+
+    const verifiedEmail = tokenUser.user.email?.toLowerCase()
+    if (!verifiedEmail) {
+      return NextResponse.json(
+        { error: 'No se pudo validar el correo asociado al token' },
         { status: 400 }
       )
     }
 
-    const supabase = createServerClient()
-    const user = await getUserByEmail(decodedEmail, supabase)
+    const user = await getUserByEmail(verifiedEmail, supabase)
     if (!user) {
       return NextResponse.json(
         { error: 'Usuario no encontrado para este token' },
         { status: 404 }
+      )
+    }
+
+    if (user.id !== tokenUser.user.id) {
+      return NextResponse.json(
+        { error: 'Token inválido para este usuario' },
+        { status: 401 }
+      )
+    }
+
+    if (!user.must_change_password) {
+      return NextResponse.json(
+        { error: 'El usuario ya ha activado su cuenta o no requiere cambio de contraseña' },
+        { status: 400 }
       )
     }
 
@@ -63,16 +87,5 @@ export async function POST(request: NextRequest) {
       { error: 'Error interno al activar la cuenta', details: error?.message },
       { status: 500 }
     )
-  }
-}
-
-function decodeActivationToken(token: string): string | null {
-  try {
-    const decoded = Buffer.from(token, 'base64').toString('utf-8').trim().toLowerCase()
-    if (!decoded || !decoded.includes('@')) return null
-    return decoded
-  } catch (error) {
-    console.error('Error decoding activation token:', error)
-    return null
   }
 }
