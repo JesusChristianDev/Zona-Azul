@@ -1,29 +1,29 @@
 import './globals.css'
 import { Metadata, Viewport } from 'next'
+import { Suspense } from 'react'
 import nextDynamic from 'next/dynamic'
 import RegisterServiceWorker from './register-sw'
 import { PanelProvider } from '../contexts/PanelContext'
+import UserPreferencesLoader from '../components/settings/UserPreferencesLoader'
 
 // Lazy load de componentes pesados para mejorar FCP y TTI
 // Deshabilitar SSR para evitar problemas de hidratación con hooks del cliente
 const DashboardHeader = nextDynamic(() => import('../components/ui/DashboardHeader'), {
   ssr: false, // Deshabilitar SSR porque usa hooks del cliente (useAuth, usePathname)
   loading: () => (
-    <header className="bg-white shadow-sm sticky top-0 z-40 border-b w-full">
+    <header className="bg-white dark:bg-slate-800 shadow-sm sticky top-0 z-40 border-b border-gray-200 dark:border-slate-700 w-full">
       <div className="max-w-7xl mx-auto w-full px-3 sm:px-4 py-2.5 sm:py-3 md:py-4">
         <div className="flex items-center justify-between">
-          <div className="h-8 w-32 bg-gray-200 rounded animate-pulse"></div>
-          <div className="h-8 w-24 bg-gray-200 rounded animate-pulse"></div>
+          <div className="h-8 w-32 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>
+          <div className="h-8 w-24 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>
         </div>
       </div>
     </header>
   ),
 })
 
-// Contenedor de paneles renderizado fuera del header
-const PanelsContainer = nextDynamic(() => import('../components/ui/PanelsContainer'), {
-  ssr: false,
-})
+// Importar PanelsContainer directamente - el componente maneja su propia renderización condicional
+import PanelsContainer from '../components/ui/PanelsContainer'
 
 // Forzar renderizado dinámico para evitar errores de prerenderizado con componentes cliente
 export const dynamic = 'force-dynamic'
@@ -86,17 +86,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="msapplication-TileColor" content="#1d4ed8" />
       </head>
-      <body className="min-h-screen bg-gray-50 text-gray-900 antialiased">
+      <body className="min-h-screen bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-gray-100 antialiased transition-colors">
         <PanelProvider>
+          {/* Cargar preferencias del usuario inmediatamente después del login */}
+          <UserPreferencesLoader />
+          
           <DashboardHeader />
           
           {/* Contenedor de paneles renderizado fuera del header para asegurar visibilidad */}
+          {/* PanelsContainer se renderiza directamente pero solo en el cliente cuando es necesario */}
           <PanelsContainer />
 
           <main className="w-full">{children}</main>
 
-          <footer className="mt-12 border-t bg-white">
-            <div className="w-full max-w-6xl mx-auto px-4 py-6 text-xs sm:text-sm text-gray-600 text-center sm:text-left">
+          <footer className="mt-12 border-t bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700">
+            <div className="w-full max-w-6xl mx-auto px-4 py-6 text-xs sm:text-sm text-gray-600 dark:text-gray-400 text-center sm:text-left">
               Demo público — Zona Azul
             </div>
           </footer>

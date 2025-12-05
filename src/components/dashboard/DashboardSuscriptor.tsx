@@ -8,6 +8,7 @@ import { getPlan, getProgress, getProfile, getUserById } from '../../lib/api'
 import * as api from '../../lib/api'
 import SummaryCard from '../ui/SummaryCard'
 import InteractiveGreeting from '../ui/InteractiveGreeting'
+import { useDarkMode } from '../../hooks/useDarkMode'
 
 interface ProgressEntry {
   date: string
@@ -44,16 +45,30 @@ export default function DashboardSuscriptor() {
   const [progressEntries, setProgressEntries] = useState<ProgressEntry[]>([])
   const [assignedNutricionista, setAssignedNutricionista] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [subscription, setSubscription] = useState<any>(null)
+  const [nextAppointment, setNextAppointment] = useState<any>(null)
+  const [pendingOrders, setPendingOrders] = useState<number>(0)
   const [stats, setStats] = useState({
     averageCalories: 0,
     averageWater: 0,
     weightChange: 0,
     weeklyData: [] as Array<{ date: string; calories: number; water: number; protein: number }>,
   })
+  const isDarkMode = useDarkMode()
 
+  // Cache para evitar recargas innecesarias cuando el componente se remonta
+  const [dataLoaded, setDataLoaded] = useState(false)
+  
   useEffect(() => {
     const loadData = async () => {
       if (!userId || !userName || !userEmail) return
+      
+      // Si los datos ya se cargaron y tenemos perfil, no recargar
+      // Esto evita recargas cuando se monta el componente después de navegar a ajustes
+      if (dataLoaded && profile) {
+        setLoading(false)
+        return
+      }
 
       setLoading(true)
       try {
@@ -112,9 +127,68 @@ export default function DashboardSuscriptor() {
           setProgressEntries([])
         }
 
+        // Cargar suscripción activa
+        try {
+          const subResponse = await fetch(`/api/subscriptions?user_id=${userId}`)
+          if (subResponse.ok) {
+            const subData = await subResponse.json()
+            const activeSub = subData.find((sub: any) => 
+              sub.status === 'active' || sub.status === 'pending_approval'
+            )
+            if (activeSub) {
+              setSubscription(activeSub)
+            } else {
+              setSubscription(null)
+            }
+          }
+        } catch (error) {
+          console.error('Error loading subscription:', error)
+        }
+
+        // Cargar próxima cita
+        try {
+          const aptResponse = await fetch('/api/appointments')
+          if (aptResponse.ok) {
+            const aptData = await aptResponse.json()
+            const appointments = aptData.appointments || []
+            const upcoming = appointments
+              .filter((apt: any) => {
+                const aptDate = new Date(apt.date_time)
+                return aptDate >= new Date() && apt.status !== 'cancelada' && apt.status !== 'completada'
+              })
+              .sort((a: any, b: any) => new Date(a.date_time).getTime() - new Date(b.date_time).getTime())
+            
+            if (upcoming.length > 0) {
+              setNextAppointment(upcoming[0])
+            } else {
+              setNextAppointment(null)
+            }
+          }
+        } catch (error) {
+          console.error('Error loading appointments:', error)
+        }
+
+        // Cargar pedidos pendientes
+        try {
+          const ordersResponse = await fetch(`/api/orders?user_id=${userId}`)
+          if (ordersResponse.ok) {
+            const ordersData = await ordersResponse.json()
+            const orders = ordersData.orders || []
+            const pending = orders.filter((order: any) => 
+              order.status === 'pending' || order.status === 'confirmed' || order.status === 'preparing'
+            )
+            setPendingOrders(pending.length)
+          }
+        } catch (error) {
+          console.error('Error loading orders:', error)
+        }
+
         // Obtener nutricionista asignado
         const nutricionista = await getAssignedNutricionista(userId)
         setAssignedNutricionista(nutricionista)
+        
+        // Marcar como cargado
+        setDataLoaded(true)
       } catch (error) {
         console.error('Error loading dashboard data:', error)
       } finally {
@@ -124,13 +198,19 @@ export default function DashboardSuscriptor() {
 
     loadData()
 
-    // Polling cada 30 segundos para actualizar datos
-    const interval = setInterval(loadData, 30000)
+    // Polling cada 30 segundos para actualizar datos (solo si ya se cargaron)
+    const interval = setInterval(() => {
+      if (dataLoaded && userId && userName && userEmail) {
+        // Recargar datos en segundo plano sin mostrar loading
+        loadData()
+      }
+    }, 30000)
 
     return () => {
       clearInterval(interval)
     }
-  }, [userId, userName, userEmail])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, userName, userEmail]) // Solo dependencias esenciales para evitar loops
 
   // Calcular estadísticas desde datos reales
   useEffect(() => {
@@ -182,6 +262,14 @@ export default function DashboardSuscriptor() {
     })
   }, [progressEntries, plan])
 
+  // Colores para gráficos según el tema
+  const axisColor = isDarkMode ? '#94a3b8' : '#6b7280'
+  const gridColor = isDarkMode ? '#475569' : '#f0f0f0'
+  const strokeColor = isDarkMode ? '#475569' : '#e5e7eb'
+  const tooltipBg = isDarkMode ? '#1e293b' : '#fff'
+  const tooltipBorder = isDarkMode ? '#334155' : '#e5e7eb'
+  const tooltipText = isDarkMode ? '#cbd5e1' : '#6b7280'
+
   // Preparar datos para gráficos
   const weeklyChartData = stats.weeklyData.length > 0
     ? stats.weeklyData.map((entry) => ({
@@ -221,6 +309,27 @@ export default function DashboardSuscriptor() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
         <SummaryCard
+          title="Suscripción"
+          value={subscription ? (subscription.status === 'active' ? 'Activa' : 'Pendiente') : 'Inactiva'}
+          subtitle={
+            subscription && subscription.end_date
+              ? (() => {
+                  const endDate = new Date(subscription.end_date)
+                  const today = new Date()
+                  const daysLeft = Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+                  return daysLeft > 0 ? `${daysLeft} días restantes` : 'Expirada'
+                })()
+              : subscription?.status === 'pending_approval'
+              ? 'Esperando aprobación'
+              : 'Sin suscripción'
+          }
+          icon={
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+          }
+        />
+        <SummaryCard
           title="Calorías Promedio"
           value={Math.round(stats.averageCalories)}
           subtitle={`Meta: ${profile.goals.calories} kcal`}
@@ -258,6 +367,40 @@ export default function DashboardSuscriptor() {
             </svg>
           }
         />
+      </div>
+
+      {/* Segunda fila de tarjetas */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
+        <SummaryCard
+          title="Comidas por Día"
+          value={subscription?.meals_per_day === 2 ? '2 comidas' : subscription?.meals_per_day === 1 ? '1 comida' : '—'}
+          subtitle={subscription?.meals_per_day === 2 ? 'Almuerzo y Cena' : subscription?.meals_per_day === 1 ? 'Almuerzo o Cena' : 'No definido'}
+          icon={
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+            </svg>
+          }
+        />
+        <SummaryCard
+          title="Próxima Cita"
+          value={nextAppointment ? new Date(nextAppointment.date_time).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : 'Sin cita'}
+          subtitle={nextAppointment ? new Date(nextAppointment.date_time).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : 'Agenda una consulta'}
+          icon={
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          }
+        />
+        <SummaryCard
+          title="Pedidos Pendientes"
+          value={pendingOrders > 0 ? pendingOrders.toString() : '0'}
+          subtitle={pendingOrders > 0 ? 'En preparación' : 'Sin pedidos'}
+          icon={
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+            </svg>
+          }
+        />
         <SummaryCard
           title="Cambio de Peso"
           value={`${stats.weightChange > 0 ? '+' : ''}${stats.weightChange.toFixed(1)} kg`}
@@ -278,10 +421,10 @@ export default function DashboardSuscriptor() {
       {weeklyChartData.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8 mb-4 sm:mb-6 lg:mb-8">
           {/* Gráfico de progreso semanal */}
-          <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 sm:p-5 lg:p-6 overflow-hidden">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-gray-100 dark:border-slate-700 p-4 sm:p-5 lg:p-6 overflow-hidden">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Progreso Semanal</h2>
-              <div className="flex items-center gap-2 text-xs text-gray-500">
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100">Progreso Semanal</h2>
+              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                 <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
                 <span>Calorías</span>
                 <div className="w-3 h-3 rounded-full bg-sky-500 ml-2"></div>
@@ -290,24 +433,40 @@ export default function DashboardSuscriptor() {
             </div>
             <ResponsiveContainer width="100%" height={280}>
               <LineChart data={weeklyChartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
                 <XAxis 
                   dataKey="fecha" 
-                  tick={{ fontSize: 11, fill: '#6b7280' }} 
-                  stroke="#e5e7eb"
+                  tick={{ fontSize: 11, fill: axisColor }} 
+                  stroke={strokeColor}
                 />
                 <YAxis 
-                  tick={{ fontSize: 11, fill: '#6b7280' }} 
-                  stroke="#e5e7eb"
+                  tick={{ fontSize: 11, fill: axisColor }} 
+                  stroke={strokeColor}
                 />
                 <Tooltip 
                   contentStyle={{ 
                     fontSize: '12px', 
-                    backgroundColor: '#fff',
-                    border: '1px solid #e5e7eb',
+                    backgroundColor: tooltipBg,
+                    border: `1px solid ${tooltipBorder}`,
                     borderRadius: '8px',
-                    padding: '8px'
-                  }} 
+                    padding: '8px',
+                    color: tooltipText
+                  }}
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      return (
+                        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-3 shadow-lg">
+                          <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">{payload[0].payload.fecha}</p>
+                          {payload.map((entry: any, index: number) => (
+                            <p key={index} className="text-sm font-medium" style={{ color: entry.color }}>
+                              {entry.name}: {entry.value}
+                            </p>
+                          ))}
+                        </div>
+                      )
+                    }
+                    return null
+                  }}
                 />
                 <Legend 
                   wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} 
@@ -336,33 +495,49 @@ export default function DashboardSuscriptor() {
           </div>
 
           {/* Gráfico de hidratación */}
-          <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 sm:p-5 lg:p-6 overflow-hidden">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-gray-100 dark:border-slate-700 p-4 sm:p-5 lg:p-6 overflow-hidden">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Hidratación Diaria</h2>
-              <div className="text-xs text-gray-500">
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100">Hidratación Diaria</h2>
+              <div className="text-xs text-gray-500 dark:text-gray-400">
                 Meta: {profile.goals.water} ml
               </div>
             </div>
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={weeklyChartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
                 <XAxis 
                   dataKey="fecha" 
-                  tick={{ fontSize: 11, fill: '#6b7280' }} 
-                  stroke="#e5e7eb"
+                  tick={{ fontSize: 11, fill: axisColor }} 
+                  stroke={strokeColor}
                 />
                 <YAxis 
-                  tick={{ fontSize: 11, fill: '#6b7280' }} 
-                  stroke="#e5e7eb"
+                  tick={{ fontSize: 11, fill: axisColor }} 
+                  stroke={strokeColor}
                 />
                 <Tooltip 
                   contentStyle={{ 
                     fontSize: '12px', 
-                    backgroundColor: '#fff',
-                    border: '1px solid #e5e7eb',
+                    backgroundColor: tooltipBg,
+                    border: `1px solid ${tooltipBorder}`,
                     borderRadius: '8px',
-                    padding: '8px'
-                  }} 
+                    padding: '8px',
+                    color: tooltipText
+                  }}
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      return (
+                        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-3 shadow-lg">
+                          <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">{payload[0].payload.fecha}</p>
+                          {payload.map((entry: any, index: number) => (
+                            <p key={index} className="text-sm font-medium" style={{ color: entry.color }}>
+                              {entry.name}: {entry.value}
+                            </p>
+                          ))}
+                        </div>
+                      )
+                    }
+                    return null
+                  }}
                 />
                 <Bar 
                   dataKey="agua" 
@@ -375,20 +550,20 @@ export default function DashboardSuscriptor() {
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-xl shadow-md border border-gray-100 p-8 sm:p-12 text-center">
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-gray-100 dark:border-slate-700 p-8 sm:p-12 text-center">
           <div className="max-w-md mx-auto">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-16 h-16 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Aún no hay datos de progreso</h3>
-            <p className="text-sm text-gray-600 mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Aún no hay datos de progreso</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
               Comienza a registrar tu progreso diario para ver tus estadísticas aquí.
             </p>
             <a
               href="/suscriptor/progreso"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium"
+              className="btn btn-primary w-full sm:w-auto justify-center"
             >
               Registrar Progreso
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -399,34 +574,96 @@ export default function DashboardSuscriptor() {
         </div>
       )}
 
-      {/* Plan de comidas */}
-      {plan && plan.days && plan.days.length > 0 ? (
-        <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 sm:p-6 mb-6 sm:mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-            <div>
-              <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Plan de Comidas</h2>
-              <p className="text-sm text-gray-600 mt-1">
-                {plan.days.length} días programados
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              {assignedNutricionista ? (
-                <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-600">
-                  <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                    <span className="text-primary font-semibold text-xs">
-                      {assignedNutricionista.name.charAt(0).toUpperCase()}
-                    </span>
+      {/* Plan de comidas - Solo día actual */}
+      {plan && plan.days && plan.days.length > 0 ? (() => {
+        // Obtener el día actual de la semana (0 = Domingo, 1 = Lunes, ..., 6 = Sábado)
+        const today = new Date()
+        const dayOfWeek = today.getDay() // 0-6
+        // Mapear a nombres en español (el plan usa Lunes-Viernes, que son días 1-5)
+        const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+        const todayName = dayNames[dayOfWeek]
+        
+        // Buscar el día actual en el plan (solo Lunes-Viernes están en el plan)
+        const todayPlan = plan.days.find((day) => day.day === todayName)
+        
+        return todayPlan ? (
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-gray-100 dark:border-slate-700 p-4 sm:p-6 mb-6 sm:mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+              <div>
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100">Plan de Comidas de Hoy</h2>
+                <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                  {todayName} - {today.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto">
+                {assignedNutricionista ? (
+                  <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 dark:text-gray-300">
+                    <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                      <span className="text-primary font-semibold text-xs">
+                        {assignedNutricionista.name.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <span>Creado por {assignedNutricionista.name}</span>
                   </div>
-                  <span>Creado por {assignedNutricionista.name}</span>
-                </div>
-              ) : plan?.createdBy ? (
-                <span className="text-xs sm:text-sm text-gray-500">
-                  Creado por {plan.createdBy}
+                ) : plan?.createdBy ? (
+                  <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                    Creado por {plan.createdBy}
+                  </span>
+                ) : null}
+                <a
+                  href="/suscriptor/plan"
+                  className="btn btn-ghost w-full sm:w-auto justify-center"
+                >
+                  Ver plan completo
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </a>
+              </div>
+            </div>
+            <div className="border border-gray-200 dark:border-slate-700 rounded-xl p-4 sm:p-5 bg-gradient-to-br from-white to-gray-50/50 dark:from-slate-800 dark:to-slate-700/50">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-lg">{todayPlan.day}</h3>
+                <span className="text-sm bg-primary/10 text-primary px-3 py-1.5 rounded-full font-medium">
+                  {todayPlan.totalCalories} kcal
                 </span>
-              ) : null}
+              </div>
+              <div className="space-y-3">
+                {todayPlan.meals && todayPlan.meals.length > 0 ? (
+                  todayPlan.meals.map((meal, index) => (
+                    <div
+                      key={index}
+                      className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3 bg-white dark:bg-slate-800 rounded-lg border border-gray-100 dark:border-slate-700 hover:border-primary/30 dark:hover:border-primary/50 transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium text-gray-800 dark:text-gray-100 text-sm block">{meal.name}</span>
+                        {meal.description && (
+                          <span className="text-xs text-gray-500 dark:text-gray-400 mt-1 block">{meal.description}</span>
+                        )}
+                        <span className="text-xs text-primary font-medium mt-1 inline-block">{meal.calories} kcal</span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                    No hay comidas programadas para hoy
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-gray-100 dark:border-slate-700 p-4 sm:p-6 mb-6 sm:mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+              <div>
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100">Plan de Comidas</h2>
+                <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                  No hay plan para {todayName}
+                </p>
+              </div>
               <a
                 href="/suscriptor/plan"
-                className="text-sm text-primary hover:text-primary/80 font-medium flex items-center gap-1"
+                className="btn btn-ghost w-full sm:w-auto justify-center"
               >
                 Ver plan completo
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -434,56 +671,29 @@ export default function DashboardSuscriptor() {
                 </svg>
               </a>
             </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+              El plan nutricional solo incluye días laborables (Lunes a Viernes)
+            </p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {plan.days.slice(0, 3).map((day) => (
-              <div 
-                key={day.day} 
-                className="border border-gray-200 rounded-xl p-4 sm:p-5 hover:shadow-lg hover:border-primary/30 transition-all bg-gradient-to-br from-white to-gray-50/50"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-gray-900 text-base">{day.day}</h3>
-                  <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full font-medium">
-                    {day.totalCalories} kcal
-                  </span>
-                </div>
-                <div className="space-y-2.5">
-                  {day.meals.slice(0, 3).map((meal, index) => (
-                    <div key={index} className="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-100">
-                      <div className="flex-1 min-w-0">
-                        <span className="font-medium text-gray-800 text-sm block truncate">{meal.name}</span>
-                        <span className="text-xs text-gray-500">{meal.calories} kcal</span>
-                      </div>
-                    </div>
-                  ))}
-                  {day.meals.length > 3 && (
-                    <p className="text-xs text-gray-500 text-center pt-1">
-                      +{day.meals.length - 3} comida{day.meals.length - 3 > 1 ? 's' : ''} más
-                    </p>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div className="bg-white rounded-xl shadow-md border border-gray-100 p-8 sm:p-12 text-center">
+        )
+      })() : (
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-gray-100 dark:border-slate-700 p-8 sm:p-12 text-center">
           <div className="max-w-md mx-auto">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-16 h-16 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">No tienes un plan activo</h3>
-            <p className="text-sm text-gray-600 mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">No tienes un plan activo</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
               Contacta con tu nutricionista para que te asigne un plan personalizado.
             </p>
             {assignedNutricionista && (
-              <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                <p className="text-xs text-gray-600 mb-2">Tu nutricionista asignado:</p>
-                <p className="font-medium text-gray-900">{assignedNutricionista.name}</p>
+              <div className="bg-gray-50 dark:bg-slate-700/50 rounded-lg p-4 mb-4">
+                <p className="text-xs text-gray-600 dark:text-gray-300 mb-2">Tu nutricionista asignado:</p>
+                <p className="font-medium text-gray-900 dark:text-gray-100">{assignedNutricionista.name}</p>
                 {assignedNutricionista.email && (
-                  <p className="text-xs text-gray-500 mt-1">{assignedNutricionista.email}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{assignedNutricionista.email}</p>
                 )}
               </div>
             )}
@@ -491,52 +701,6 @@ export default function DashboardSuscriptor() {
         </div>
       )}
 
-      {/* Información del perfil */}
-      <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 sm:p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Mi Perfil</h2>
-          <a
-            href="/suscriptor/ajustes"
-            className="text-sm text-primary hover:text-primary/80 font-medium flex items-center gap-1"
-          >
-            Editar
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-          </a>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-          <div className="p-3 bg-gray-50 rounded-lg">
-            <p className="text-xs text-gray-500 mb-1">Nombre</p>
-            <p className="font-medium text-gray-900">{profile.name}</p>
-          </div>
-          <div className="p-3 bg-gray-50 rounded-lg">
-            <p className="text-xs text-gray-500 mb-1">Email</p>
-            <p className="font-medium text-gray-900 break-all">{profile.email}</p>
-          </div>
-          <div className="p-3 bg-gray-50 rounded-lg">
-            <p className="text-xs text-gray-500 mb-1">Teléfono</p>
-            <p className="font-medium text-gray-900">{profile.phone || (
-              <span className="text-gray-400 italic">No proporcionado</span>
-            )}</p>
-          </div>
-          <div className="p-3 bg-gray-50 rounded-lg">
-            <p className="text-xs text-gray-500 mb-1">Estado de Suscripción</p>
-            <span className={`inline-block px-3 py-1.5 rounded-full text-xs font-semibold ${
-              profile.subscriptionStatus === 'active'
-                ? 'bg-green-100 text-green-700'
-                : profile.subscriptionStatus === 'expired'
-                  ? 'bg-red-100 text-red-700'
-                  : 'bg-gray-100 text-gray-700'
-            }`}>
-              {profile.subscriptionStatus === 'active' && '✓ Activa'}
-              {profile.subscriptionStatus === 'expired' && '✗ Expirada'}
-              {profile.subscriptionStatus === 'inactive' && '○ Inactiva'}
-            </span>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }
-

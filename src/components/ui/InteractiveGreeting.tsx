@@ -68,7 +68,7 @@ export default function InteractiveGreeting({ userName, role }: InteractiveGreet
   const firstName = userName?.split(' ')[0] || 'Usuario'
 
   return (
-    <div className="relative overflow-hidden rounded-xl sm:rounded-2xl bg-gradient-to-br from-primary/10 via-accent/10 to-highlight/10 border border-primary/20 p-4 sm:p-6 lg:p-8 shadow-lg">
+    <div className="relative overflow-hidden rounded-xl sm:rounded-2xl bg-gradient-to-br from-primary/10 via-accent/10 to-highlight/10 dark:from-primary/20 dark:via-accent/20 dark:to-highlight/20 border border-primary/20 dark:border-primary/30 p-4 sm:p-6 lg:p-8 shadow-lg">
       {/* Decoración de fondo */}
       <div className="absolute top-0 right-0 w-24 h-24 sm:w-32 sm:h-32 bg-primary/5 rounded-full -mr-12 sm:-mr-16 -mt-12 sm:-mt-16 blur-2xl"></div>
       <div className="absolute bottom-0 left-0 w-16 h-16 sm:w-24 sm:h-24 bg-accent/5 rounded-full -ml-8 sm:-ml-12 -mb-8 sm:-mb-12 blur-2xl"></div>
@@ -81,12 +81,12 @@ export default function InteractiveGreeting({ userName, role }: InteractiveGreet
                 {greetingData.emoji}
               </span>
               <div className="min-w-0 flex-1">
-                <h1 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-bold text-gray-900 mb-0.5 sm:mb-1">
+                <h1 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-0.5 sm:mb-1">
                   <span className="text-primary">{greetingData.greeting}</span>
                   {', '}
                   <span className="animate-in fade-in slide-in-from-right-4 break-words">{firstName}</span>
                 </h1>
-                <p className="text-xs sm:text-sm lg:text-base text-gray-600 line-clamp-2">
+                <p className="text-xs sm:text-sm lg:text-base text-gray-600 dark:text-gray-300 line-clamp-2">
                   {greetingData.message}
                 </p>
               </div>
@@ -94,9 +94,9 @@ export default function InteractiveGreeting({ userName, role }: InteractiveGreet
           </div>
           
           <div className="flex-shrink-0 self-start sm:self-auto">
-            <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-white/80 backdrop-blur-sm rounded-full border border-primary/20 shadow-md">
+            <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-full border border-primary/20 dark:border-primary/30 shadow-md">
               <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-xs sm:text-sm font-semibold text-gray-700 whitespace-nowrap">{getRoleMessage(role)}</span>
+              <span className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-200 whitespace-nowrap">{getRoleMessage(role)}</span>
             </div>
           </div>
         </div>

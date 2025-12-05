@@ -4,6 +4,8 @@
 --   - Migración de separación menú/planes
 --   - Tabla de suscripciones push (push_subscriptions)
 --   - Campo signature_image en subscription_contracts
+--   - Tabla de preferencias de comida/cena (meal_plan_day_preferences)
+--   - Campos de accesibilidad en user_settings (accessibility_font_size, accessibility_high_contrast, accessibility_reduce_animations)
 --   - Scripts opcionales de actualización de datos existentes
 -- Ejecutar este script en el SQL Editor de Supabase
 
@@ -125,6 +127,315 @@ CREATE TABLE IF NOT EXISTS order_items (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Tabla de configuración por comida dentro de un pedido
+CREATE TABLE IF NOT EXISTS order_meal_settings (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  order_item_id UUID NOT NULL REFERENCES order_items(id) ON DELETE CASCADE,
+  meal_type TEXT NOT NULL CHECK (meal_type IN ('lunch', 'dinner')),
+  delivery_mode TEXT NOT NULL CHECK (delivery_mode IN ('delivery', 'pickup')),
+  delivery_address_id UUID,
+  pickup_location TEXT,
+  delivery_time TIME WITHOUT TIME ZONE NOT NULL,
+  estimated_delivery_time TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(order_item_id),
+  CHECK (
+    (
+      delivery_mode = 'delivery'
+      AND delivery_address_id IS NOT NULL
+      AND pickup_location IS NULL
+    ) OR (
+      delivery_mode = 'pickup'
+      AND pickup_location IS NOT NULL
+    )
+  ),
+  CHECK (
+    (meal_type = 'lunch' AND delivery_time >= TIME '12:00' AND delivery_time <= TIME '16:00')
+    OR (meal_type = 'dinner' AND delivery_time >= TIME '19:00' AND delivery_time <= TIME '23:00')
+  )
+);
+
+-- ================================
+-- Tablas de nutrición personalizada
+-- ================================
+
+CREATE TABLE IF NOT EXISTS fichas_tecnicas (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  sexo TEXT NOT NULL CHECK (sexo IN ('hombre', 'mujer')),
+  edad SMALLINT CHECK (edad >= 0),
+  peso_kg NUMERIC(6,2) CHECK (peso_kg > 0),
+  altura_cm NUMERIC(6,2) CHECK (altura_cm > 0),
+  imc NUMERIC(5,2),
+  densidad_osea NUMERIC(6,3),
+  masa_magra NUMERIC(6,2),
+  masa_grasa NUMERIC(6,2),
+  trabajo TEXT CHECK (trabajo IN ('sedentario', 'moderado', 'intenso')),
+  nivel_actividad TEXT CHECK (nivel_actividad IN ('sedentario', 'ligero', 'moderado', 'intenso', 'atleta')),
+  puesto_trabajo TEXT,
+  intensidad_trabajo TEXT CHECK (intensidad_trabajo IN ('baja', 'moderada', 'alta')),
+  entrenamientos_semanales SMALLINT CHECK (entrenamientos_semanales >= 0),
+  nivel_entrenamiento TEXT CHECK (nivel_entrenamiento IN ('principiante', 'intermedio', 'avanzado')),
+  patologias TEXT,
+  preferencias TEXT,
+  objetivo TEXT CHECK (objetivo IN ('perder_grasa', 'mantener', 'ganar_masa', 'recomp_corporal')),
+  comidas_por_dia SMALLINT DEFAULT 2 CHECK (comidas_por_dia BETWEEN 1 AND 2),
+  fecha_revision DATE,
+  calorias_objetivo INTEGER,
+  get_total NUMERIC(8,2),
+  tmb NUMERIC(8,2),
+  factor_actividad NUMERIC(4,2),
+  proteinas_objetivo NUMERIC(10,2),
+  grasas_objetivo NUMERIC(10,2),
+  carbohidratos_objetivo NUMERIC(10,2),
+  fibra_objetivo NUMERIC(10,2),
+  distribucion_calorias JSONB,
+  distribucion_macros JSONB,
+  observaciones TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(user_id)
+);
+
+ALTER TABLE fichas_tecnicas DROP CONSTRAINT IF EXISTS fichas_tecnicas_objetivo_check;
+ALTER TABLE fichas_tecnicas ADD CONSTRAINT fichas_tecnicas_objetivo_check CHECK (objetivo IN ('perder_grasa', 'mantener', 'ganar_masa', 'recomp_corporal'));
+
+ALTER TABLE fichas_tecnicas ADD COLUMN IF NOT EXISTS nivel_actividad TEXT CHECK (nivel_actividad IN ('sedentario', 'ligero', 'moderado', 'intenso', 'atleta'));
+ALTER TABLE fichas_tecnicas ADD COLUMN IF NOT EXISTS puesto_trabajo TEXT;
+ALTER TABLE fichas_tecnicas ADD COLUMN IF NOT EXISTS intensidad_trabajo TEXT CHECK (intensidad_trabajo IN ('baja', 'moderada', 'alta'));
+ALTER TABLE fichas_tecnicas ADD COLUMN IF NOT EXISTS comidas_por_dia SMALLINT DEFAULT 2 CHECK (comidas_por_dia BETWEEN 1 AND 2);
+ALTER TABLE fichas_tecnicas ADD COLUMN IF NOT EXISTS get_total NUMERIC(8,2);
+ALTER TABLE fichas_tecnicas ADD COLUMN IF NOT EXISTS proteinas_objetivo NUMERIC(10,2);
+ALTER TABLE fichas_tecnicas ADD COLUMN IF NOT EXISTS grasas_objetivo NUMERIC(10,2);
+ALTER TABLE fichas_tecnicas ADD COLUMN IF NOT EXISTS carbohidratos_objetivo NUMERIC(10,2);
+ALTER TABLE fichas_tecnicas ADD COLUMN IF NOT EXISTS fibra_objetivo NUMERIC(10,2);
+ALTER TABLE fichas_tecnicas ADD COLUMN IF NOT EXISTS distribucion_calorias JSONB;
+ALTER TABLE fichas_tecnicas ADD COLUMN IF NOT EXISTS distribucion_macros JSONB;
+
+CREATE TABLE IF NOT EXISTS planes_base (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  nombre TEXT NOT NULL,
+  descripcion TEXT,
+  objetivo TEXT CHECK (objetivo IN ('perder_grasa', 'mantener', 'ganar_masa', 'antiinflamatorio', 'deportivo', 'recomp_corporal')),
+  dias_plan SMALLINT NOT NULL DEFAULT 5 CHECK (dias_plan BETWEEN 1 AND 20),
+  calorias_base INTEGER NOT NULL CHECK (calorias_base > 0),
+  proteinas_base NUMERIC(7,2),
+  carbohidratos_base NUMERIC(7,2),
+  grasas_base NUMERIC(7,2),
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE planes_base DROP CONSTRAINT IF EXISTS planes_base_objetivo_check;
+ALTER TABLE planes_base ADD CONSTRAINT planes_base_objetivo_check CHECK (objetivo IN ('perder_grasa', 'mantener', 'ganar_masa', 'antiinflamatorio', 'deportivo', 'recomp_corporal'));
+ALTER TABLE planes_base DROP CONSTRAINT IF EXISTS planes_base_dias_plan_check;
+ALTER TABLE planes_base ADD CONSTRAINT planes_base_dias_plan_check CHECK (dias_plan BETWEEN 1 AND 20);
+
+CREATE TABLE IF NOT EXISTS ingredientes (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  nombre TEXT NOT NULL UNIQUE,
+  unidad_base TEXT NOT NULL,
+  calorias_por_unidad NUMERIC(10,4),
+  proteinas_por_unidad NUMERIC(10,4),
+  carbohidratos_por_unidad NUMERIC(10,4),
+  grasas_por_unidad NUMERIC(10,4),
+  stock_minimo NUMERIC(12,3) DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS recetas (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  plan_base_id UUID REFERENCES planes_base(id) ON DELETE SET NULL,
+  nombre TEXT NOT NULL,
+  descripcion TEXT,
+  meal_type TEXT NOT NULL CHECK (meal_type IN ('lunch', 'dinner')),
+  calorias_totales INTEGER,
+  proteinas_totales NUMERIC(8,2),
+  carbohidratos_totales NUMERIC(8,2),
+  grasas_totales NUMERIC(8,2),
+  porciones INTEGER NOT NULL DEFAULT 1 CHECK (porciones > 0),
+  formula_escalado TEXT,
+  tiempo_preparacion_min SMALLINT,
+  es_biblioteca BOOLEAN NOT NULL DEFAULT false,
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Asegurar que la columna es_biblioteca exista en instalaciones previas
+ALTER TABLE recetas
+ADD COLUMN IF NOT EXISTS es_biblioteca BOOLEAN NOT NULL DEFAULT false;
+
+CREATE INDEX IF NOT EXISTS idx_recetas_es_biblioteca ON recetas(es_biblioteca);
+
+CREATE TABLE IF NOT EXISTS recetas_ingredientes (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  receta_id UUID NOT NULL REFERENCES recetas(id) ON DELETE CASCADE,
+  ingrediente_id UUID NOT NULL REFERENCES ingredientes(id) ON DELETE RESTRICT,
+  cantidad_base NUMERIC(12,3) NOT NULL,
+  unidad TEXT NOT NULL,
+  porcentaje_merma NUMERIC(5,2) DEFAULT 0 CHECK (porcentaje_merma BETWEEN 0 AND 100),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- ==========================
+-- Planes semanales adaptados
+-- ==========================
+
+CREATE TABLE IF NOT EXISTS planes_semanales (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  ficha_tecnica_id UUID REFERENCES fichas_tecnicas(id) ON DELETE SET NULL,
+  plan_base_id UUID REFERENCES planes_base(id) ON DELETE SET NULL,
+  week_start_date DATE NOT NULL,
+  week_end_date DATE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pendiente' CHECK (status IN ('pendiente', 'generado', 'aprobado', 'archivado')),
+  total_calorias NUMERIC(10,2),
+  comentarios TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(user_id, week_start_date)
+);
+
+CREATE TABLE IF NOT EXISTS planes_semanales_comidas (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  plan_semanal_id UUID NOT NULL REFERENCES planes_semanales(id) ON DELETE CASCADE,
+  day_number SMALLINT NOT NULL CHECK (day_number BETWEEN 1 AND 28),
+  meal_type TEXT NOT NULL CHECK (meal_type IN ('lunch', 'dinner')),
+  receta_id UUID REFERENCES recetas(id) ON DELETE SET NULL,
+  calorias_adaptadas NUMERIC(10,2),
+  proteinas_adaptadas NUMERIC(10,2),
+  carbohidratos_adaptados NUMERIC(10,2),
+  grasas_adaptadas NUMERIC(10,2),
+  cantidad_total NUMERIC(12,3),
+  unidad TEXT,
+  notas TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+ALTER TABLE planes_semanales_comidas DROP CONSTRAINT IF EXISTS planes_semanales_comidas_day_number_check;
+ALTER TABLE planes_semanales_comidas ADD CONSTRAINT planes_semanales_comidas_day_number_check CHECK (day_number BETWEEN 1 AND 28);
+
+CREATE TABLE IF NOT EXISTS planes_semanales_ingredientes (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  plan_semanal_id UUID NOT NULL REFERENCES planes_semanales(id) ON DELETE CASCADE,
+  plan_semanal_comida_id UUID NOT NULL REFERENCES planes_semanales_comidas(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plan_base_id UUID NOT NULL REFERENCES planes_base(id) ON DELETE CASCADE,
+  receta_id UUID NOT NULL REFERENCES recetas(id) ON DELETE CASCADE,
+  ingrediente_id UUID NOT NULL REFERENCES ingredientes(id) ON DELETE RESTRICT,
+  cantidad_base NUMERIC(12,4) NOT NULL,
+  unidad TEXT NOT NULL,
+  porcentaje_merma NUMERIC(5,2),
+  cantidad_adaptada NUMERIC(12,4) NOT NULL,
+  consumo_fecha DATE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_planes_semanales_ingredientes_fecha ON planes_semanales_ingredientes(consumo_fecha);
+CREATE INDEX IF NOT EXISTS idx_planes_semanales_ingredientes_ing ON planes_semanales_ingredientes(ingrediente_id);
+CREATE INDEX IF NOT EXISTS idx_planes_semanales_ingredientes_plan ON planes_semanales_ingredientes(plan_semanal_id);
+CREATE INDEX IF NOT EXISTS idx_planes_semanales_ingredientes_usuario ON planes_semanales_ingredientes(user_id);
+CREATE INDEX IF NOT EXISTS idx_planes_semanales_ingredientes_plan_base ON planes_semanales_ingredientes(plan_base_id);
+
+-- =========
+-- Inventario
+-- =========
+
+CREATE TABLE IF NOT EXISTS stock (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  ingrediente_id UUID NOT NULL REFERENCES ingredientes(id) ON DELETE CASCADE,
+  cantidad_disponible NUMERIC(14,3) NOT NULL DEFAULT 0,
+  unidad TEXT NOT NULL,
+  actualizado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(ingrediente_id)
+);
+
+CREATE TABLE IF NOT EXISTS pedidos_proveedores (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  proveedor TEXT NOT NULL,
+  fecha_solicitud TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  fecha_entrega_estimada DATE,
+  estado TEXT NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'en_proceso', 'recibido', 'cancelado')),
+  margen_error NUMERIC(5,2) DEFAULT 0 CHECK (margen_error BETWEEN 0 AND 0.5),
+  notas TEXT
+);
+
+CREATE TABLE IF NOT EXISTS pedidos_proveedores_detalles (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  pedido_id UUID NOT NULL REFERENCES pedidos_proveedores(id) ON DELETE CASCADE,
+  ingrediente_id UUID NOT NULL REFERENCES ingredientes(id) ON DELETE RESTRICT,
+  cantidad NUMERIC(14,3) NOT NULL,
+  unidad TEXT NOT NULL,
+  costo_unitario NUMERIC(10,2),
+  creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- =================
+-- Producción diaria
+-- =================
+
+CREATE TABLE IF NOT EXISTS produccion_diaria (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  fecha DATE NOT NULL,
+  plan_semanal_id UUID REFERENCES planes_semanales(id) ON DELETE SET NULL,
+  estado TEXT NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'en_proceso', 'completado')),
+  comentarios TEXT,
+  creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  actualizado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(fecha)
+);
+
+CREATE TABLE IF NOT EXISTS produccion_diaria_detalles (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  produccion_id UUID NOT NULL REFERENCES produccion_diaria(id) ON DELETE CASCADE,
+  receta_id UUID REFERENCES recetas(id) ON DELETE SET NULL,
+  cantidad_programada NUMERIC(10,2),
+  cantidad_producida NUMERIC(10,2),
+  unidad TEXT,
+  estado TEXT DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'en_proceso', 'listo')),
+  notas TEXT
+);
+
+-- =========
+-- Logística
+-- =========
+
+CREATE TABLE IF NOT EXISTS logistica_rutas (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  fecha DATE NOT NULL,
+  repartidor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  nombre TEXT,
+  estado TEXT NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'en_ruta', 'completada', 'cancelada')),
+  ventana_inicio TIME WITHOUT TIME ZONE,
+  ventana_fin TIME WITHOUT TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS logistica_rutas_paradas (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  ruta_id UUID NOT NULL REFERENCES logistica_rutas(id) ON DELETE CASCADE,
+  order_id UUID REFERENCES orders(id) ON DELETE SET NULL,
+  cliente_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  posicion SMALLINT,
+  hora_estimada TIME WITHOUT TIME ZONE,
+  estado TEXT DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'en_camino', 'entregado', 'incidencia')),
+  notas TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_fichas_tecnicas_user ON fichas_tecnicas(user_id);
+CREATE INDEX IF NOT EXISTS idx_planes_semanales_user_week ON planes_semanales(user_id, week_start_date);
+CREATE INDEX IF NOT EXISTS idx_planes_semanales_comidas_plan ON planes_semanales_comidas(plan_semanal_id);
+CREATE INDEX IF NOT EXISTS idx_stock_ingrediente ON stock(ingrediente_id);
+CREATE INDEX IF NOT EXISTS idx_pedidos_proveedores_estado ON pedidos_proveedores(estado);
+CREATE INDEX IF NOT EXISTS idx_produccion_diaria_fecha ON produccion_diaria(fecha);
+CREATE INDEX IF NOT EXISTS idx_logistica_rutas_fecha ON logistica_rutas(fecha);
+
+
 -- Tabla de planes nutricionales
 CREATE TABLE IF NOT EXISTS meal_plans (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -162,6 +473,28 @@ CREATE TABLE IF NOT EXISTS meal_plan_day_meals (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Tabla de preferencias de comida/cena para usuarios con 1 comida/día
+CREATE TABLE IF NOT EXISTS meal_plan_day_preferences (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  meal_plan_id UUID NOT NULL REFERENCES meal_plans(id) ON DELETE CASCADE,
+  meal_plan_day_id UUID NOT NULL REFERENCES meal_plan_days(id) ON DELETE CASCADE,
+  preferred_meal_type TEXT NOT NULL CHECK (preferred_meal_type IN ('lunch', 'dinner')),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(user_id, meal_plan_day_id) -- Un usuario solo puede tener una preferencia por día
+);
+
+-- Índices para meal_plan_day_preferences
+CREATE INDEX IF NOT EXISTS idx_meal_plan_day_preferences_user_id ON meal_plan_day_preferences(user_id);
+CREATE INDEX IF NOT EXISTS idx_meal_plan_day_preferences_meal_plan_id ON meal_plan_day_preferences(meal_plan_id);
+CREATE INDEX IF NOT EXISTS idx_meal_plan_day_preferences_meal_plan_day_id ON meal_plan_day_preferences(meal_plan_day_id);
+
+-- Trigger para actualizar updated_at en meal_plan_day_preferences
+DROP TRIGGER IF EXISTS update_meal_plan_day_preferences_updated_at ON meal_plan_day_preferences;
+CREATE TRIGGER update_meal_plan_day_preferences_updated_at BEFORE UPDATE ON meal_plan_day_preferences
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- Tabla de progreso del usuario
 CREATE TABLE IF NOT EXISTS progress (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -191,21 +524,6 @@ CREATE TABLE IF NOT EXISTS messages (
   message TEXT NOT NULL,
   reply TEXT,
   read BOOLEAN DEFAULT false,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Tabla de plantillas de planes (para nutricionistas)
-CREATE TABLE IF NOT EXISTS plan_templates (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name TEXT NOT NULL,
-  description TEXT,
-  nutricionista_id UUID REFERENCES users(id) ON DELETE SET NULL,
-  focus TEXT,
-  duration TEXT,
-  audience TEXT,
-  total_calories INTEGER,
-  is_public BOOLEAN DEFAULT false,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -255,6 +573,8 @@ CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_repartidor_id ON orders(repartidor_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_order_meal_settings_order_item_id ON order_meal_settings(order_item_id);
+CREATE INDEX IF NOT EXISTS idx_order_meal_settings_delivery_mode ON order_meal_settings(delivery_mode);
 CREATE INDEX IF NOT EXISTS idx_meals_type ON meals(type);
 CREATE INDEX IF NOT EXISTS idx_meals_available ON meals(available);
 -- Índices para separación menú/planes (incluidos en migración)
@@ -267,7 +587,6 @@ CREATE INDEX IF NOT EXISTS idx_progress_date ON progress(date);
 CREATE INDEX IF NOT EXISTS idx_messages_from_user_id ON messages(from_user_id);
 CREATE INDEX IF NOT EXISTS idx_messages_to_user_id ON messages(to_user_id);
 CREATE INDEX IF NOT EXISTS idx_messages_read ON messages(read);
-CREATE INDEX IF NOT EXISTS idx_plan_templates_nutricionista_id ON plan_templates(nutricionista_id);
 CREATE INDEX IF NOT EXISTS idx_nutricionista_clients_nutricionista_id ON nutricionista_clients(nutricionista_id);
 CREATE INDEX IF NOT EXISTS idx_nutricionista_clients_client_id ON nutricionista_clients(client_id);
 CREATE INDEX IF NOT EXISTS idx_user_chat_preferences_user_id ON user_chat_preferences(user_id);
@@ -310,16 +629,16 @@ DROP TRIGGER IF EXISTS update_meal_plans_updated_at ON meal_plans;
 CREATE TRIGGER update_meal_plans_updated_at BEFORE UPDATE ON meal_plans
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_order_meal_settings_updated_at ON order_meal_settings;
+CREATE TRIGGER update_order_meal_settings_updated_at BEFORE UPDATE ON order_meal_settings
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 DROP TRIGGER IF EXISTS update_progress_updated_at ON progress;
 CREATE TRIGGER update_progress_updated_at BEFORE UPDATE ON progress
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 DROP TRIGGER IF EXISTS update_messages_updated_at ON messages;
 CREATE TRIGGER update_messages_updated_at BEFORE UPDATE ON messages
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_plan_templates_updated_at ON plan_templates;
-CREATE TRIGGER update_plan_templates_updated_at BEFORE UPDATE ON plan_templates
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 DROP TRIGGER IF EXISTS update_nutricionista_clients_updated_at ON nutricionista_clients;
@@ -439,8 +758,6 @@ CREATE TRIGGER update_nutritionist_schedule_updated_at BEFORE UPDATE ON nutritio
 -- ALTER TABLE meal_plan_day_meals ENABLE ROW LEVEL SECURITY;
 -- ALTER TABLE progress ENABLE ROW LEVEL SECURITY;
 -- ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE plan_templates ENABLE ROW LEVEL SECURITY;
-
 -- Ejemplo de políticas básicas (descomenta y ajusta según necesidades):
 -- CREATE POLICY "Users can view own data" ON users
 --     FOR SELECT USING (auth.uid()::text = id::text);
@@ -633,7 +950,7 @@ CREATE TABLE IF NOT EXISTS weekly_menu_day_meals (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   weekly_menu_day_id UUID NOT NULL REFERENCES weekly_menu_days(id) ON DELETE CASCADE,
   meal_id UUID NOT NULL REFERENCES meals(id) ON DELETE RESTRICT,
-  meal_type TEXT NOT NULL CHECK (meal_type IN ('breakfast', 'lunch', 'dinner', 'snack')),
+  meal_type TEXT NOT NULL CHECK (meal_type IN ('lunch', 'dinner')),
   order_index INTEGER NOT NULL, -- Orden de la comida en el día
   is_original BOOLEAN DEFAULT true, -- Si es la comida original o una modificación
   original_meal_id UUID REFERENCES meals(id) ON DELETE SET NULL, -- Si fue modificado, referencia al original
@@ -646,7 +963,7 @@ CREATE TABLE IF NOT EXISTS menu_modifications (
   weekly_menu_id UUID NOT NULL REFERENCES weekly_menus(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   day_number INTEGER NOT NULL,
-  meal_type TEXT NOT NULL CHECK (meal_type IN ('breakfast', 'lunch', 'dinner', 'snack')),
+  meal_type TEXT NOT NULL CHECK (meal_type IN ('lunch', 'dinner')),
   original_meal_id UUID NOT NULL REFERENCES meals(id) ON DELETE RESTRICT,
   requested_meal_id UUID NOT NULL REFERENCES meals(id) ON DELETE RESTRICT,
   nutritionist_recommendation TEXT, -- Recomendación del nutricionista
@@ -730,6 +1047,17 @@ ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS notifications_renewal_reminde
 ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS notifications_plan_approval BOOLEAN DEFAULT true;
 ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS notifications_consultation_required BOOLEAN DEFAULT true;
 
+-- Extender user_settings con campos de accesibilidad
+ALTER TABLE user_settings 
+ADD COLUMN IF NOT EXISTS accessibility_font_size TEXT DEFAULT 'medium' CHECK (accessibility_font_size IN ('small', 'medium', 'large', 'xlarge')),
+ADD COLUMN IF NOT EXISTS accessibility_high_contrast BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS accessibility_reduce_animations BOOLEAN DEFAULT false;
+
+-- Comentarios explicativos para campos de accesibilidad
+COMMENT ON COLUMN user_settings.accessibility_font_size IS 'Tamaño de fuente preferido: small (14px), medium (16px), large (18px), xlarge (20px)';
+COMMENT ON COLUMN user_settings.accessibility_high_contrast IS 'Activar modo de alto contraste para mejorar la legibilidad';
+COMMENT ON COLUMN user_settings.accessibility_reduce_animations IS 'Reducir o desactivar animaciones para una experiencia más estática';
+
 -- Tabla de notificaciones enviadas (para historial)
 CREATE TABLE IF NOT EXISTS notifications_log (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -762,6 +1090,13 @@ CREATE TABLE IF NOT EXISTS delivery_addresses (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Relacionar configuraciones de comida con direcciones de entrega (se crea aquí para asegurar dependencia)
+ALTER TABLE order_meal_settings
+DROP CONSTRAINT IF EXISTS order_meal_settings_delivery_address_id_fkey;
+ALTER TABLE order_meal_settings
+ADD CONSTRAINT order_meal_settings_delivery_address_id_fkey
+FOREIGN KEY (delivery_address_id) REFERENCES delivery_addresses(id) ON DELETE SET NULL;
 
 -- Tabla de historial de direcciones (para archivar cambios)
 CREATE TABLE IF NOT EXISTS delivery_address_history (

@@ -12,7 +12,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 interface MealWithStock {
   id: string
   name: string
-  type: 'breakfast' | 'lunch' | 'dinner' | 'snack'
+  type: 'lunch' | 'dinner'
   calories: number
   available: boolean
   stock?: {
@@ -53,7 +53,7 @@ export async function checkMealStock(mealId: string): Promise<boolean> {
  */
 export async function findAutomaticSubstitution(
   originalMealId: string,
-  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack',
+  mealType: 'lunch' | 'dinner',
   originalCalories?: number
 ): Promise<string | null> {
   try {
@@ -231,7 +231,7 @@ export async function notifyNutritionistAboutSubstitution(
  * Retorna un array con las comidas (sustituidas si es necesario)
  */
 export async function applyAutomaticSubstitutions(
-  meals: Array<{ meal_id: string; meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack'; calories?: number }>,
+  meals: Array<{ meal_id: string; meal_type: 'lunch' | 'dinner'; calories?: number }>,
   weeklyMenuId: string
 ): Promise<Array<{ meal_id: string; meal_type: string; was_substituted: boolean; original_meal_id?: string }>> {
   const results = []

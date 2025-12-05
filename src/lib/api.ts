@@ -413,14 +413,6 @@ export async function getMealPlansByNutricionista(nutricionistaId: string) {
 }
 
 // Copiar un plan completo a un usuario
-export async function copyPlanToUser(sourcePlanId: string, userId: string, startDate: string, endDate: string) {
-  const response = await apiRequest<{ plan: any }>('/api/plans/copy', {
-    method: 'POST',
-    body: JSON.stringify({ source_plan_id: sourcePlanId, user_id: userId, start_date: startDate, end_date: endDate }),
-  })
-  return response.data?.plan || null
-}
-
 // Eliminar plan asignado a un usuario
 export async function deleteUserPlan(userId: string) {
   const response = await apiRequest<{ success: boolean }>(`/api/plans/user/${userId}`, {
@@ -504,33 +496,241 @@ export async function removeClientFromNutricionista(nutricionistaId: string, cli
   return response.data?.success || false
 }
 
-// ==================== TEMPLATES DE PLANES ====================
+// ==================== FICHA TÉCNICA ====================
 
-export async function getPlanTemplates(nutricionistaId?: string) {
-  const params = new URLSearchParams()
-  if (nutricionistaId) params.append('nutricionista_id', nutricionistaId)
-  
-  const query = params.toString()
-  const url = `/api/plan-templates${query ? `?${query}` : ''}`
-  
-  const response = await apiRequest<{ templates: any[] }>(url)
-  return response.data?.templates || []
+export async function getFichaTecnica(userId: string) {
+  const response = await apiRequest<{ ficha: any }>(`/api/fichas-tecnicas?user_id=${userId}`)
+  return response.data?.ficha || null
 }
 
-export async function createPlanTemplate(templateData: {
-  name: string
-  description?: string
-  focus: string
-  duration: string
-  audience: string
-  total_calories?: number
-  is_public?: boolean
-}) {
-  const response = await apiRequest<{ template: any }>('/api/plan-templates', {
+export async function saveFichaTecnica(userId: string, payload: any) {
+  const response = await apiRequest<{ ficha: any }>('/api/fichas-tecnicas', {
     method: 'POST',
-    body: JSON.stringify(templateData),
+    body: JSON.stringify({ user_id: userId, ...payload }),
   })
-  return response.data?.template || null
+  if (response.error) {
+    throw new Error(response.error)
+  }
+  return response.data?.ficha || null
+}
+
+export async function calculateNutritionPreview(payload: any) {
+  const response = await apiRequest<{ result: any }>('/api/nutrition/calculate', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  if (response.error) {
+    throw new Error(response.error)
+  }
+  return response.data?.result || null
+}
+
+// ==================== PLANES BASE & GENERACIÓN ====================
+
+export async function getPlanBases(options?: { includeRecipes?: boolean }) {
+  const params = new URLSearchParams()
+  if (options?.includeRecipes) {
+    params.append('include_recipes', 'true')
+  }
+  const query = params.toString()
+  const url = `/api/planes-base${query ? `?${query}` : ''}`
+  const response = await apiRequest<{ planes: any[] }>(url)
+  return response.data?.planes || []
+}
+
+export async function createPlanBase(payload: any) {
+  const response = await apiRequest<{ plan: any }>('/api/planes-base', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  if (response.error) {
+    throw new Error(response.error)
+  }
+  return response.data?.plan
+}
+
+export async function updatePlanBase(id: string, payload: any) {
+  const response = await apiRequest<{ plan: any }>('/api/planes-base', {
+    method: 'PATCH',
+    body: JSON.stringify({ id, ...payload }),
+  })
+  if (response.error) {
+    throw new Error(response.error)
+  }
+  return response.data?.plan
+}
+
+export async function deletePlanBase(id: string) {
+  const response = await apiRequest<{ success: boolean }>(`/api/planes-base?id=${id}`, {
+    method: 'DELETE',
+  })
+  if (response.error) {
+    throw new Error(response.error)
+  }
+  return response.data?.success ?? true
+}
+
+export async function generateWeeklyPlanForUser(payload: {
+  user_id: string
+  plan_base_id: string
+  week_start_date: string
+}) {
+  const response = await apiRequest<{ plan: any; meals: any[] }>('/api/planes-semanales/generate', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  if (response.error) {
+    throw new Error(response.error)
+  }
+  return response.data
+}
+
+export async function getWeeklyPlan(params?: { user_id?: string; week_start?: string; include_meals?: boolean }) {
+  const searchParams = new URLSearchParams()
+  if (params?.user_id) searchParams.append('user_id', params.user_id)
+  if (params?.week_start) searchParams.append('week_start', params.week_start)
+  if (params && params.include_meals === false) searchParams.append('include_meals', 'false')
+
+  const query = searchParams.toString()
+  const response = await apiRequest<{ plan: any }>(`/api/planes-semanales${query ? `?${query}` : ''}`)
+  if (response.error) {
+    throw new Error(response.error)
+  }
+  return response.data?.plan || null
+}
+
+export async function getPlanBaseRecipes(planBaseId: string) {
+  const response = await apiRequest<{ recetas: any[] }>(`/api/recetas?plan_base_id=${planBaseId}`)
+  if (response.error) {
+    throw new Error(response.error)
+  }
+  return response.data?.recetas || []
+}
+
+export async function createPlanBaseRecipe(payload: any) {
+  const response = await apiRequest<{ receta: any }>('/api/recetas', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  if (response.error) {
+    throw new Error(response.error)
+  }
+  return response.data?.receta
+}
+
+export async function updatePlanBaseRecipe(id: string, payload: any) {
+  const response = await apiRequest<{ receta: any }>('/api/recetas', {
+    method: 'PATCH',
+    body: JSON.stringify({ id, ...payload }),
+  })
+  if (response.error) {
+    throw new Error(response.error)
+  }
+  return response.data?.receta
+}
+
+export async function deletePlanBaseRecipe(id: string) {
+  const response = await apiRequest<{ success: boolean }>(`/api/recetas?id=${id}`, {
+    method: 'DELETE',
+  })
+  if (response.error) {
+    throw new Error(response.error)
+  }
+  return response.data?.success ?? true
+}
+
+// ==================== BIBLIOTECA DE RECETAS ====================
+
+export async function getIngredientesCatalog() {
+  const response = await apiRequest<{ ingredientes: any[] }>('/api/ingredientes')
+  if (response.error) {
+    throw new Error(response.error)
+  }
+  return response.data?.ingredientes || []
+}
+
+export async function saveIngrediente(payload: any) {
+  const response = await apiRequest<{ ingrediente: any }>('/api/ingredientes', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  if (response.error) {
+    throw new Error(response.error)
+  }
+  return response.data?.ingrediente
+}
+
+export async function deleteIngrediente(id: string) {
+  const response = await apiRequest<{ success: boolean }>(`/api/ingredientes?id=${id}`, {
+    method: 'DELETE',
+  })
+  if (response.error) {
+    throw new Error(response.error)
+  }
+  return response.data?.success ?? true
+}
+
+export async function getRecipeLibrary(options?: { meal_type?: 'lunch' | 'dinner' }) {
+  const params = new URLSearchParams({ library: 'true' })
+  if (options?.meal_type) {
+    params.append('meal_type', options.meal_type)
+  }
+  const response = await apiRequest<{ recetas: any[] }>(`/api/recetas?${params.toString()}`)
+  if (response.error) {
+    throw new Error(response.error)
+  }
+  return response.data?.recetas || []
+}
+
+export async function createLibraryRecipe(payload: any) {
+  const response = await apiRequest<{ receta: any }>('/api/recetas', {
+    method: 'POST',
+    body: JSON.stringify({ ...payload, es_biblioteca: true }),
+  })
+  if (response.error) {
+    throw new Error(response.error)
+  }
+  return response.data?.receta
+}
+
+export async function updateLibraryRecipe(id: string, payload: any) {
+  const response = await apiRequest<{ receta: any }>('/api/recetas', {
+    method: 'PATCH',
+    body: JSON.stringify({ id, ...payload }),
+  })
+  if (response.error) {
+    throw new Error(response.error)
+  }
+  return response.data?.receta
+}
+
+export async function deleteLibraryRecipe(id: string) {
+  const response = await apiRequest<{ success: boolean }>(`/api/recetas?id=${id}`, {
+    method: 'DELETE',
+  })
+  if (response.error) {
+    throw new Error(response.error)
+  }
+  return response.data?.success ?? true
+}
+
+export async function assignLibraryRecipeToPlan(
+  planBaseId: string,
+  recipeId: string,
+  overrides?: { nombre?: string; descripcion?: string }
+) {
+  const response = await apiRequest<{ receta: any }>('/api/recetas', {
+    method: 'POST',
+    body: JSON.stringify({
+      plan_base_id: planBaseId,
+      source_receta_id: recipeId,
+      ...(overrides || {}),
+    }),
+  })
+  if (response.error) {
+    throw new Error(response.error)
+  }
+  return response.data?.receta
 }
 
 // ==================== PREFERENCIAS DE CHAT ====================
@@ -593,6 +793,9 @@ export async function updateUserSettings(settings: {
   preferences_language?: string
   preferences_theme?: 'light' | 'dark' | 'auto'
   preferences_email_notifications?: boolean
+  accessibility_font_size?: 'small' | 'medium' | 'large' | 'xlarge'
+  accessibility_high_contrast?: boolean
+  accessibility_reduce_animations?: boolean
 }) {
   const response = await apiRequest<{ settings: any }>('/api/user-settings', {
     method: 'POST',

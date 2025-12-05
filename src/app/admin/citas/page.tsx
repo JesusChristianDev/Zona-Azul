@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth'
 import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
 import SearchFilters from '@/components/ui/SearchFilters'
+import ActionButton from '@/components/ui/ActionButton'
 import ToastMessage from '@/components/ui/ToastMessage'
 import EmptyState from '@/components/ui/EmptyState'
 import { getAppointments, updateAppointment, createUser, deleteAppointment } from '@/lib/api'
@@ -435,17 +436,15 @@ export default function AdminCitasPage() {
             <label className="block text-sm font-medium text-gray-700 mb-2">Filtrar por estado:</label>
             <div className="flex flex-wrap items-center gap-2">
               {(['todas', 'pendiente', 'confirmada', 'cancelada', 'completada', 'sin_usuario'] as FilterStatus[]).map((status) => (
-                <button
+                <ActionButton
                   key={status}
                   onClick={() => setFilter(status)}
-                  className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-all ${
-                    filter === status
-                      ? 'bg-primary text-white shadow-md scale-105'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:scale-105'
-                  }`}
+                  variant={filter === status ? 'primary' : 'muted'}
+                  size="sm"
+                  className={filter === status ? 'shadow-md scale-105' : 'hover:scale-105'}
                 >
                   {status === 'todas' ? 'Todas' : status === 'sin_usuario' ? 'Sin Usuario' : status.charAt(0).toUpperCase() + status.slice(1)}
-                </button>
+                </ActionButton>
               ))}
             </div>
           </div>
@@ -571,7 +570,7 @@ export default function AdminCitasPage() {
                       </div>
                     )}
 
-                    <button
+                    <ActionButton
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation()
@@ -583,13 +582,15 @@ export default function AdminCitasPage() {
                         zIndex: 11,
                         minWidth: '80px'
                       }}
-                      className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap shadow-sm flex-shrink-0"
+                      variant="primary"
+                      size="sm"
+                      className="whitespace-nowrap flex-shrink-0 shadow-sm"
                       title="Editar cita"
                       aria-label="Editar cita"
                     >
                       ✏️ Editar
-                    </button>
-                    <button
+                    </ActionButton>
+                    <ActionButton
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation()
@@ -601,14 +602,16 @@ export default function AdminCitasPage() {
                         zIndex: 11,
                         minWidth: '80px'
                       }}
-                      className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors whitespace-nowrap shadow-sm flex-shrink-0"
+                      variant="danger"
+                      size="sm"
+                      className="whitespace-nowrap flex-shrink-0 shadow-sm"
                       title="Eliminar cita"
                       aria-label="Eliminar cita"
                     >
                       🗑️ Eliminar
-                    </button>
+                    </ActionButton>
                     {!appointment.user_id && (
-                      <button
+                      <ActionButton
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation()
@@ -620,11 +623,13 @@ export default function AdminCitasPage() {
                           zIndex: 11,
                           minWidth: '120px'
                         }}
-                        className="px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors whitespace-nowrap shadow-sm flex-shrink-0"
+                        variant="primary"
+                        size="sm"
+                        className="whitespace-nowrap flex-shrink-0 shadow-sm"
                         aria-label="Crear usuario"
                       >
                         👤 Crear Usuario
-                      </button>
+                      </ActionButton>
                     )}
                   </div>
                 </div>
@@ -814,21 +819,22 @@ export default function AdminCitasPage() {
                 />
               </div>
               <div className="flex gap-2 pt-4 border-t">
-                <button
+                <ActionButton
                   type="button"
                   onClick={() => setModalMode('view')}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  variant="muted-outline"
+                  fullWidth
                   disabled={editingAppointment}
                 >
                   Cancelar
-                </button>
-                <button
+                </ActionButton>
+                <ActionButton
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+                  fullWidth
                   disabled={editingAppointment || !editDate || !editTime}
                 >
                   {editingAppointment ? 'Guardando...' : 'Guardar Cambios'}
-                </button>
+                </ActionButton>
               </div>
             </form>
           )}
@@ -888,21 +894,22 @@ export default function AdminCitasPage() {
                 />
               </div>
               <div className="flex gap-2 pt-4 border-t">
-                <button
+                <ActionButton
                   type="button"
                   onClick={() => setModalMode('view')}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  variant="muted-outline"
+                  fullWidth
                   disabled={creatingUser}
                 >
                   Cancelar
-                </button>
-                <button
+                </ActionButton>
+                <ActionButton
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+                  fullWidth
                   disabled={creatingUser || !userPassword}
                 >
                   {creatingUser ? 'Creando...' : 'Crear Usuario'}
-                </button>
+                </ActionButton>
               </div>
             </form>
           )}
@@ -925,18 +932,20 @@ export default function AdminCitasPage() {
                 Esta acción no se puede deshacer. Si la cita tiene un evento en Google Calendar, también se eliminará.
               </p>
               <div className="flex gap-2 pt-4">
-                <button
+                <ActionButton
                   onClick={() => setModalMode('view')}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  variant="muted-outline"
+                  fullWidth
                 >
                   Cancelar
-                </button>
-                <button
+                </ActionButton>
+                <ActionButton
                   onClick={handleConfirmDelete}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                  variant="danger"
+                  fullWidth
                 >
                   Eliminar Cita
-                </button>
+                </ActionButton>
               </div>
             </div>
           )}

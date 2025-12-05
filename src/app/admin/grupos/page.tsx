@@ -361,19 +361,21 @@ export default function AdminGruposPage() {
                           </div>
                           <div className="flex items-center gap-2">
                             {!member.is_primary && (
-                              <button
+                              <ActionButton
                                 onClick={() => handleSetPrimary(group.id, member.id, member.user_id)}
-                                className="px-3 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition"
+                                variant="muted"
+                                size="sm"
                               >
                                 Hacer Principal
-                              </button>
+                              </ActionButton>
                             )}
-                            <button
+                            <ActionButton
                               onClick={() => handleRemoveMember(group.id, member.id)}
-                              className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition"
+                              variant="soft-danger"
+                              size="sm"
                             >
                               Remover
-                            </button>
+                            </ActionButton>
                           </div>
                         </div>
                       ))}
@@ -381,15 +383,17 @@ export default function AdminGruposPage() {
                   ) : (
                     <p className="text-sm text-gray-500">No hay miembros en este grupo</p>
                   )}
-                  <button
+                  <ActionButton
                     onClick={() => {
                       setSelectedGroup(group)
                       setIsMemberModalOpen(true)
                     }}
-                    className="mt-2 px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition"
+                    variant="muted"
+                    size="sm"
+                    className="mt-2"
                   >
                     + Agregar Miembro
-                  </button>
+                  </ActionButton>
                 </div>
               </div>
             ))}
@@ -471,21 +475,22 @@ export default function AdminGruposPage() {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
-          <div className="flex gap-3 pt-4">
-            <button
+          <div className="flex flex-col sm:flex-row gap-3 pt-4">
+            <ActionButton
               type="button"
               onClick={() => setIsCreateModalOpen(false)}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+              variant="muted-outline"
+              fullWidth
             >
               Cancelar
-            </button>
-            <button
+            </ActionButton>
+            <ActionButton
               type="button"
               onClick={handleCreateGroup}
-              className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition"
+              fullWidth
             >
               Crear Grupo
-            </button>
+            </ActionButton>
           </div>
         </div>
       </Modal>
@@ -543,8 +548,8 @@ export default function AdminGruposPage() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
-            <div className="flex gap-3 pt-4">
-              <button
+            <div className="flex flex-col sm:flex-row gap-3 pt-4">
+              <ActionButton
                 type="button"
                 onClick={() => {
                   setIsMemberModalOpen(false)
@@ -554,17 +559,18 @@ export default function AdminGruposPage() {
                   })
                   setSelectedGroup(null)
                 }}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+                variant="muted-outline"
+                fullWidth
               >
                 Cancelar
-              </button>
-              <button
+              </ActionButton>
+              <ActionButton
                 type="button"
                 onClick={() => handleAddMember(selectedGroup.id)}
-                className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition"
+                fullWidth
               >
                 Agregar Miembro
-              </button>
+              </ActionButton>
             </div>
           </div>
         )}

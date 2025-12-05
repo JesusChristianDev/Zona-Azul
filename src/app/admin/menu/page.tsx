@@ -404,27 +404,30 @@ export default function AdminMenuPage() {
             </p>
             {item.description && <p className="mt-2 text-xs text-gray-500">{item.description}</p>}
             <div className="mt-4 flex flex-wrap gap-2">
-              <button
+              <ActionButton
                 onClick={() => handleEdit(item)}
-                className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary hover:bg-primary/20 transition"
+                variant="ghost"
+                size="sm"
               >
                 Editar
                 <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
                   <path d="M17.414 2.586a2 2 0 010 2.828l-1.793 1.793-2.828-2.828 1.793-1.793a2 2 0 012.828 0zM2 13.586l10-10 2.828 2.828-10 10H2v-2.828z" />
                 </svg>
-              </button>
-              <button
+              </ActionButton>
+              <ActionButton
                 onClick={() => handleToggleAvailability(item.id)}
-                className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 hover:border-primary hover:text-primary transition"
+                variant={item.availability === 'Disponible' ? 'soft-warning' : 'soft-success'}
+                size="sm"
               >
                 {item.availability === 'Disponible' ? 'Marcar no disponible' : 'Marcar disponible'}
-              </button>
-              <button
+              </ActionButton>
+              <ActionButton
                 onClick={() => handleDelete(item.id)}
-                className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 hover:border-highlight hover:text-highlight transition"
+                variant="soft-danger"
+                size="sm"
               >
                 Eliminar
-              </button>
+              </ActionButton>
             </div>
           </article>
           ))}
@@ -506,20 +509,21 @@ export default function AdminMenuPage() {
               placeholder="Descripción del plato..."
             />
           </div>
-          <div className="flex gap-3 pt-4">
-            <button
+          <div className="flex flex-col sm:flex-row gap-3 pt-4">
+            <ActionButton
               type="button"
               onClick={() => setIsCreateModalOpen(false)}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+              variant="muted-outline"
+              fullWidth
             >
               Cancelar
-            </button>
-            <button
+            </ActionButton>
+            <ActionButton
               type="submit"
-              className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition"
+              fullWidth
             >
               Crear plato
-            </button>
+            </ActionButton>
           </div>
         </form>
       </Modal>
@@ -597,20 +601,21 @@ export default function AdminMenuPage() {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
-          <div className="flex gap-3 pt-4">
-            <button
+          <div className="flex flex-col sm:flex-row gap-3 pt-4">
+            <ActionButton
               type="button"
               onClick={() => setIsEditModalOpen(false)}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+              variant="muted-outline"
+              fullWidth
             >
               Cancelar
-            </button>
-            <button
+            </ActionButton>
+            <ActionButton
               type="submit"
-              className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition"
+              fullWidth
             >
               Guardar cambios
-            </button>
+            </ActionButton>
           </div>
         </form>
       </Modal>

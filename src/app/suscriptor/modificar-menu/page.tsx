@@ -125,13 +125,7 @@ export default function ModificarMenuPage() {
   }
 
   const getMealTypeText = (type: string) => {
-    const types: Record<string, string> = {
-      breakfast: 'Desayuno',
-      lunch: 'Almuerzo',
-      dinner: 'Cena',
-      snack: 'Snack',
-    }
-    return types[type] || type
+    return type === 'lunch' ? 'Almuerzo' : type === 'dinner' ? 'Cena' : type
   }
 
   const getStatusBadge = (status: string) => {

@@ -674,17 +674,14 @@ export default function NutricionistaCitasPage() {
             <label className="block text-sm font-medium text-gray-700 mb-2">Filtrar por estado:</label>
             <div className="flex gap-2 flex-wrap">
               {(['todas', 'pendiente', 'confirmada', 'cancelada', 'completada'] as FilterStatus[]).map((status) => (
-                <button
+                <ActionButton
                   key={status}
                   onClick={() => setFilter(status)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    filter === status
-                      ? 'bg-primary text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
+                  variant={filter === status ? 'primary' : 'muted'}
+                  size="sm"
                 >
                   {status === 'todas' ? 'Todas' : status.charAt(0).toUpperCase() + status.slice(1)}
-                </button>
+                </ActionButton>
               ))}
             </div>
           </div>
@@ -786,7 +783,7 @@ export default function NutricionistaCitasPage() {
                     </div>
 
                     {/* Botón Crear Usuario - Siempre visible para que el nutricionista pueda crear el usuario en la primera consulta */}
-                    <button
+                    <ActionButton
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation()
@@ -811,17 +808,15 @@ export default function NutricionistaCitasPage() {
                         zIndex: 11,
                         minWidth: '120px'
                       }}
-                      className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap shadow-sm flex-shrink-0 ${
-                        appointment.user_id 
-                          ? 'bg-gray-400 hover:bg-gray-500 cursor-not-allowed' 
-                          : 'bg-primary hover:bg-primary/90'
-                      }`}
+                      variant={appointment.user_id ? 'muted' : 'primary'}
+                      size="sm"
+                      className="whitespace-nowrap flex-shrink-0 shadow-sm"
                       aria-label={appointment.user_id ? "Usuario ya creado" : "Crear usuario"}
                       disabled={!!appointment.user_id}
                       title={appointment.user_id ? "Este cliente ya tiene usuario creado" : "Crear usuario para iniciar ficha técnica"}
                     >
                       {appointment.user_id ? '✓ Usuario Creado' : '👤 Crear Usuario'}
-                    </button>
+                    </ActionButton>
                   </div>
                 </div>
               </div>

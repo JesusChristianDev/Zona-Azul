@@ -11,6 +11,7 @@
   "id": "/",
   "dir": "ltr",
   "lang": "es",
+  "display_override": ["standalone", "minimal-ui"],
   "icons": [
     {
       "src": "/icon-192x192.png",

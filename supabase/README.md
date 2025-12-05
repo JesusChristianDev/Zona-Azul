@@ -83,7 +83,6 @@ console.log('Supabase conectado:', isConnected)
 - **meal_plan_day_meals**: Comidas asignadas a cada día
 - **progress**: Registro de progreso diario de usuarios
 - **messages**: Mensajes entre usuarios
-- **plan_templates**: Plantillas de planes para nutricionistas
 
 ## Row Level Security (RLS)
 

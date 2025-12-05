@@ -167,8 +167,8 @@ export default function SuscripcionPage() {
             </svg>
           }
         />
-        <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-sm text-blue-800">
+        <div className="mt-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+          <p className="text-sm text-blue-800 dark:text-blue-300">
             <strong>ℹ️ Información:</strong> Las suscripciones son asignadas por el administrador después de una reunión presencial. 
             Recibirás una notificación cuando tu suscripción sea activada.
           </p>
@@ -181,7 +181,7 @@ export default function SuscripcionPage() {
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm">
+        <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 text-red-700 dark:text-red-400 text-sm">
           {error}
         </div>
       )}
@@ -195,39 +195,39 @@ export default function SuscripcionPage() {
 
       {/* Información del plan */}
       {plan && (
-        <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Detalles del Plan</h2>
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-gray-200 dark:border-slate-700 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Detalles del Plan</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-500 mb-1">Duración</p>
-              <p className="font-semibold text-gray-900">
+            <div className="p-4 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Duración</p>
+              <p className="font-semibold text-gray-900 dark:text-gray-100">
                 {plan.duration_months} {plan.duration_months === 1 ? 'mes' : 'meses'}
               </p>
             </div>
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-500 mb-1">Precio Total</p>
-              <p className="font-semibold text-gray-900">
+            <div className="p-4 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Precio Total</p>
+              <p className="font-semibold text-gray-900 dark:text-gray-100">
                 €{subscription.price.toFixed(2)}
               </p>
             </div>
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-500 mb-1">Comidas por Día</p>
-              <p className="font-semibold text-gray-900">
+            <div className="p-4 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Comidas por Día</p>
+              <p className="font-semibold text-gray-900 dark:text-gray-100">
                 {subscription.meals_per_day === 2 ? 'Comida y Cena' : 'Comida o Cena'}
               </p>
             </div>
             {subscription.discount_applied > 0 && (
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-500 mb-1">Descuento Aplicado</p>
-                <p className="font-semibold text-green-600">
+              <div className="p-4 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Descuento Aplicado</p>
+                <p className="font-semibold text-green-600 dark:text-green-400">
                   -€{subscription.discount_applied.toFixed(2)}
                 </p>
               </div>
             )}
             {plan.description && (
-              <div className="p-4 bg-gray-50 rounded-lg sm:col-span-2">
-                <p className="text-sm text-gray-500 mb-1">Descripción</p>
-                <p className="text-gray-900">{plan.description}</p>
+              <div className="p-4 bg-gray-50 dark:bg-slate-700/50 rounded-lg sm:col-span-2">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Descripción</p>
+                <p className="text-gray-900 dark:text-gray-100">{plan.description}</p>
               </div>
             )}
           </div>
@@ -236,32 +236,32 @@ export default function SuscripcionPage() {
 
       {/* Fechas importantes */}
       <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Fechas Importantes</h2>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Fechas Importantes</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="p-4 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-500 mb-1">Fecha de Inicio</p>
-            <p className="font-semibold text-gray-900">
+          <div className="p-4 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Fecha de Inicio</p>
+            <p className="font-semibold text-gray-900 dark:text-gray-100">
               {formatDate(subscription.start_date)}
             </p>
           </div>
-          <div className="p-4 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-500 mb-1">Fecha de Fin</p>
-            <p className="font-semibold text-gray-900">
+          <div className="p-4 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Fecha de Fin</p>
+            <p className="font-semibold text-gray-900 dark:text-gray-100">
               {formatDate(subscription.end_date)}
             </p>
           </div>
           {subscription.created_at && (
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-500 mb-1">Fecha de Creación</p>
-              <p className="font-semibold text-gray-900">
+            <div className="p-4 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Fecha de Creación</p>
+              <p className="font-semibold text-gray-900 dark:text-gray-100">
                 {formatDate(subscription.created_at)}
               </p>
             </div>
           )}
           {subscription.nutricionista_approved_at && (
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-500 mb-1">Aprobada por Nutricionista</p>
-              <p className="font-semibold text-gray-900">
+            <div className="p-4 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Aprobada por Nutricionista</p>
+              <p className="font-semibold text-gray-900 dark:text-gray-100">
                 {formatDate(subscription.nutricionista_approved_at)}
               </p>
             </div>
@@ -271,9 +271,9 @@ export default function SuscripcionPage() {
 
       {/* Estado de aprobación */}
       <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Estado de Aprobación</h2>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Estado de Aprobación</h2>
         <div className="space-y-3">
-          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+          <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
             <div className="flex items-center gap-3">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
                 subscription.admin_approved ? 'bg-green-100' : 'bg-gray-200'
@@ -289,8 +289,8 @@ export default function SuscripcionPage() {
                 )}
               </div>
               <div>
-                <p className="font-medium text-gray-900">Aprobación Administrador</p>
-                <p className="text-xs text-gray-500">
+                <p className="font-medium text-gray-900 dark:text-gray-100">Aprobación Administrador</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   {subscription.admin_approved ? 'Aprobada' : 'Pendiente'}
                 </p>
               </div>
@@ -301,7 +301,7 @@ export default function SuscripcionPage() {
               </p>
             )}
           </div>
-          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+          <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
             <div className="flex items-center gap-3">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
                 subscription.nutricionista_approved ? 'bg-green-100' : 'bg-gray-200'
@@ -330,7 +330,7 @@ export default function SuscripcionPage() {
             )}
           </div>
           {subscription.requires_consultation && (
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
               <div className="flex items-center gap-3">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
                   subscription.consultation_completed ? 'bg-green-100' : 'bg-yellow-100'
@@ -359,7 +359,7 @@ export default function SuscripcionPage() {
 
       {/* Acciones */}
       <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Acciones</h2>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Acciones</h2>
         <div className="flex flex-wrap gap-3">
           {contract && (
             <button

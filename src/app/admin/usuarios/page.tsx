@@ -1,16 +1,24 @@
 "use client"
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
 import SearchFilters from '@/components/ui/SearchFilters'
 import ToastMessage from '@/components/ui/ToastMessage'
 import LoadingState from '@/components/ui/LoadingState'
+import ActionButton from '@/components/ui/ActionButton'
 import { User } from '@/lib/types'
-import { assignPlanToSubscriber, hasPlanAssigned } from '@/lib/planAssignment'
 import { useUsers, useOrders } from '@/hooks/useApi'
 import * as api from '@/lib/api'
 import { getSubscribers } from '@/lib/subscribers'
+
+function getNextMonday(): string {
+  const today = new Date()
+  const day = today.getDay()
+  const diff = day === 1 ? 0 : (8 - day) % 7
+  today.setDate(today.getDate() + diff)
+  return today.toISOString().split('T')[0]
+}
 
 interface TeamMember extends User {
   clients: number
@@ -30,8 +38,13 @@ export default function AdminUsuariosPage() {
   const [isAssignPlanModalOpen, setIsAssignPlanModalOpen] = useState(false)
   const [isAssignClientsModalOpen, setIsAssignClientsModalOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<TeamMember | null>(null)
-  const [availablePlans, setAvailablePlans] = useState<any[]>([])
-  const [selectedPlanId, setSelectedPlanId] = useState<string>('')
+  const [planBases, setPlanBases] = useState<any[]>([])
+  const [planBasesLoading, setPlanBasesLoading] = useState(false)
+  const [planForm, setPlanForm] = useState({
+    planBaseId: '',
+    weekStartDate: getNextMonday(),
+  })
+  const [planSubmitting, setPlanSubmitting] = useState(false)
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([])
   const [isCreatingFromClientsTab, setIsCreatingFromClientsTab] = useState(false)
   const [availableSubscribers, setAvailableSubscribers] = useState<User[]>([])
@@ -47,8 +60,6 @@ export default function AdminUsuariosPage() {
   })
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-  const [usersWithPlans, setUsersWithPlans] = useState<Set<string>>(new Set())
-  const recentlyDeletedPlansRef = useRef<Set<string>>(new Set()) // Para evitar que el polling recargue planes recién eliminados
 
   // Función para contar clientes asignados reales desde la API
   const countAssignedClients = async (userId: string, role: string): Promise<number> => {
@@ -135,94 +146,27 @@ export default function AdminUsuariosPage() {
     setFilteredUsers(filtered)
   }, [users, activeTab, filterRole, searchTerm])
 
-  // Cargar planes completos disponibles (sin asignar) de todos los nutricionistas
+  // Cargar planes base disponibles
   useEffect(() => {
-    const loadAvailablePlans = async () => {
+    const loadPlanBases = async () => {
       try {
-        // Obtener todos los nutricionistas
-        const nutritionists = await api.getNutritionists()
-        
-        if (!nutritionists || nutritionists.length === 0) {
-          console.warn('No hay nutricionistas disponibles para cargar planes')
-          setAvailablePlans([])
-          return
-        }
-        
-        // Obtener planes sin asignar de cada nutricionista
-        const allPlans: any[] = []
-        for (const nutritionist of nutritionists) {
-          try {
-            const plans = await api.getMealPlansByNutricionista(nutritionist.id)
-            if (plans && Array.isArray(plans)) {
-              // Filtrar solo planes que tengan días y comidas (planes completos)
-              const completePlans = plans.filter((plan: any) => {
-                // Verificar que el plan tenga días con comidas
-                return plan.days && Array.isArray(plan.days) && plan.days.length > 0
-              })
-              allPlans.push(...completePlans)
-            }
-          } catch (error) {
-            console.error(`Error loading plans for nutritionist ${nutritionist.id}:`, error)
-          }
-        }
-        
-        setAvailablePlans(allPlans)
+        setPlanBasesLoading(true)
+        const planes = await api.getPlanBases()
+        setPlanBases(planes)
+        setPlanForm((prev) => ({
+          ...prev,
+          planBaseId: prev.planBaseId || planes[0]?.id || '',
+        }))
       } catch (error) {
-        console.error('Error loading available plans:', error)
-        setAvailablePlans([])
+        console.error('Error loading plan bases:', error)
+        setPlanBases([])
+      } finally {
+        setPlanBasesLoading(false)
       }
     }
-    
-    loadAvailablePlans()
 
-    // Polling cada 30 segundos para actualizar planes
-    const interval = setInterval(loadAvailablePlans, 30000)
-
-    return () => {
-      clearInterval(interval)
-    }
+    loadPlanBases()
   }, [])
-
-  // Cargar información de planes asignados para suscriptores
-  useEffect(() => {
-    const loadPlansInfo = async () => {
-      if (!apiUsers || apiUsers.length === 0) return
-      
-      const subscribers = apiUsers.filter((u: any) => u.role === 'suscriptor')
-      if (subscribers.length === 0) return
-
-      try {
-        const plansPromises = subscribers.map(async (subscriber: any) => {
-          try {
-            // Si el plan fue eliminado recientemente, no verificar
-            if (recentlyDeletedPlansRef.current.has(subscriber.id)) {
-              return null
-            }
-            const hasPlan = await hasPlanAssigned(subscriber.id)
-            return hasPlan ? subscriber.id : null
-          } catch (error) {
-            console.error(`Error checking plan for subscriber ${subscriber.id}:`, error)
-            return null
-          }
-        })
-        
-        const usersWithPlansArray = await Promise.all(plansPromises)
-        const usersWithPlansSet = new Set(usersWithPlansArray.filter(Boolean) as string[])
-        setUsersWithPlans(usersWithPlansSet)
-      } catch (error) {
-        console.error('Error loading plans info:', error)
-      }
-    }
-    
-    loadPlansInfo()
-    
-    // Polling cada 60 segundos para actualizar información
-    const interval = setInterval(loadPlansInfo, 60000)
-    
-    return () => {
-      clearInterval(interval)
-    }
-  }, [apiUsers])
 
   const showToast = (message: string, isError = false) => {
     if (isError) {
@@ -291,7 +235,14 @@ export default function AdminUsuariosPage() {
       return
     }
     setSelectedUser(user)
-    setSelectedPlanId('')
+    if (!planBases.length) {
+      showToast('Primero crea un plan base en la sección Nutricionista → Planes', true)
+      return
+    }
+    setPlanForm({
+      planBaseId: planBases[0]?.id || '',
+      weekStartDate: getNextMonday(),
+    })
     setError(null)
     setIsAssignPlanModalOpen(true)
   }
@@ -408,51 +359,35 @@ export default function AdminUsuariosPage() {
   const handleSubmitAssignPlan = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
-    
-    if (!selectedUser || !selectedPlanId) {
-      setError('Por favor selecciona un plan')
+
+    if (!selectedUser) {
+      setError('Selecciona un cliente')
       return
     }
 
-    const plan = availablePlans.find((p) => p.id === selectedPlanId)
-    if (!plan) {
-      setError('Plan no encontrado')
+    if (!planForm.planBaseId || !planForm.weekStartDate) {
+      setError('Selecciona un plan base y la fecha de inicio')
       return
     }
 
     try {
-      // assignPlanToSubscriber ahora lanza errores en lugar de retornar false
-      await assignPlanToSubscriber(selectedUser.id, selectedPlanId, 'Admin')
-      
-      // Si llegamos aquí, la asignación fue exitosa
-      // Actualizar el estado de planes asignados
-      setUsersWithPlans(prev => new Set([...Array.from(prev), selectedUser.id]))
-      showToast(`Plan "${plan.name}" asignado correctamente a ${selectedUser.name}`)
+      setPlanSubmitting(true)
+      await api.generateWeeklyPlanForUser({
+        user_id: selectedUser.id,
+        plan_base_id: planForm.planBaseId,
+        week_start_date: planForm.weekStartDate,
+      })
+
+      showToast(`Plan semanal generado para ${selectedUser.name}`)
       setIsAssignPlanModalOpen(false)
       setSelectedUser(null)
-      setSelectedPlanId('')
-      
-      // Recargar planes disponibles para actualizar la lista
-      try {
-        const nutritionists = await api.getNutritionists()
-        const allPlans: any[] = []
-        for (const nutritionist of nutritionists) {
-          const plans = await api.getMealPlansByNutricionista(nutritionist.id)
-          if (plans && Array.isArray(plans)) {
-            const completePlans = plans.filter((p: any) => p.days && Array.isArray(p.days) && p.days.length > 0)
-            allPlans.push(...completePlans)
-          }
-        }
-        setAvailablePlans(allPlans)
-      } catch (reloadError) {
-        console.error('Error reloading plans:', reloadError)
-        // No es crítico, solo no actualizamos la lista
-      }
     } catch (err: any) {
-      console.error('Error assigning plan:', err)
-      const errorMessage = err?.message || 'Error al asignar el plan. Verifica que el plan tenga días y comidas asignadas.'
+      console.error('Error generating weekly plan:', err)
+      const errorMessage = err?.message || 'Error al generar el plan semanal'
       setError(errorMessage)
       showToast(errorMessage, true)
+    } finally {
+      setPlanSubmitting(false)
     }
   }
 
@@ -489,90 +424,6 @@ export default function AdminUsuariosPage() {
     } catch (err: any) {
       setError(err.message || 'Error al crear usuario')
       showToast(err.message || 'Error al crear usuario', true)
-    }
-  }
-
-  const handleRemovePlan = async (userId: string, userName: string) => {
-    if (!confirm(`¿Estás seguro de quitar el plan asignado a ${userName}?`)) {
-      return
-    }
-
-    try {
-      // Verificar primero si realmente tiene un plan antes de intentar eliminarlo
-      const currentPlan = await api.getPlan(userId)
-      if (!currentPlan || !currentPlan.id) {
-        showToast('El usuario no tiene un plan asignado', true)
-        // Actualizar estado local de todas formas
-        setUsersWithPlans(prev => {
-          const updated = new Set(prev)
-          updated.delete(userId)
-          return updated
-        })
-        return
-      }
-
-      const success = await api.deleteUserPlan(userId)
-      
-      if (!success) {
-        showToast('Error al quitar el plan', true)
-        return
-      }
-      
-      // Marcar como eliminado recientemente para evitar que el polling lo recargue
-      recentlyDeletedPlansRef.current.add(userId)
-      
-      // Actualizar estado local inmediatamente - remover de usersWithPlans
-      setUsersWithPlans(prev => {
-        const updated = new Set(prev)
-        updated.delete(userId)
-        return updated
-      })
-      
-      showToast(`Plan de ${userName} eliminado correctamente`)
-      
-      // Remover de recentlyDeletedPlansRef después de 10 segundos
-      setTimeout(() => {
-        recentlyDeletedPlansRef.current.delete(userId)
-      }, 10000)
-      
-      // Verificar después de un delay que el plan fue eliminado
-      setTimeout(async () => {
-        try {
-          // Verificar directamente si el usuario todavía tiene plan
-          const planAfterDelete = await api.getPlan(userId)
-          if (planAfterDelete && planAfterDelete.id) {
-            console.warn(`Plan todavía existe para usuario ${userId} después de eliminarlo`)
-            // Si todavía existe, recargar todos los planes
-            const subscribers = apiUsers?.filter((u: any) => u.role === 'suscriptor') || []
-            const plansSet = new Set<string>()
-            
-            for (const subscriber of subscribers) {
-              try {
-                const plan = await api.getPlan(subscriber.id)
-                if (plan && plan.id) {
-                  plansSet.add(subscriber.id)
-                }
-              } catch (error) {
-                console.error('Error checking plan for subscriber:', subscriber.id, error)
-              }
-            }
-            
-            setUsersWithPlans(plansSet)
-          } else {
-            // Confirmar que el usuario ya no tiene plan
-            setUsersWithPlans(prev => {
-              const updated = new Set(prev)
-              updated.delete(userId)
-              return updated
-            })
-          }
-        } catch (error) {
-          console.error('Error verifying plan deletion:', error)
-        }
-      }, 1500)
-    } catch (err: any) {
-      console.error('Error removing plan:', err)
-      showToast(err.message || 'Error al quitar el plan', true)
     }
   }
 
@@ -650,34 +501,38 @@ export default function AdminUsuariosPage() {
       />
 
       {/* Tabs */}
-      <div className="flex border-b border-gray-200">
-        <button
+      <div className="flex border-b border-gray-200 gap-2">
+        <ActionButton
           onClick={() => {
             setActiveTab('team')
             setFilterRole('todos')
             setSearchTerm('')
           }}
-          className={`py-2 px-4 text-sm font-medium transition-colors ${
+          variant="ghost"
+          size="sm"
+          className={`rounded-none border-b-2 ${
             activeTab === 'team'
-              ? 'border-b-2 border-primary text-primary'
-              : 'text-gray-500 hover:text-gray-700'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
           Equipo
-        </button>
-        <button
+        </ActionButton>
+        <ActionButton
           onClick={() => {
             setActiveTab('clients')
             setSearchTerm('')
           }}
-          className={`py-2 px-4 text-sm font-medium transition-colors ${
+          variant="ghost"
+          size="sm"
+          className={`rounded-none border-b-2 ${
             activeTab === 'clients'
-              ? 'border-b-2 border-primary text-primary'
-              : 'text-gray-500 hover:text-gray-700'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
           Clientes
-        </button>
+        </ActionButton>
       </div>
 
       {/* Búsqueda y filtros */}
@@ -723,7 +578,7 @@ export default function AdminUsuariosPage() {
                 Administradores, nutricionistas y repartidores. Roles operativos del sistema.
               </p>
             </div>
-            <button
+            <ActionButton
               onClick={() => {
                 setFormData({
                   name: '',
@@ -737,17 +592,18 @@ export default function AdminUsuariosPage() {
                 setError(null)
                 setIsCreateModalOpen(true)
               }}
-              className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition"
+              icon={
+                <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path
+                    fillRule="evenodd"
+                    d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              }
             >
               Agregar al equipo
-              <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-                <path
-                  fillRule="evenodd"
-                  d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </button>
+            </ActionButton>
           </div>
 
           <div className="space-y-3">
@@ -777,25 +633,29 @@ export default function AdminUsuariosPage() {
                     <span>Clientes asignados: {member.clients}</span>
                     <div className="flex gap-2">
                       {member.role === 'nutricionista' && (
-                        <button
+                        <ActionButton
                           onClick={() => handleAssignClients(member)}
-                          className="rounded-full border border-accent px-3 py-1 font-medium text-accent hover:bg-accent hover:text-white transition"
+                          variant="outline"
+                          size="sm"
+                          className="text-accent border-accent hover:bg-accent hover:text-white"
                         >
                           Asignar clientes
-                        </button>
+                        </ActionButton>
                       )}
-                      <button
+                      <ActionButton
                         onClick={() => handleEdit(member)}
-                        className="rounded-full border border-gray-200 px-3 py-1 font-medium text-gray-600 hover:border-primary hover:text-primary transition"
+                        variant="muted-outline"
+                        size="sm"
                       >
                         Editar
-                      </button>
-                      <button
+                      </ActionButton>
+                      <ActionButton
                         onClick={() => handleDelete(member.id)}
-                        className="rounded-full border border-gray-200 px-3 py-1 font-medium text-gray-600 hover:border-highlight hover:text-highlight transition"
+                        variant="soft-danger"
+                        size="sm"
                       >
                         Eliminar
-                      </button>
+                      </ActionButton>
                     </div>
                   </div>
                 </article>
@@ -875,24 +735,16 @@ export default function AdminUsuariosPage() {
                     </div>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs">
-                    <span className={`font-medium ${usersWithPlans.has(member.id) ? 'text-green-600' : 'text-gray-500'}`}>
-                      Plan: {usersWithPlans.has(member.id) ? '✓ Asignado' : 'No asignado'}
+                    <span className="text-gray-500">
+                      Genera o regenera el plan semanal personalizado según el plan base elegido.
                     </span>
                     <div className="flex gap-2 flex-wrap">
                       <button
                         onClick={() => handleAssignPlan(member)}
                         className="rounded-full border border-primary px-3 py-1 font-medium text-primary hover:bg-primary hover:text-white transition text-xs"
                       >
-                        {usersWithPlans.has(member.id) ? 'Cambiar plan' : 'Asignar plan'}
+                        Generar plan semanal
                       </button>
-                      {usersWithPlans.has(member.id) && (
-                        <button
-                          onClick={() => handleRemovePlan(member.id, member.name)}
-                          className="rounded-full border border-red-300 px-3 py-1 font-medium text-red-600 hover:bg-red-50 transition text-xs"
-                        >
-                          Quitar plan
-                        </button>
-                      )}
                       <button
                         onClick={() => handleEdit(member)}
                         className="rounded-full border border-gray-200 px-3 py-1 font-medium text-gray-600 hover:border-accent hover:text-accent transition text-xs"
@@ -1064,87 +916,78 @@ export default function AdminUsuariosPage() {
         onClose={() => {
           setIsAssignPlanModalOpen(false)
           setSelectedUser(null)
-          setSelectedPlanId('')
         }}
-        title={`Asignar plan a ${selectedUser?.name || ''}`}
+        title={`Generar plan para ${selectedUser?.name || ''}`}
         size="md"
       >
         <form onSubmit={handleSubmitAssignPlan} className="space-y-4">
           {error && (
             <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-red-700 text-sm">{error}</div>
           )}
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Selecciona un plan nutricional
+              Plan base
             </label>
-            {availablePlans.length === 0 ? (
-              <div className="text-sm text-gray-500 py-4 space-y-2">
-                <p className="font-medium">No hay planes disponibles para asignar.</p>
-                <p className="text-xs">
-                  Los nutricionistas deben crear planes completos (con días y comidas) desde su dashboard.
-                  Solo se muestran planes que tienen días y comidas asignadas.
-                </p>
-              </div>
+            {planBasesLoading ? (
+              <p className="text-sm text-gray-500 py-2">Cargando planes base...</p>
+            ) : planBases.length === 0 ? (
+              <p className="text-sm text-red-500 py-2">
+                No hay planes base disponibles. Pide a un nutricionista que cree uno desde la seccion "Planes".
+              </p>
             ) : (
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {availablePlans.map((plan) => (
-                  <label
-                    key={plan.id}
-                    className={`block p-3 border rounded-lg cursor-pointer transition ${
-                      selectedPlanId === plan.id
-                        ? 'border-primary bg-primary/5'
-                        : 'border-gray-200 hover:border-primary/40'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="plan"
-                      value={plan.id}
-                      checked={selectedPlanId === plan.id}
-                      onChange={(e) => setSelectedPlanId(e.target.value)}
-                      className="sr-only"
-                    />
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <p className="font-semibold text-gray-900">{plan.name}</p>
-                        {plan.description && (
-                          <p className="text-xs text-gray-600 mt-1">{plan.description}</p>
-                        )}
-                        <div className="flex gap-3 mt-2 text-xs text-gray-500">
-                          {plan.totalCalories && <span>• {plan.totalCalories} kcal/día</span>}
-                          {plan.total_calories && <span>• {plan.total_calories} kcal/día</span>}
-                          {plan.days && Array.isArray(plan.days) && (
-                            <span>• {plan.days.length} día{plan.days.length !== 1 ? 's' : ''}</span>
-                          )}
-                        </div>
-                        {plan.days && Array.isArray(plan.days) && plan.days.length === 0 && (
-                          <p className="text-xs text-yellow-600 mt-1">⚠️ Este plan no tiene días asignados</p>
-                        )}
-                      </div>
-                      {selectedPlanId === plan.id && (
-                        <svg className="w-5 h-5 text-primary ml-2" fill="currentColor" viewBox="0 0 20 20">
-                          <path
-                            fillRule="evenodd"
-                            d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                      )}
-                    </div>
-                  </label>
+              <select
+                value={planForm.planBaseId}
+                onChange={(e) =>
+                  setPlanForm((prev) => ({
+                    ...prev,
+                    planBaseId: e.target.value,
+                  }))
+                }
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {planBases.map((plan) => (
+                  <option key={plan.id} value={plan.id}>
+                    {plan.nombre}
+                    {plan.objetivo ? ` - ${plan.objetivo}` : ''}
+                    {plan.calorias_base ? ` - ${plan.calorias_base} kcal` : ''}
+                  </option>
                 ))}
-              </div>
+              </select>
             )}
           </div>
 
-          <div className="flex gap-3 pt-4 border-t">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Semana que inicia
+            </label>
+            <input
+              type="date"
+              value={planForm.weekStartDate}
+              onChange={(e) =>
+                setPlanForm((prev) => ({
+                  ...prev,
+                  weekStartDate: e.target.value,
+                }))
+              }
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              required
+            />
+            <p className="text-xs text-gray-500 mt-2">
+              El plan semanal se genera usando la ficha tecnica del cliente y el plan base seleccionado.
+            </p>
+          </div>
+
+          <div className="rounded-lg bg-gray-50 px-4 py-3 text-xs text-gray-600">
+            Si existe un plan previo para esa semana se reemplazara automaticamente.
+          </div>
+
+          <div className="flex gap-3 pt-2">
             <button
               type="button"
               onClick={() => {
                 setIsAssignPlanModalOpen(false)
                 setSelectedUser(null)
-                setSelectedPlanId('')
               }}
               className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
             >
@@ -1152,10 +995,10 @@ export default function AdminUsuariosPage() {
             </button>
             <button
               type="submit"
-              disabled={!selectedPlanId || availablePlans.length === 0}
+              disabled={planBases.length === 0 || !planForm.planBaseId || planSubmitting}
               className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Asignar plan
+              {planSubmitting ? 'Generando...' : 'Generar plan'}
             </button>
           </div>
         </form>

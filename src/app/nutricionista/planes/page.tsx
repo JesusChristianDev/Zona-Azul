@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
 import SearchFilters from '@/components/ui/SearchFilters'
@@ -13,14 +13,131 @@ import { useAuth } from '@/hooks/useAuth'
 import * as api from '@/lib/api'
 import { getMeals } from '@/lib/api'
 
-interface PlanTemplate {
+const mealTypeLabels: Record<'lunch' | 'dinner', string> = {
+  lunch: 'Almuerzo',
+  dinner: 'Cena',
+}
+
+interface PlanBase {
   id: string
-  name: string
-  focus: string
-  duration: string
-  audience: string
-  description?: string
-  calories?: number
+  nombre: string
+  descripcion?: string | null
+  objetivo?: 'perder_grasa' | 'mantener' | 'ganar_masa' | 'antiinflamatorio' | 'deportivo' | null
+  dias_plan: number
+  calorias_base: number
+  proteinas_base?: number | null
+  carbohidratos_base?: number | null
+  grasas_base?: number | null
+  updated_at?: string
+}
+
+interface PlanBaseRecipe {
+  id: string
+  nombre: string
+  descripcion?: string | null
+  meal_type: 'lunch' | 'dinner'
+  calorias_totales?: number | null
+  proteinas_totales?: number | null
+  carbohidratos_totales?: number | null
+  grasas_totales?: number | null
+  porciones?: number | null
+}
+
+interface LibraryRecipeItem {
+  id: string
+  nombre: string
+  descripcion?: string | null
+  meal_type: 'lunch' | 'dinner'
+  calorias_totales?: number | null
+  proteinas_totales?: number | null
+  carbohidratos_totales?: number | null
+  grasas_totales?: number | null
+  porciones?: number | null
+  tiempo_preparacion_min?: number | null
+  recetas_ingredientes?: Array<{
+    id: string
+    ingrediente_id: string
+    cantidad_base: number
+    unidad: string
+    ingredientes?: { nombre: string }
+  }>
+}
+
+const WEEKDAY_DURATION_OPTIONS = [
+  { value: 5, label: '1 semana · 5 días hábiles' },
+  { value: 10, label: '2 semanas · 10 días hábiles' },
+  { value: 15, label: '3 semanas · 15 días hábiles' },
+  { value: 20, label: '4 semanas · 20 días hábiles' },
+]
+
+const DEFAULT_PLAN_CALORIES = 2000
+
+type MacroTotals = {
+  calories: number
+  protein: number
+  carbs: number
+  fat: number
+}
+
+type MealBucket = MacroTotals & { count: number }
+
+type PlanBaseRecipeSummary = {
+  lunch: MealBucket
+  dinner: MealBucket
+  daily: MacroTotals
+}
+
+function formatPlanDurationLabel(days: number) {
+  const weeks = Math.round(days / 5)
+  if (!Number.isFinite(weeks) || weeks <= 1) {
+    return `1 semana · ${Math.max(days, 5)} días hábiles`
+  }
+  return `${weeks} semanas · ${days} días hábiles`
+}
+
+function summarizePlanBaseRecipes(recipes: PlanBaseRecipe[]): PlanBaseRecipeSummary {
+  const createBucket = (): MealBucket => ({
+    count: 0,
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0,
+  })
+
+  const summary = {
+    lunch: createBucket(),
+    dinner: createBucket(),
+  }
+
+  recipes.forEach((receta) => {
+    const bucket = receta.meal_type === 'dinner' ? summary.dinner : summary.lunch
+    bucket.count += 1
+    bucket.calories += receta.calorias_totales ?? 0
+    bucket.protein += receta.proteinas_totales ?? 0
+    bucket.carbs += receta.carbohidratos_totales ?? 0
+    bucket.fat += receta.grasas_totales ?? 0
+  })
+
+  const avg = (bucket: MealBucket): MacroTotals => ({
+    calories: bucket.count ? bucket.calories / bucket.count : 0,
+    protein: bucket.count ? bucket.protein / bucket.count : 0,
+    carbs: bucket.count ? bucket.carbs / bucket.count : 0,
+    fat: bucket.count ? bucket.fat / bucket.count : 0,
+  })
+
+  const lunchAvg = avg(summary.lunch)
+  const dinnerAvg = avg(summary.dinner)
+
+  return {
+    lunch: summary.lunch,
+    dinner: summary.dinner,
+    daily: {
+      calories: lunchAvg.calories + dinnerAvg.calories,
+      protein: lunchAvg.protein + dinnerAvg.protein,
+      carbs: lunchAvg.carbs + dinnerAvg.carbs,
+      fat: lunchAvg.fat + dinnerAvg.fat,
+    },
+  }
 }
 
 interface SuggestedMeal {
@@ -28,61 +145,10 @@ interface SuggestedMeal {
   name: string
   calories: number
   description: string
-  category: 'breakfast' | 'lunch' | 'dinner' | 'snack'
+  category: 'lunch' | 'dinner'
 }
 
-const initialTemplates: PlanTemplate[] = [
-  {
-    id: 'template-1',
-    name: 'Plan Azul Energía',
-    focus: 'Balance mente-cuerpo',
-    duration: '4 semanas',
-    audience: 'Suscriptores nuevos',
-    description: 'Plan equilibrado para iniciar el camino hacia el bienestar integral.',
-    calories: 2000,
-  },
-  {
-    id: 'template-2',
-    name: 'Plan Fortaleza',
-    focus: 'Ganancia de masa magra',
-    duration: '6 semanas',
-    audience: 'Atletas recreativos',
-    description: 'Enfoque en proteína y entrenamiento para desarrollo muscular.',
-    calories: 2500,
-  },
-  {
-    id: 'template-3',
-    name: 'Plan Ligereza',
-    focus: 'Déficit calórico sostenible',
-    duration: '8 semanas',
-    audience: 'Clientes con sobrepeso moderado',
-    description: 'Reducción gradual y saludable de peso corporal.',
-    calories: 1800,
-  },
-]
-
 const initialSuggestedMeals: SuggestedMeal[] = [
-  {
-    id: 'meal-1',
-    name: 'Avena con frutas',
-    calories: 350,
-    description: 'Avena integral con plátano, frutos rojos y miel orgánica.',
-    category: 'breakfast',
-  },
-  {
-    id: 'meal-2',
-    name: 'Smoothie Verde Vital',
-    calories: 280,
-    description: 'Espinaca, piña, pepino y proteína vegetal.',
-    category: 'breakfast',
-  },
-  {
-    id: 'meal-3',
-    name: 'Tostadas de aguacate',
-    calories: 320,
-    description: 'Pan multigrano, aguacate, semillas de girasol y limón.',
-    category: 'breakfast',
-  },
   {
     id: 'meal-4',
     name: 'Pollo al horno con quinoa',
@@ -95,13 +161,6 @@ const initialSuggestedMeals: SuggestedMeal[] = [
     name: 'Wrap proteico',
     calories: 540,
     description: 'Tortilla integral con falafel, hummus y vegetales frescos.',
-    category: 'lunch',
-  },
-  {
-    id: 'meal-6',
-    name: 'Poke integral',
-    calories: 580,
-    description: 'Arroz integral, atún fresco, mango y edamame con soya ligera.',
     category: 'lunch',
   },
   {
@@ -125,390 +184,559 @@ const initialSuggestedMeals: SuggestedMeal[] = [
     description: 'Coliflor rostizada, cúrcuma y crocante de garbanzo.',
     category: 'dinner',
   },
-  {
-    id: 'meal-10',
-    name: 'Snack: Mix energía',
-    calories: 210,
-    description: 'Nueces activadas, almendras y chips de coco sin azúcar.',
-    category: 'snack',
-  },
-  {
-    id: 'meal-11',
-    name: 'Snack: Yogurt con semillas',
-    calories: 190,
-    description: 'Yogurt griego con chía, linaza y un toque de miel.',
-    category: 'snack',
-  },
-  {
-    id: 'meal-12',
-    name: 'Snack: Smoothie Azul',
-    calories: 210,
-    description: 'Blueberries, plátano, leche de almendra y espirulina.',
-    category: 'snack',
-  },
 ]
+
+const PLAN_OBJECTIVE_LABELS: Record<string, string> = {
+  perder_grasa: 'Pérdida de grasa',
+  mantener: 'Mantenimiento',
+  ganar_masa: 'Ganancia muscular',
+  antiinflamatorio: 'Antiinflamatorio',
+  deportivo: 'Deportivo',
+  recomp_corporal: 'Recomposición corporal',
+}
+
+function getNextMonday(): string {
+  const today = new Date()
+  const day = today.getDay()
+  const diff = day === 1 ? 0 : (8 - day) % 7
+  today.setDate(today.getDate() + diff)
+  return today.toISOString().split('T')[0]
+}
 
 export default function NutricionistaPlanesPage() {
   const { userId } = useAuth()
   const [activeTab, setActiveTab] = useState<'plans' | 'suggestions'>('plans')
-  const [templates, setTemplates] = useState<PlanTemplate[]>([])
-  const [filteredTemplates, setFilteredTemplates] = useState<PlanTemplate[]>([])
-  const [suggestedMeals, setSuggestedMeals] = useState<SuggestedMeal[]>([])
-  const [filteredMeals, setFilteredMeals] = useState<SuggestedMeal[]>([])
-  const [searchTerm, setSearchTerm] = useState('')
-  const [filterCategory, setFilterCategory] = useState<string>('todas')
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [isMealModalOpen, setIsMealModalOpen] = useState(false)
-  const [selectedTemplate, setSelectedTemplate] = useState<PlanTemplate | null>(null)
-  const [selectedMeal, setSelectedMeal] = useState<SuggestedMeal | null>(null)
-  const [formData, setFormData] = useState({
-    name: '',
-    focus: '',
-    duration: '',
-    audience: '',
-    description: '',
-    calories: '',
+
+  const [planBases, setPlanBases] = useState<PlanBase[]>([])
+  const [filteredPlanBases, setFilteredPlanBases] = useState<PlanBase[]>([])
+  const [planBaseSearch, setPlanBaseSearch] = useState('')
+  const [planBaseObjective, setPlanBaseObjective] = useState<'todos' | PlanBase['objetivo']>('todos')
+  const [planBasesLoading, setPlanBasesLoading] = useState(true)
+  const [isPlanBaseModalOpen, setIsPlanBaseModalOpen] = useState(false)
+  const [selectedPlanBase, setSelectedPlanBase] = useState<PlanBase | null>(null)
+  const [planBaseSaving, setPlanBaseSaving] = useState(false)
+  const [planBaseForm, setPlanBaseForm] = useState({
+    nombre: '',
+    descripcion: '',
+    objetivo: 'mantener',
+    dias_plan: 5,
+    calorias_base: DEFAULT_PLAN_CALORIES.toString(),
+    proteinas_base: '',
+    carbohidratos_base: '',
+    grasas_base: '',
   })
+  const [isRecipesModalOpen, setIsRecipesModalOpen] = useState(false)
+  const [recipesLoading, setRecipesLoading] = useState(false)
+  const [selectedPlanBaseForRecipes, setSelectedPlanBaseForRecipes] = useState<PlanBase | null>(null)
+  const [planBaseRecipes, setPlanBaseRecipes] = useState<PlanBaseRecipe[]>([])
+  const [planBaseRecipeSummary, setPlanBaseRecipeSummary] = useState<PlanBaseRecipeSummary | null>(null)
+  const [isSyncingPlanTotals, setIsSyncingPlanTotals] = useState(false)
+  const [selectedRecipe, setSelectedRecipe] = useState<PlanBaseRecipe | null>(null)
+  const [recipeForm, setRecipeForm] = useState({
+    nombre: '',
+    descripcion: '',
+    meal_type: 'lunch' as 'lunch' | 'dinner',
+    calorias_totales: '',
+    proteinas_totales: '',
+    carbohidratos_totales: '',
+    grasas_totales: '',
+    porciones: '1',
+  })
+  const [isLibraryModalOpen, setIsLibraryModalOpen] = useState(false)
+  const [libraryRecipes, setLibraryRecipes] = useState<LibraryRecipeItem[]>([])
+  const [libraryLoading, setLibraryLoading] = useState(false)
+  const [librarySearch, setLibrarySearch] = useState('')
+  const [libraryMealFilter, setLibraryMealFilter] = useState<'all' | 'lunch' | 'dinner'>('all')
+  const [assigningLibraryRecipe, setAssigningLibraryRecipe] = useState<string | null>(null)
+
+  const [availableClients, setAvailableClients] = useState<Array<{ id: string; name: string }>>([])
+  const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false)
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false)
+  const [generateForm, setGenerateForm] = useState({
+    clientId: '',
+    planBaseId: '',
+    weekStartDate: getNextMonday(),
+  })
+
+  const [suggestedMeals, setSuggestedMeals] = useState<SuggestedMeal[]>(initialSuggestedMeals)
+  const [filteredMeals, setFilteredMeals] = useState<SuggestedMeal[]>(initialSuggestedMeals)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterCategory, setFilterCategory] = useState('todas')
+  const [isMealModalOpen, setIsMealModalOpen] = useState(false)
+  const [selectedMeal, setSelectedMeal] = useState<SuggestedMeal | null>(null)
   const [mealFormData, setMealFormData] = useState({
     name: '',
     calories: '',
     description: '',
-    category: 'breakfast' as SuggestedMeal['category'],
+    category: 'lunch' as SuggestedMeal['category'],
   })
+
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-  // Estado para comidas seleccionadas por día al crear plan
-  const [planMealsByDay, setPlanMealsByDay] = useState<{ [dayNumber: number]: string[] }>({})
 
-  // Función para cargar planes completos desde la API
-  const loadTemplates = async () => {
-    if (!userId) return
-
-    try {
-      // Cargar planes completos sin asignar del nutricionista
-      const plans = await api.getMealPlansByNutricionista(userId)
-
-      // Convertir planes a formato PlanTemplate para mostrar
-      const formattedTemplates: PlanTemplate[] = plans.map((p: any) => {
-        const totalMeals = p.days?.reduce((sum: number, day: any) => sum + (day.meals?.length || 0), 0) || 0
-        return {
-          id: p.id,
-          name: p.name,
-          focus: `${p.days?.length || 0} días, ${totalMeals} comidas`,
-          duration: `${Math.ceil((new Date(p.endDate).getTime() - new Date(p.startDate).getTime()) / (1000 * 60 * 60 * 24))} días`,
-          audience: 'Plan completo',
-          description: p.description || undefined,
-          calories: p.totalCalories || undefined,
-        }
-      })
-
-      setTemplates(formattedTemplates)
-    } catch (error) {
-      console.error('Error loading plans:', error)
-      setTemplates([])
-    }
-  }
-
-  // Función para cargar opciones sugeridas desde la API
-  // Nota: Se cargan solo comidas para PLANES NUTRICIONALES (is_menu_item=false)
-  // NO se incluyen comidas del menú del local (is_menu_item=true)
-  const loadSuggestedMeals = async () => {
-    if (!userId) return
-
-    try {
-      const meals = await getMeals()
-      if (meals && meals.length > 0) {
-        // Convertir meals de API a formato SuggestedMeal
-        // Filtrar solo comidas para planes nutricionales (NO del menú del local)
-        const suggested: SuggestedMeal[] = meals
-          .filter((m: any) => m.available && m.is_menu_item === false)
-          .map((m: any) => ({
-            id: m.id,
-            name: m.name,
-            calories: m.calories || 0,
-            description: m.description || '',
-            category: (m.type || 'lunch') as SuggestedMeal['category'],
-          }))
-        setSuggestedMeals(suggested.length > 0 ? suggested : initialSuggestedMeals)
+  const showToast = useCallback(
+    (message: string, isError = false) => {
+      if (isError) {
+        setError(message)
+        setTimeout(() => setError(null), 5000)
       } else {
-        setSuggestedMeals(initialSuggestedMeals)
+        setSuccess(message)
+        setTimeout(() => setSuccess(null), 3000)
       }
-    } catch (error) {
-      console.error('Error loading suggested meals:', error)
-      setSuggestedMeals(initialSuggestedMeals)
+    },
+    [setError, setSuccess]
+  )
+
+  const loadPlanBases = useCallback(async () => {
+    try {
+      setPlanBasesLoading(true)
+      const bases = await api.getPlanBases({ includeRecipes: false })
+      setPlanBases(bases)
+    } catch (err) {
+      console.error('Error loading plan bases:', err)
+      setPlanBases([])
+      showToast('No se pudieron cargar los planes base', true)
+    } finally {
+      setPlanBasesLoading(false)
     }
-  }
+  }, [showToast])
 
-  useEffect(() => {
+  const syncPlanBaseMetrics = useCallback(
+    async (planBaseId: string, recipes: PlanBaseRecipe[], summaryOverride?: PlanBaseRecipeSummary) => {
+      if (!planBaseId || !recipes.length) return
+      const summary = summaryOverride ?? summarizePlanBaseRecipes(recipes)
+      if (!summary.daily.calories) return
+
+      const normalized = {
+        calorias_base: Math.max(1, Math.round(summary.daily.calories)),
+        proteinas_base: summary.daily.protein ? Number(summary.daily.protein.toFixed(1)) : null,
+        carbohidratos_base: summary.daily.carbs ? Number(summary.daily.carbs.toFixed(1)) : null,
+        grasas_base: summary.daily.fat ? Number(summary.daily.fat.toFixed(1)) : null,
+      }
+
+      const currentPlan = planBases.find((plan) => plan.id === planBaseId)
+      const hasDifferences =
+        !currentPlan ||
+        currentPlan.calorias_base !== normalized.calorias_base ||
+        (currentPlan.proteinas_base ?? null) !== normalized.proteinas_base ||
+        (currentPlan.carbohidratos_base ?? null) !== normalized.carbohidratos_base ||
+        (currentPlan.grasas_base ?? null) !== normalized.grasas_base
+
+      if (!hasDifferences) return
+
+      try {
+        setIsSyncingPlanTotals(true)
+        await api.updatePlanBase(planBaseId, normalized)
+        await loadPlanBases()
+        setSelectedPlanBaseForRecipes((prev) =>
+          prev && prev.id === planBaseId ? { ...prev, ...normalized } : prev
+        )
+      } catch (error) {
+        console.error('Error sincronizando totales del plan base:', error)
+        showToast('No se pudieron recalcular los totales del plan base', true)
+      } finally {
+        setIsSyncingPlanTotals(false)
+      }
+    },
+    [planBases, loadPlanBases, showToast]
+  )
+
+  const loadClients = useCallback(async () => {
     if (!userId) return
-
-    loadTemplates()
-    loadSuggestedMeals()
-
-    // Polling cada 30 segundos para actualizar templates y comidas desde API
-    const interval = setInterval(() => {
-      loadTemplates()
-      loadSuggestedMeals()
-    }, 30000)
-
-    return () => {
-      clearInterval(interval)
+    try {
+      const assignments = await api.getNutricionistaClients(userId)
+      const subscribers = await api.getSubscribers()
+      const subscribersMap = new Map(subscribers.map((s: any) => [s.id, s]))
+      const formatted = assignments
+        .map((assignment: any) => {
+          const subscriber = subscribersMap.get(assignment.client_id)
+          return {
+            id: assignment.client_id,
+            name: subscriber?.name || subscriber?.email || 'Cliente sin nombre',
+          }
+        })
+        .filter((client) => client.id)
+      setAvailableClients(formatted)
+    } catch (err) {
+      console.error('Error loading clients:', err)
+      setAvailableClients([])
     }
   }, [userId])
 
-  // Filtrar y buscar planes
-  useEffect(() => {
-    let filtered = [...templates]
+  const loadSuggestedMeals = useCallback(async () => {
+    if (!userId) return
+    try {
+      const meals = await getMeals()
+      if (!meals || meals.length === 0) {
+        setSuggestedMeals(initialSuggestedMeals)
+        return
+      }
+      const filtered = meals
+        .filter((meal: any) => meal.available && meal.is_menu_item === false)
+        .map((meal: any) => ({
+          id: meal.id,
+          name: meal.name,
+          description: meal.description || '',
+          calories: meal.calories || 0,
+          category: (meal.type || 'lunch') as SuggestedMeal['category'],
+        }))
+      setSuggestedMeals(filtered.length ? filtered : initialSuggestedMeals)
+    } catch (err) {
+      console.error('Error loading meals:', err)
+      setSuggestedMeals(initialSuggestedMeals)
+    }
+  }, [userId])
 
-    // Buscar por nombre, descripción o focus
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase()
-      filtered = filtered.filter(template =>
-        template.name.toLowerCase().includes(term) ||
-        (template.description && template.description.toLowerCase().includes(term)) ||
-        template.focus.toLowerCase().includes(term)
+  useEffect(() => {
+    if (!userId) return
+    loadPlanBases()
+    loadClients()
+    loadSuggestedMeals()
+    const interval = setInterval(() => {
+      loadPlanBases()
+      loadSuggestedMeals()
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [userId, loadPlanBases, loadClients, loadSuggestedMeals])
+
+  useEffect(() => {
+    let filtered = [...planBases]
+    if (planBaseSearch) {
+      const term = planBaseSearch.toLowerCase()
+      filtered = filtered.filter(
+        (plan) =>
+          plan.nombre.toLowerCase().includes(term) ||
+          (plan.descripcion && plan.descripcion.toLowerCase().includes(term)) ||
+          (plan.objetivo && PLAN_OBJECTIVE_LABELS[plan.objetivo]?.toLowerCase().includes(term))
       )
     }
+    if (planBaseObjective !== 'todos') {
+      filtered = filtered.filter((plan) => plan.objetivo === planBaseObjective)
+    }
+    setFilteredPlanBases(filtered)
+  }, [planBases, planBaseSearch, planBaseObjective])
 
-    setFilteredTemplates(filtered)
-  }, [templates, searchTerm])
-
-  // Filtrar y buscar comidas sugeridas
   useEffect(() => {
-    let filtered = [...suggestedMeals]
+    if (!selectedPlanBaseForRecipes) return
+    const refreshed = planBases.find((plan) => plan.id === selectedPlanBaseForRecipes.id)
+    if (
+      refreshed &&
+      (refreshed.calorias_base !== selectedPlanBaseForRecipes.calorias_base ||
+        (refreshed.proteinas_base ?? null) !== (selectedPlanBaseForRecipes.proteinas_base ?? null) ||
+        (refreshed.carbohidratos_base ?? null) !== (selectedPlanBaseForRecipes.carbohidratos_base ?? null) ||
+        (refreshed.grasas_base ?? null) !== (selectedPlanBaseForRecipes.grasas_base ?? null) ||
+        refreshed.dias_plan !== selectedPlanBaseForRecipes.dias_plan)
+    ) {
+      setSelectedPlanBaseForRecipes(refreshed)
+    }
+  }, [planBases, selectedPlanBaseForRecipes])
 
-    // Filtrar por categoría
+  useEffect(() => {
+    let meals = [...suggestedMeals]
     if (filterCategory !== 'todas') {
-      filtered = filtered.filter(meal => meal.category === filterCategory)
+      meals = meals.filter((meal) => meal.category === filterCategory)
     }
-
-    // Buscar por nombre o descripción
     if (searchTerm) {
       const term = searchTerm.toLowerCase()
-      filtered = filtered.filter(meal =>
-        meal.name.toLowerCase().includes(term) ||
-        meal.description.toLowerCase().includes(term) ||
-        meal.calories.toString().includes(term)
+      meals = meals.filter(
+        (meal) =>
+          meal.name.toLowerCase().includes(term) ||
+          meal.description.toLowerCase().includes(term) ||
+          meal.calories.toString().includes(term)
       )
     }
-
-    setFilteredMeals(filtered)
+    setFilteredMeals(meals)
   }, [suggestedMeals, filterCategory, searchTerm])
 
-  const showToast = (message: string, isError = false) => {
-    if (isError) {
-      setError(message)
-      setTimeout(() => setError(null), 5000)
-    } else {
-      setSuccess(message)
-      setTimeout(() => setSuccess(null), 3000)
-    }
-  }
-
-
-  // Funciones para templates
-  const handleCreate = () => {
-    setFormData({
-      name: '',
-      focus: '',
-      duration: '',
-      audience: '',
-      description: '',
-      calories: '',
+  const resetPlanBaseForm = () => {
+    setPlanBaseForm({
+      nombre: '',
+      descripcion: '',
+      objetivo: 'mantener',
+      dias_plan: 5,
+      calorias_base: DEFAULT_PLAN_CALORIES.toString(),
+      proteinas_base: '',
+      carbohidratos_base: '',
+      grasas_base: '',
     })
-    setPlanMealsByDay({}) // Resetear comidas seleccionadas
-    setError(null)
-    setIsCreateModalOpen(true)
   }
 
-  const handleEdit = (template: PlanTemplate) => {
-    setSelectedTemplate(template)
-    setFormData({
-      name: template.name,
-      focus: template.focus,
-      duration: template.duration,
-      audience: template.audience,
-      description: template.description || '',
-      calories: template.calories?.toString() || '',
+  const handleOpenPlanBaseModal = () => {
+    setSelectedPlanBase(null)
+    resetPlanBaseForm()
+    setIsPlanBaseModalOpen(true)
+  }
+
+  const handleEditPlanBase = (plan: PlanBase) => {
+    setSelectedPlanBase(plan)
+    setPlanBaseForm({
+      nombre: plan.nombre,
+      descripcion: plan.descripcion || '',
+      objetivo: plan.objetivo || 'mantener',
+      dias_plan: plan.dias_plan || 5,
+      calorias_base: plan.calorias_base?.toString() || '',
+      proteinas_base: plan.proteinas_base?.toString() || '',
+      carbohidratos_base: plan.carbohidratos_base?.toString() || '',
+      grasas_base: plan.grasas_base?.toString() || '',
     })
-    setError(null)
-    setIsEditModalOpen(true)
+    setIsPlanBaseModalOpen(true)
   }
 
-  const handleDelete = async (templateId: string) => {
-    if (!confirm('¿Estás seguro de eliminar este plan?')) return
-
+  const handleDeletePlanBase = async (planId: string) => {
+    if (!confirm('¿Eliminar este plan base?')) return
     try {
-      // TODO: Implementar API para eliminar templates
-      // Por ahora, solo actualizar el estado local
-      const updated = templates.filter((t) => t.id !== templateId)
-      setTemplates(updated)
-      showToast('Plan eliminado correctamente')
-      // Recargar templates desde la API
-      await loadTemplates()
-    } catch (error) {
-      console.error('Error deleting template:', error)
-      showToast('Error al eliminar el plan', true)
+      await api.deletePlanBase(planId)
+      showToast('Plan base eliminado correctamente')
+      if (selectedPlanBaseForRecipes?.id === planId) {
+        setIsRecipesModalOpen(false)
+        setSelectedPlanBaseForRecipes(null)
+        resetRecipeForm()
+      }
+      await loadPlanBases()
+    } catch (err: any) {
+      console.error('Error deleting plan base:', err)
+      showToast(err?.message || 'Error al eliminar el plan base', true)
     }
   }
 
-  const handleSubmitCreate = async (e: React.FormEvent) => {
+  const handleSubmitPlanBase = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError(null)
-
-    if (!formData.name) {
-      setError('El nombre del plan es requerido')
+    if (!planBaseForm.nombre.trim()) {
+      showToast('El plan base necesita un nombre', true)
       return
     }
-
-    // Validar que cada día tenga al menos una comida (almuerzo o cena) y máximo 1 de cada tipo
-    const dayNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']
-    for (let dayNumber = 1; dayNumber <= 5; dayNumber++) {
-      const dayMeals = planMealsByDay[dayNumber] || []
-      if (dayMeals.length === 0) {
-        setError(`El ${dayNames[dayNumber - 1]} debe tener al menos un almuerzo o una cena`)
-        return
-      }
-
-      // Contar almuerzos y cenas
-      const lunchCount = dayMeals.filter((mealId) => {
-        const meal = suggestedMeals.find((m) => m.id === mealId)
-        return meal && meal.category === 'lunch'
-      }).length
-
-      const dinnerCount = dayMeals.filter((mealId) => {
-        const meal = suggestedMeals.find((m) => m.id === mealId)
-        return meal && meal.category === 'dinner'
-      }).length
-
-      // Verificar que haya al menos un almuerzo o una cena
-      if (lunchCount === 0 && dinnerCount === 0) {
-        setError(`El ${dayNames[dayNumber - 1]} debe tener al menos un almuerzo o una cena`)
-        return
-      }
-
-      // Verificar que no haya más de 1 almuerzo
-      if (lunchCount > 1) {
-        setError(`El ${dayNames[dayNumber - 1]} solo puede tener máximo 1 almuerzo`)
-        return
-      }
-
-      // Verificar que no haya más de 1 cena
-      if (dinnerCount > 1) {
-        setError(`El ${dayNames[dayNumber - 1]} solo puede tener máximo 1 cena`)
-        return
-      }
+    setPlanBaseSaving(true)
+    const normalizedDiasPlan =
+      WEEKDAY_DURATION_OPTIONS.find((option) => option.value === planBaseForm.dias_plan)?.value || 5
+    const payload = {
+      nombre: planBaseForm.nombre.trim(),
+      descripcion: planBaseForm.descripcion.trim() || null,
+      objetivo: planBaseForm.objetivo as PlanBase['objetivo'],
+      dias_plan: normalizedDiasPlan,
+      calorias_base: planBaseForm.calorias_base ? Number(planBaseForm.calorias_base) : DEFAULT_PLAN_CALORIES,
+      proteinas_base: planBaseForm.proteinas_base ? Number(planBaseForm.proteinas_base) : null,
+      carbohidratos_base: planBaseForm.carbohidratos_base ? Number(planBaseForm.carbohidratos_base) : null,
+      grasas_base: planBaseForm.grasas_base ? Number(planBaseForm.grasas_base) : null,
     }
-
     try {
-      // Calcular fechas (plan de 5 días: lunes a viernes)
-      const startDate = new Date()
-      const endDate = new Date()
-      endDate.setDate(endDate.getDate() + 4) // 5 días: lunes a viernes
-
-      // Preparar días con comidas (lunes a viernes: días 1-5)
-      const days = [1, 2, 3, 4, 5].map((dayNumber) => ({
-        day_number: dayNumber,
-        day_name: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'][dayNumber - 1],
-        meals: planMealsByDay[dayNumber] || [], // Array de meal IDs
-      }))
-
-      // Crear plan completo con días y comidas
-      const newPlan = await api.createPlan({
-        user_id: null, // Sin asignar - será un plan template
-        name: formData.name,
-        description: formData.description || undefined,
-        start_date: startDate.toISOString().split('T')[0],
-        end_date: endDate.toISOString().split('T')[0],
-        total_calories: formData.calories ? parseInt(formData.calories) : undefined,
-        days: days, // Incluir días con comidas
-      })
-
-      if (newPlan) {
-        // Recargar planes desde la API
-        await loadTemplates()
-        setIsCreateModalOpen(false)
-        setPlanMealsByDay({}) // Limpiar comidas seleccionadas
-        showToast('Plan completo creado correctamente')
+      if (selectedPlanBase) {
+        await api.updatePlanBase(selectedPlanBase.id, payload)
+        showToast('Plan base actualizado correctamente')
       } else {
-        showToast('Error al crear el plan', true)
+        await api.createPlanBase(payload)
+        showToast('Plan base creado correctamente')
       }
-    } catch (error: any) {
-      console.error('Error creating plan:', error)
-      setError(error.message || 'Error al crear el plan')
-      showToast('Error al crear el plan', true)
+      setIsPlanBaseModalOpen(false)
+      setSelectedPlanBase(null)
+      await loadPlanBases()
+    } catch (err: any) {
+      console.error('Error saving plan base:', err)
+      showToast(err?.message || 'Error al guardar el plan base', true)
+    } finally {
+      setPlanBaseSaving(false)
     }
   }
 
-  // Funciones para agregar/eliminar comidas por día
-  const handleAddMealToDay = (dayNumber: number, mealId: string) => {
-    setPlanMealsByDay((prev) => ({
-      ...prev,
-      [dayNumber]: [...(prev[dayNumber] || []), mealId],
-    }))
+  const resetRecipeForm = () => {
+    setRecipeForm({
+      nombre: '',
+      descripcion: '',
+      meal_type: 'lunch',
+      calorias_totales: '',
+      proteinas_totales: '',
+      carbohidratos_totales: '',
+      grasas_totales: '',
+      porciones: '1',
+    })
+    setSelectedRecipe(null)
   }
 
-  const handleRemoveMealFromDay = (dayNumber: number, mealIndex: number) => {
-    setPlanMealsByDay((prev) => {
-      const dayMeals = prev[dayNumber] || []
-      return {
-        ...prev,
-        [dayNumber]: dayMeals.filter((_, index) => index !== mealIndex),
+  const loadLibraryRecipes = async () => {
+    try {
+      setLibraryLoading(true)
+      const recetas = await api.getRecipeLibrary()
+      setLibraryRecipes(recetas as LibraryRecipeItem[])
+    } catch (err) {
+      console.error('Error loading recipe library:', err)
+      showToast('No se pudo cargar la biblioteca de recetas', true)
+      setLibraryRecipes([])
+    } finally {
+      setLibraryLoading(false)
+    }
+  }
+
+  const handleOpenLibraryModal = async () => {
+    if (!selectedPlanBaseForRecipes) {
+      showToast('Selecciona un plan base para asignar recetas', true)
+      return
+    }
+    setIsLibraryModalOpen(true)
+    setAssigningLibraryRecipe(null)
+    setLibrarySearch('')
+    await loadLibraryRecipes()
+  }
+
+  const handleAssignLibraryRecipe = async (libraryRecipeId: string) => {
+    if (!selectedPlanBaseForRecipes) {
+      showToast('Selecciona un plan base para continuar', true)
+      return
+    }
+    try {
+      setAssigningLibraryRecipe(libraryRecipeId)
+      await api.assignLibraryRecipeToPlan(selectedPlanBaseForRecipes.id, libraryRecipeId)
+      showToast('Receta añadida desde la biblioteca')
+      await loadPlanBaseRecipes(selectedPlanBaseForRecipes.id)
+      setIsLibraryModalOpen(false)
+    } catch (err: any) {
+      console.error('Error assigning library recipe:', err)
+      showToast(err?.message || 'No se pudo añadir la receta', true)
+    } finally {
+      setAssigningLibraryRecipe(null)
+    }
+  }
+
+  const loadPlanBaseRecipes = useCallback(
+    async (planBaseId: string) => {
+      try {
+        setRecipesLoading(true)
+        const recetas = await api.getPlanBaseRecipes(planBaseId)
+        const summary = recetas.length ? summarizePlanBaseRecipes(recetas) : null
+        setPlanBaseRecipes(recetas)
+        setPlanBaseRecipeSummary(summary)
+        if (summary) {
+          await syncPlanBaseMetrics(planBaseId, recetas, summary)
+        }
+      } catch (err) {
+        console.error('Error loading recipes:', err)
+        showToast('No se pudieron cargar las recetas', true)
+        setPlanBaseRecipes([])
+        setPlanBaseRecipeSummary(null)
+      } finally {
+        setRecipesLoading(false)
       }
+    },
+    [showToast, syncPlanBaseMetrics]
+  )
+
+  const handleOpenRecipesModal = async (plan: PlanBase) => {
+    setSelectedPlanBaseForRecipes(plan)
+    setIsRecipesModalOpen(true)
+    resetRecipeForm()
+    setPlanBaseRecipeSummary(null)
+    await loadPlanBaseRecipes(plan.id)
+  }
+
+  const handleEditRecipe = (receta: PlanBaseRecipe) => {
+    setSelectedRecipe(receta)
+    setRecipeForm({
+      nombre: receta.nombre,
+      descripcion: receta.descripcion || '',
+      meal_type: receta.meal_type,
+      calorias_totales: receta.calorias_totales?.toString() || '',
+      proteinas_totales: receta.proteinas_totales?.toString() || '',
+      carbohidratos_totales: receta.carbohidratos_totales?.toString() || '',
+      grasas_totales: receta.grasas_totales?.toString() || '',
+      porciones: receta.porciones?.toString() || '1',
     })
   }
 
-  const handleSubmitEdit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-
-    if (!selectedTemplate) return
-
-    if (!formData.name || !formData.focus || !formData.duration || !formData.audience) {
-      setError('Por favor completa todos los campos requeridos')
-      return
-    }
-
+  const handleDeleteRecipe = async (recetaId: string) => {
+    if (!selectedPlanBaseForRecipes) return
+    if (!confirm('¿Eliminar esta receta del plan base?')) return
     try {
-      // TODO: Implementar API para actualizar templates
-      // Por ahora, solo actualizar el estado local
-      const updated = templates.map((t) =>
-        t.id === selectedTemplate.id
-          ? {
-            ...t,
-            name: formData.name,
-            focus: formData.focus,
-            duration: formData.duration,
-            audience: formData.audience,
-            description: formData.description,
-            calories: formData.calories ? parseInt(formData.calories) : undefined,
-          }
-          : t
-      )
-
-      setTemplates(updated)
-      setIsEditModalOpen(false)
-      setSelectedTemplate(null)
-      showToast('Plan actualizado correctamente')
-      // Recargar templates desde la API
-      await loadTemplates()
-    } catch (error: any) {
-      console.error('Error updating template:', error)
-      setError(error.message || 'Error al actualizar el plan')
-      showToast('Error al actualizar el plan', true)
+      await api.deletePlanBaseRecipe(recetaId)
+      showToast('Receta eliminada')
+      await loadPlanBaseRecipes(selectedPlanBaseForRecipes.id)
+    } catch (err: any) {
+      console.error('Error deleting recipe:', err)
+      showToast(err?.message || 'Error al eliminar la receta', true)
     }
   }
 
-  // Funciones para opciones sugeridas
+  const handleSubmitRecipe = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedPlanBaseForRecipes) return
+    if (!recipeForm.nombre) {
+      showToast('La receta necesita un nombre', true)
+      return
+    }
+
+    const payload = {
+      plan_base_id: selectedPlanBaseForRecipes.id,
+      nombre: recipeForm.nombre.trim(),
+      descripcion: recipeForm.descripcion.trim() || null,
+      meal_type: recipeForm.meal_type,
+      calorias_totales: recipeForm.calorias_totales ? Number(recipeForm.calorias_totales) : null,
+      proteinas_totales: recipeForm.proteinas_totales ? Number(recipeForm.proteinas_totales) : null,
+      carbohidratos_totales: recipeForm.carbohidratos_totales ? Number(recipeForm.carbohidratos_totales) : null,
+      grasas_totales: recipeForm.grasas_totales ? Number(recipeForm.grasas_totales) : null,
+      porciones: recipeForm.porciones ? Number(recipeForm.porciones) : 1,
+    }
+
+    try {
+      if (selectedRecipe) {
+        await api.updatePlanBaseRecipe(selectedRecipe.id, payload)
+        showToast('Receta actualizada')
+      } else {
+        await api.createPlanBaseRecipe(payload)
+        showToast('Receta creada')
+      }
+      resetRecipeForm()
+      await loadPlanBaseRecipes(selectedPlanBaseForRecipes.id)
+    } catch (err: any) {
+      console.error('Error saving recipe:', err)
+      showToast(err?.message || 'Error al guardar la receta', true)
+    }
+  }
+
+  const handleOpenGenerateModal = () => {
+    if (!planBases.length) {
+      showToast('Primero crea un plan base', true)
+      return
+    }
+    if (!availableClients.length) {
+      showToast('No hay clientes asignados todavía', true)
+      return
+    }
+    setGenerateForm({
+      clientId: availableClients[0]?.id || '',
+      planBaseId: planBases[0]?.id || '',
+      weekStartDate: getNextMonday(),
+    })
+    setIsGenerateModalOpen(true)
+  }
+
+  const handleGeneratePlan = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!generateForm.clientId || !generateForm.planBaseId || !generateForm.weekStartDate) {
+      showToast('Selecciona cliente, plan base y fecha de inicio', true)
+      return
+    }
+    try {
+      setIsGeneratingPlan(true)
+      await api.generateWeeklyPlanForUser({
+        user_id: generateForm.clientId,
+        plan_base_id: generateForm.planBaseId,
+        week_start_date: generateForm.weekStartDate,
+      })
+      showToast('Plan semanal generado correctamente')
+      setIsGenerateModalOpen(false)
+    } catch (err: any) {
+      console.error('Error generating weekly plan:', err)
+      showToast(err?.message || 'Error al generar el plan semanal', true)
+    } finally {
+      setIsGeneratingPlan(false)
+    }
+  }
+
   const handleCreateMeal = () => {
+    setSelectedMeal(null)
     setMealFormData({
       name: '',
       calories: '',
       description: '',
-      category: 'breakfast',
+      category: 'lunch',
     })
-    setError(null)
     setIsMealModalOpen(true)
   }
 
@@ -520,82 +748,63 @@ export default function NutricionistaPlanesPage() {
       description: meal.description,
       category: meal.category,
     })
-    setError(null)
     setIsMealModalOpen(true)
   }
 
   const handleDeleteMeal = async (mealId: string) => {
-    if (!confirm('¿Estás seguro de eliminar esta opción sugerida?')) return
-
+    if (!confirm('¿Eliminar esta opción sugerida?')) return
     try {
-      // Las opciones sugeridas vienen de la API de meals
-      // Si es una comida personalizada del nutricionista, se puede eliminar
-      // Por ahora, solo actualizar el estado local
-      const updated = suggestedMeals.filter((m) => m.id !== mealId)
-      setSuggestedMeals(updated)
-      showToast('Opción sugerida eliminada correctamente')
-      // Recargar comidas desde la API
+      await api.deleteMeal(mealId)
+      showToast('Opción sugerida eliminada')
       await loadSuggestedMeals()
-    } catch (error) {
-      console.error('Error deleting meal:', error)
-      showToast('Error al eliminar la opción sugerida', true)
+    } catch (err: any) {
+      console.error('Error deleting meal:', err)
+      showToast(err?.message || 'Error al eliminar la opción sugerida', true)
     }
   }
 
   const handleSubmitMeal = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError(null)
-
     if (!mealFormData.name || !mealFormData.calories || !mealFormData.description) {
-      setError('Por favor completa todos los campos requeridos')
+      showToast('Completa todos los campos de la comida', true)
       return
     }
-
     try {
       if (selectedMeal) {
-        // Editar - actualizar meal en la API
         await api.updateMeal(selectedMeal.id, {
           name: mealFormData.name,
-          calories: parseInt(mealFormData.calories),
           description: mealFormData.description,
-          type: mealFormData.category,
-        })
-        setIsMealModalOpen(false)
-        setSelectedMeal(null)
-        showToast('Opción sugerida actualizada correctamente')
-        await loadSuggestedMeals()
-      } else {
-        // Crear - crear meal en la API
-        await api.createMeal({
-          name: mealFormData.name,
-          calories: parseInt(mealFormData.calories),
-          description: mealFormData.description,
+          calories: Number(mealFormData.calories),
           type: mealFormData.category,
           available: true,
+          is_menu_item: false,
         })
-        setIsMealModalOpen(false)
-        showToast('Opción sugerida creada correctamente')
-        await loadSuggestedMeals()
+        showToast('Opción sugerida actualizada')
+      } else {
+        await api.createMeal({
+          name: mealFormData.name,
+          description: mealFormData.description,
+          calories: Number(mealFormData.calories),
+          type: mealFormData.category,
+          available: true,
+          is_menu_item: false,
+        })
+        showToast('Opción sugerida creada')
       }
-    } catch (error: any) {
-      console.error('Error saving meal:', error)
-      setError(error.message || 'Error al guardar la opción sugerida')
-      showToast('Error al guardar la opción sugerida', true)
+      setIsMealModalOpen(false)
+      setSelectedMeal(null)
+      await loadSuggestedMeals()
+    } catch (err: any) {
+      console.error('Error saving meal:', err)
+      showToast(err?.message || 'Error al guardar la opción sugerida', true)
     }
   }
 
-  const getCategoryLabel = (category: SuggestedMeal['category']) => {
-    const labels = {
-      breakfast: 'Desayuno',
-      lunch: 'Almuerzo',
-      dinner: 'Cena',
-      snack: 'Snack',
-    }
-    return labels[category]
-  }
+  const getCategoryLabel = (category: SuggestedMeal['category']) =>
+    category === 'lunch' ? 'Almuerzo' : 'Cena'
 
   const plusIcon = (
-    <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+    <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
       <path
         fillRule="evenodd"
         d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"
@@ -604,141 +813,177 @@ export default function NutricionistaPlanesPage() {
     </svg>
   )
 
+  const filteredLibraryRecipes = useMemo(() => {
+    let data = [...libraryRecipes]
+    if (libraryMealFilter !== 'all') {
+      data = data.filter((recipe) => recipe.meal_type === libraryMealFilter)
+    }
+    if (librarySearch) {
+      const term = librarySearch.toLowerCase()
+      data = data.filter(
+        (recipe) =>
+          recipe.nombre.toLowerCase().includes(term) ||
+          (recipe.descripcion && recipe.descripcion.toLowerCase().includes(term))
+      )
+    }
+    return data
+  }, [libraryMealFilter, libraryRecipes, librarySearch])
+
+  const planBaseResultsCount = useMemo(() => {
+    if (planBaseSearch || planBaseObjective !== 'todos') {
+      return { showing: filteredPlanBases.length, total: planBases.length }
+    }
+    return undefined
+  }, [filteredPlanBases.length, planBases.length, planBaseObjective, planBaseSearch])
+
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Mensajes */}
-      {error && (
-        <ToastMessage
-          message={error}
-          type="error"
-          onClose={() => setError(null)}
-        />
-      )}
-      {success && (
-        <ToastMessage
-          message={success}
-          type="success"
-          onClose={() => setSuccess(null)}
-        />
-      )}
-
-      {/* Header */}
       <PageHeader
-        title="Biblioteca de planes y opciones"
-        description="Crea planes completos con comidas asignadas para cada día (Lunes a Viernes). Estos planes se pueden asignar a tus clientes desde la sección 'Clientes'."
+        title="Planes nutricionales"
+        description="Construye planes base y opciones sugeridas para automatizar la planificación semanal."
       />
 
-      {/* Tabs */}
-      <div className="border-b border-gray-200">
-        <nav className="flex space-x-8">
+      {error && <ToastMessage type="error" message={error} />}
+      {success && <ToastMessage type="success" message={success} />}
+
+      <div className="border border-gray-200 rounded-full inline-flex p-1 bg-white w-fit">
+        {(['plans', 'suggestions'] as const).map((tab) => (
           <button
-            onClick={() => {
-              setActiveTab('plans')
-              setSearchTerm('')
-              setFilterCategory('todas')
-            }}
-            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'plans'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-1.5 text-sm font-medium rounded-full transition ${
+              activeTab === tab ? 'bg-primary text-white shadow-sm' : 'text-gray-600 hover:text-primary'
+            }`}
           >
-            Planes
+            {tab === 'plans' ? 'Planes base' : 'Opciones sugeridas'}
           </button>
-          <button
-            onClick={() => {
-              setActiveTab('suggestions')
-              setSearchTerm('')
-              setFilterCategory('todas')
-            }}
-            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'suggestions'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-          >
-            Opciones sugeridas
-          </button>
-        </nav>
+        ))}
       </div>
 
-      {/* Tab: Planes */}
       {activeTab === 'plans' && (
         <>
-          <div className="flex justify-end">
-            <ActionButton onClick={handleCreate} icon={plusIcon}>
-              Crear nuevo plan
+          <div className="flex flex-wrap justify-end gap-2">
+            <ActionButton onClick={handleOpenGenerateModal} icon={plusIcon}>
+              Generar plan semanal
+            </ActionButton>
+            <ActionButton onClick={handleOpenPlanBaseModal} icon={plusIcon}>
+              Nuevo plan base
             </ActionButton>
           </div>
 
-          {/* Búsqueda para planes */}
-          {templates.length > 0 && (
-            <SearchFilters
-              searchTerm={searchTerm}
-              onSearchChange={setSearchTerm}
-              searchPlaceholder="Buscar por nombre, descripción o características..."
-              resultsCount={
-                searchTerm
-                  ? { showing: filteredTemplates.length, total: templates.length }
-                  : undefined
-              }
-            />
-          )}
-
-          {filteredTemplates.length === 0 && templates.length > 0 && (
+          {planBasesLoading ? (
+            <LoadingState message="Cargando planes base..." />
+          ) : planBases.length === 0 ? (
             <EmptyState
-              title="No se encontraron planes"
-              message="Intenta ajustar la búsqueda."
-            />
-          )}
-
-          {templates.length === 0 && (
-            <EmptyState
-              title="No hay planes creados"
-              message="Crea tu primer plan nutricional para comenzar."
+              title="Aún no tienes planes base"
+              message="Crea un plan base para poder asignarlo y generar planes automáticos."
               action={
-                <ActionButton onClick={handleCreate} icon={plusIcon}>
-                  Crear Primer Plan
+                <ActionButton onClick={handleOpenPlanBaseModal} icon={plusIcon}>
+                  Crear plan base
                 </ActionButton>
               }
             />
-          )}
+          ) : (
+            <>
+              <SearchFilters
+                searchTerm={planBaseSearch}
+                onSearchChange={setPlanBaseSearch}
+                searchPlaceholder="Buscar por nombre, objetivo o descripción..."
+                filters={
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Objetivo</label>
+                    <select
+                      value={planBaseObjective ?? 'todos'}
+                      onChange={(e) =>
+                        setPlanBaseObjective(
+                          e.target.value === 'todos' ? 'todos' : (e.target.value as PlanBase['objetivo'])
+                        )
+                      }
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                    >
+                      <option value="todos">Todos</option>
+                      {Object.entries(PLAN_OBJECTIVE_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                }
+                resultsCount={planBaseResultsCount}
+              />
 
-          {filteredTemplates.length > 0 && (
-            <ResponsiveGrid cols={{ mobile: 1, tablet: 2, desktop: 3 }} gap="md">
-            {filteredTemplates.map((template) => (
-              <article
-                key={template.id}
-                className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
-              >
-                <h3 className="text-lg font-semibold text-gray-900">{template.name}</h3>
-                <p className="mt-2 text-sm text-primary font-medium">{template.focus}</p>
-                {template.description && <p className="mt-2 text-xs text-gray-600">{template.description}</p>}
-                <ul className="mt-3 space-y-1 text-xs text-gray-500">
-                  <li>Duración: {template.duration}</li>
-                  <li>Orientado a: {template.audience}</li>
-                  {template.calories && <li>Calorías objetivo: {template.calories} kcal</li>}
-                </ul>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button
-                    onClick={() => handleEdit(template)}
-                    className="inline-flex items-center gap-2 rounded-full border border-primary px-4 py-2 text-xs font-semibold text-primary hover:bg-primary hover:text-white transition"
-                  >
-                    Editar
-                  </button>
-                  <button
-                    onClick={() => handleDelete(template.id)}
-                    className="rounded-full border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-600 hover:border-highlight hover:text-highlight transition"
-                  >
-                    Eliminar
-                  </button>
-                </div>
-              </article>
-            ))}
-            </ResponsiveGrid>
+              {filteredPlanBases.length === 0 ? (
+                <EmptyState
+                  title="No se encontraron planes base"
+                  message="Prueba con otro término o limpia los filtros aplicados."
+                />
+              ) : (
+                <ResponsiveGrid cols={{ mobile: 1, tablet: 2, desktop: 3 }} gap="md">
+                  {filteredPlanBases.map((plan) => (
+                    <article
+                      key={plan.id}
+                      className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900">{plan.nombre}</h3>
+                          <p className="text-sm text-primary mt-1">
+                            {plan.objetivo ? PLAN_OBJECTIVE_LABELS[plan.objetivo] : 'Objetivo personalizado'}
+                          </p>
+                          {plan.descripcion && (
+                            <p className="mt-2 text-xs text-gray-600 line-clamp-3">{plan.descripcion}</p>
+                          )}
+                        </div>
+                      </div>
+                      <ul className="mt-4 space-y-1 text-xs text-gray-500">
+                        <li>Duración: {formatPlanDurationLabel(plan.dias_plan || 5)}</li>
+                        <li>Calorías base estimadas: {plan.calorias_base} kcal</li>
+                        <li>
+                          Macronutrientes:{' '}
+                          {[plan.proteinas_base && `${plan.proteinas_base}g P`, plan.carbohidratos_base && `${plan.carbohidratos_base}g C`, plan.grasas_base && `${plan.grasas_base}g G`]
+                            .filter(Boolean)
+                            .join(' · ') || 'Pendiente'}
+                        </li>
+                        {plan.updated_at && (
+                          <li>
+                            Última edición:{' '}
+                            {new Date(plan.updated_at).toLocaleDateString('es-ES', {
+                              day: '2-digit',
+                              month: 'short',
+                            })}
+                          </li>
+                        )}
+                      </ul>
+                      <div className="mt-5 flex flex-wrap gap-2">
+                        <button
+                          onClick={() => handleOpenRecipesModal(plan)}
+                          className="flex-1 rounded-full border border-primary/60 px-4 py-2 text-xs font-semibold text-primary hover:bg-primary/10 transition"
+                        >
+                          Gestionar recetas
+                        </button>
+                        <button
+                          onClick={() => handleEditPlanBase(plan)}
+                          className="flex-1 rounded-full border border-primary px-4 py-2 text-xs font-semibold text-primary hover:bg-primary hover:text-white transition"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => handleDeletePlanBase(plan.id)}
+                          className="flex-1 rounded-full border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-600 hover:border-red-400 hover:text-red-500 transition"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </ResponsiveGrid>
+              )}
+            </>
           )}
         </>
       )}
 
-      {/* Tab: Opciones sugeridas */}
       {activeTab === 'suggestions' && (
         <>
           <div className="flex justify-end">
@@ -747,321 +992,646 @@ export default function NutricionistaPlanesPage() {
             </ActionButton>
           </div>
 
-          {/* Búsqueda y filtros para comidas */}
-          {suggestedMeals.length > 0 && (
-            <SearchFilters
-              searchTerm={searchTerm}
-              onSearchChange={setSearchTerm}
-              searchPlaceholder="Buscar por nombre, descripción o calorías..."
-              filters={
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Categoría</label>
-                  <select
-                    value={filterCategory}
-                    onChange={(e) => setFilterCategory(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                  >
-                    <option value="todas">Todas</option>
-                    <option value="breakfast">Desayuno</option>
-                    <option value="lunch">Almuerzo</option>
-                    <option value="dinner">Cena</option>
-                    <option value="snack">Snack</option>
-                  </select>
-                </div>
-              }
-              resultsCount={
-                (searchTerm || filterCategory !== 'todas')
-                  ? { showing: filteredMeals.length, total: suggestedMeals.length }
-                  : undefined
-              }
-            />
-          )}
-
-          {suggestedMeals.length === 0 && (
+          {suggestedMeals.length === 0 ? (
             <EmptyState
               title="No hay opciones sugeridas"
-              message="Agrega comidas sugeridas para usar en los planes nutricionales."
+              message="Agrega comidas específicas para planes nutricionales."
               action={
                 <ActionButton onClick={handleCreateMeal} icon={plusIcon}>
-                  Agregar Primera Opción
+                  Agregar primera opción
                 </ActionButton>
               }
             />
-          )}
+          ) : (
+            <>
+              <SearchFilters
+                searchTerm={searchTerm}
+                onSearchChange={setSearchTerm}
+                searchPlaceholder="Buscar por nombre, descripción o calorías..."
+                filters={
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Categoría</label>
+                    <select
+                      value={filterCategory}
+                      onChange={(e) => setFilterCategory(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                    >
+                      <option value="todas">Todas</option>
+                      <option value="lunch">Almuerzo</option>
+                      <option value="dinner">Cena</option>
+                    </select>
+                  </div>
+                }
+                resultsCount={
+                  searchTerm || filterCategory !== 'todas'
+                    ? { showing: filteredMeals.length, total: suggestedMeals.length }
+                    : undefined
+                }
+              />
 
-          {filteredMeals.length === 0 && suggestedMeals.length > 0 && (
-            <EmptyState
-              title="No se encontraron opciones"
-              message="Intenta ajustar los filtros o la búsqueda."
-            />
-          )}
-
-          {filteredMeals.length > 0 && (
-            <div className="space-y-6">
-              {['breakfast', 'lunch', 'dinner', 'snack'].map((category) => {
-                const categoryMeals = filteredMeals.filter((m) => m.category === category)
-                if (categoryMeals.length === 0) return null
-
-                return (
-                  <section key={category}>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4 capitalize">
-                      {getCategoryLabel(category as SuggestedMeal['category'])}
-                    </h3>
-                    <ResponsiveGrid cols={{ mobile: 1, tablet: 2, desktop: 3 }} gap="md">
-                    {categoryMeals.map((meal) => (
-                      <article
-                        key={meal.id}
-                        className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1">
-                            <h4 className="font-semibold text-gray-900">{meal.name}</h4>
-                            <p className="text-xs text-gray-500 mt-1">{meal.description}</p>
-                            <p className="text-sm font-medium text-primary mt-2">{meal.calories} kcal</p>
-                          </div>
-                        </div>
-                        <div className="mt-4 flex gap-2">
-                          <button
-                            onClick={() => handleEditMeal(meal)}
-                            className="flex-1 rounded-full border border-primary px-3 py-1 text-xs font-semibold text-primary hover:bg-primary hover:text-white transition"
-                          >
-                            Editar
-                          </button>
-                          <button
-                            onClick={() => handleDeleteMeal(meal.id)}
-                            className="flex-1 rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 hover:border-highlight hover:text-highlight transition"
-                          >
-                            Eliminar
-                          </button>
-                        </div>
-                      </article>
-                    ))}
-                    </ResponsiveGrid>
-                  </section>
-                )
-              })}
-            </div>
+              {filteredMeals.length === 0 ? (
+                <EmptyState title="No se encontraron comidas" message="Ajusta los filtros o la búsqueda." />
+              ) : (
+                <div className="space-y-6">
+                  {(['lunch', 'dinner'] as const).map((category) => {
+                    const categoryMeals = filteredMeals.filter((meal) => meal.category === category)
+                    if (!categoryMeals.length) return null
+                    return (
+                      <section key={category}>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4 capitalize">
+                          {getCategoryLabel(category)}
+                        </h3>
+                        <ResponsiveGrid cols={{ mobile: 1, tablet: 2, desktop: 3 }} gap="md">
+                          {categoryMeals.map((meal) => (
+                            <article
+                              key={meal.id}
+                              className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1">
+                                  <h4 className="font-semibold text-gray-900">{meal.name}</h4>
+                                  <p className="text-xs text-gray-500 mt-1">{meal.description}</p>
+                                  <p className="text-sm font-medium text-primary mt-2">{meal.calories} kcal</p>
+                                </div>
+                              </div>
+                              <div className="mt-4 flex gap-2">
+                                <button
+                                  onClick={() => handleEditMeal(meal)}
+                                  className="flex-1 rounded-full border border-primary px-3 py-1 text-xs font-semibold text-primary hover:bg-primary hover:text-white transition"
+                                >
+                                  Editar
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteMeal(meal.id)}
+                                  className="flex-1 rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 hover:border-red-400 hover:text-red-500 transition"
+                                >
+                                  Eliminar
+                                </button>
+                              </div>
+                            </article>
+                          ))}
+                        </ResponsiveGrid>
+                      </section>
+                    )
+                  })}
+                </div>
+              )}
+            </>
           )}
         </>
       )}
 
-      {/* Modal Crear/Editar Plan */}
       <Modal
-        isOpen={isCreateModalOpen || isEditModalOpen}
+        isOpen={isPlanBaseModalOpen}
         onClose={() => {
-          setIsCreateModalOpen(false)
-          setIsEditModalOpen(false)
-          setPlanMealsByDay({}) // Limpiar comidas al cerrar
+          setIsPlanBaseModalOpen(false)
+          setSelectedPlanBase(null)
         }}
-        title={isCreateModalOpen ? 'Crear nuevo plan completo' : 'Editar plan'}
-        size={isCreateModalOpen ? 'xl' : 'md'}
+        title={selectedPlanBase ? 'Editar plan base' : 'Crear plan base'}
+        size="lg"
       >
-        <form onSubmit={isCreateModalOpen ? handleSubmitCreate : handleSubmitEdit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Nombre del plan</label>
-            <input
-              type="text"
-              required
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-              placeholder="Ej: Plan Azul Energía"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
+        <form onSubmit={handleSubmitPlanBase} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Calorías objetivo (opcional)</label>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">Nombre</label>
+              <input
+                type="text"
+                value={planBaseForm.nombre}
+                onChange={(e) => setPlanBaseForm((prev) => ({ ...prev, nombre: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                required
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">Objetivo</label>
+              <select
+                value={planBaseForm.objetivo}
+                onChange={(e) => setPlanBaseForm((prev) => ({ ...prev, objetivo: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2"
+              >
+                {Object.entries(PLAN_OBJECTIVE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">Duración (lunes a viernes)</label>
+              <select
+                value={planBaseForm.dias_plan}
+                onChange={(e) =>
+                  setPlanBaseForm((prev) => ({ ...prev, dias_plan: Number(e.target.value) || 5 }))
+                }
+                className="w-full rounded-lg border border-gray-300 px-3 py-2"
+              >
+                {WEEKDAY_DURATION_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">Se excluyen automáticamente los fines de semana.</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">Calorías base</label>
               <input
                 type="number"
-                min="0"
-                value={formData.calories}
-                onChange={(e) => setFormData({ ...formData, calories: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                placeholder="Ej: 2000"
+                min={800}
+                value={planBaseForm.calorias_base}
+                readOnly
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-gray-600 cursor-not-allowed"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Este valor se recalcula automáticamente según las recetas asignadas al plan.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">Proteínas (g)</label>
+              <input
+                type="number"
+                min={0}
+                value={planBaseForm.proteinas_base}
+                readOnly
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-gray-600 cursor-not-allowed"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">Carbohidratos (g)</label>
+              <input
+                type="number"
+                min={0}
+                value={planBaseForm.carbohidratos_base}
+                readOnly
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-gray-600 cursor-not-allowed"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">Grasas (g)</label>
+              <input
+                type="number"
+                min={0}
+                value={planBaseForm.grasas_base}
+                readOnly
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-gray-600 cursor-not-allowed"
               />
             </div>
           </div>
+
+          <p className="text-xs text-gray-500">
+            Los macronutrientes se actualizan automáticamente cuando agregas, editas o eliminas recetas del plan base.
+          </p>
+
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Descripción (opcional)</label>
+            <label className="text-sm font-medium text-gray-700 mb-1 block">Descripción</label>
             <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-              placeholder="Descripción del plan..."
+              rows={4}
+              value={planBaseForm.descripcion}
+              onChange={(e) => setPlanBaseForm((prev) => ({ ...prev, descripcion: e.target.value }))}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2"
+              placeholder="Notas sobre este plan base, foco nutricional, restricciones, etc."
             />
           </div>
 
-          {/* Sección de comidas por día - Solo al crear */}
-          {isCreateModalOpen && (
-            <div className="border-t pt-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Asignar comidas a cada día (Lunes a Viernes)
-                </label>
-                <p className="text-xs text-gray-500 mb-4">
-                  Cada día debe tener al menos un <strong>almuerzo o una cena</strong>. Máximo 1 almuerzo y 1 cena por día.
-                </p>
-
-                {[1, 2, 3, 4, 5].map((dayNumber) => {
-                  const dayName = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'][dayNumber - 1]
-                  const dayMeals = planMealsByDay[dayNumber] || []
-
-                  // Separar comidas por tipo
-                  const lunchMeals = dayMeals
-                    .map((mealId) => suggestedMeals.find((m) => m.id === mealId))
-                    .filter((meal) => meal && meal.category === 'lunch')
-
-                  const dinnerMeals = dayMeals
-                    .map((mealId) => suggestedMeals.find((m) => m.id === mealId))
-                    .filter((meal) => meal && meal.category === 'dinner')
-
-                  // Filtrar comidas disponibles por tipo
-                  const availableLunches = suggestedMeals.filter((m) => m.category === 'lunch')
-                  const availableDinners = suggestedMeals.filter((m) => m.category === 'dinner')
-
-                  return (
-                    <div key={dayNumber} className="mb-4 p-3 border rounded-lg bg-gray-50">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-sm font-semibold text-gray-900">{dayName}</h4>
-                        <span className="text-xs text-gray-500">{dayMeals.length}/2 comidas</span>
-                      </div>
-
-                      {/* Sección de Almuerzos */}
-                      <div className="mb-3">
-                        <label className="block text-xs font-medium text-gray-700 mb-2">
-                          Almuerzos ({lunchMeals.length}/1)
-                        </label>
-
-                        {/* Almuerzos seleccionados */}
-                        {lunchMeals.length > 0 && (
-                          <div className="space-y-1 mb-2">
-                            {lunchMeals.map((meal, index) => {
-                              if (!meal) return null
-                              const mealIndex = dayMeals.findIndex((id) => id === meal.id)
-                              return (
-                                <div key={meal.id} className="flex items-center justify-between p-2 bg-white rounded border text-xs">
-                                  <span className="text-gray-700">{meal.name} ({meal.calories} kcal)</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveMealFromDay(dayNumber, mealIndex)}
-                                    className="text-red-600 hover:text-red-700 font-medium"
-                                  >
-                                    Eliminar
-                                  </button>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )}
-
-                        {/* Selector de almuerzos */}
-                        <select
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              handleAddMealToDay(dayNumber, e.target.value)
-                              e.target.value = ''
-                            }
-                          }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm bg-white"
-                          defaultValue=""
-                          disabled={lunchMeals.length >= 1}
-                        >
-                          <option value="">
-                            {lunchMeals.length >= 1
-                              ? 'Ya hay un almuerzo asignado (máximo 1)'
-                              : `Agregar almuerzo a ${dayName}...`}
-                          </option>
-                          {availableLunches.map((meal) => (
-                            <option key={meal.id} value={meal.id}>
-                              {meal.name} ({meal.calories} kcal)
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Sección de Cenas */}
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-2">
-                          Cenas ({dinnerMeals.length}/1)
-                        </label>
-
-                        {/* Cenas seleccionadas */}
-                        {dinnerMeals.length > 0 && (
-                          <div className="space-y-1 mb-2">
-                            {dinnerMeals.map((meal, index) => {
-                              if (!meal) return null
-                              const mealIndex = dayMeals.findIndex((id) => id === meal.id)
-                              return (
-                                <div key={meal.id} className="flex items-center justify-between p-2 bg-white rounded border text-xs">
-                                  <span className="text-gray-700">{meal.name} ({meal.calories} kcal)</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveMealFromDay(dayNumber, mealIndex)}
-                                    className="text-red-600 hover:text-red-700 font-medium"
-                                  >
-                                    Eliminar
-                                  </button>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )}
-
-                        {/* Selector de cenas */}
-                        <select
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              handleAddMealToDay(dayNumber, e.target.value)
-                              e.target.value = ''
-                            }
-                          }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
-                          defaultValue=""
-                          disabled={dinnerMeals.length >= 1}
-                        >
-                          <option value="">
-                            {dinnerMeals.length >= 1
-                              ? 'Ya hay una cena asignada (máximo 1)'
-                              : `Agregar cena a ${dayName}...`}
-                          </option>
-                          {availableDinners.map((meal) => (
-                            <option key={meal.id} value={meal.id}>
-                              {meal.name} ({meal.calories} kcal)
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-3 pt-2">
             <button
               type="button"
               onClick={() => {
-                setIsCreateModalOpen(false)
-                setIsEditModalOpen(false)
-                setPlanMealsByDay({}) // Limpiar comidas al cancelar
+                setIsPlanBaseModalOpen(false)
+                setSelectedPlanBase(null)
               }}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+              className="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-50 transition"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition"
+              disabled={planBaseSaving}
+              className="flex-1 bg-primary text-white rounded-lg px-4 py-2 hover:bg-primary/90 transition disabled:opacity-50"
             >
-              {isCreateModalOpen ? 'Crear plan' : 'Guardar cambios'}
+              {planBaseSaving ? 'Guardando...' : 'Guardar plan base'}
             </button>
           </div>
         </form>
       </Modal>
 
-      {/* Modal Crear/Editar Opción Sugerida */}
+  <Modal
+    isOpen={isRecipesModalOpen}
+    onClose={() => {
+      setIsRecipesModalOpen(false)
+      setSelectedPlanBaseForRecipes(null)
+      setPlanBaseRecipeSummary(null)
+      resetRecipeForm()
+    }}
+    title={
+      selectedPlanBaseForRecipes
+        ? `Recetas de ${selectedPlanBaseForRecipes.nombre}`
+        : 'Recetas del plan base'
+    }
+    size="xl"
+  >
+    {!selectedPlanBaseForRecipes ? (
+      <p className="text-sm text-gray-500">Selecciona un plan base para ver sus recetas.</p>
+    ) : (
+      <div className="space-y-6">
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={handleOpenLibraryModal}
+            className="rounded-full border border-primary px-4 py-2 text-xs font-semibold text-primary hover:bg-primary hover:text-white transition"
+          >
+            Agregar desde biblioteca
+          </button>
+        </div>
+        {recipesLoading ? (
+          <LoadingState message="Cargando recetas..." />
+        ) : planBaseRecipes.length === 0 ? (
+          <EmptyState
+            title="Aún no hay recetas asociadas"
+            message="Agrega al menos una receta de almuerzo o cena para este plan base."
+            action={
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={resetRecipeForm}
+                  className="flex-1 rounded-full border border-primary px-4 py-2 text-xs font-semibold text-primary hover:bg-primary hover:text-white transition"
+                >
+                  Crear la primera receta
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenLibraryModal}
+                  className="flex-1 rounded-full border border-primary/60 px-4 py-2 text-xs font-semibold text-primary hover:bg-primary/10 transition"
+                >
+                  Elegir de la biblioteca
+                </button>
+              </div>
+            }
+          />
+        ) : (
+          <div className="space-y-5">
+            <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-700">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <p className="font-semibold text-gray-900">Promedio diario estimado</p>
+                {isSyncingPlanTotals && <span className="text-xs text-primary">Sincronizando totales…</span>}
+              </div>
+              {planBaseRecipeSummary ? (
+                <>
+                  <p className="mt-2 text-sm text-gray-800">
+                    {Math.round(planBaseRecipeSummary.daily.calories || 0)} kcal ·{' '}
+                    {planBaseRecipeSummary.daily.protein.toFixed(1)} g P ·{' '}
+                    {planBaseRecipeSummary.daily.carbs.toFixed(1)} g C ·{' '}
+                    {planBaseRecipeSummary.daily.fat.toFixed(1)} g G
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {planBaseRecipeSummary.lunch.count} recetas de almuerzo · {planBaseRecipeSummary.dinner.count} recetas de cena
+                  </p>
+                </>
+              ) : (
+                <p className="mt-2 text-xs text-gray-500">
+                  Agrega al menos una receta de almuerzo y una de cena para calcular automáticamente las calorías y macros del plan.
+                </p>
+              )}
+            </div>
+            {(['lunch', 'dinner'] as const).map((type) => {
+              const recipesByType = planBaseRecipes.filter((receta) => receta.meal_type === type)
+              if (!recipesByType.length) return null
+              return (
+                <section key={type} className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-1 h-5 rounded ${type === 'lunch' ? 'bg-orange-500' : 'bg-indigo-500'}`} />
+                    <h4 className="text-sm font-semibold text-gray-900">
+                      {getCategoryLabel(type)}
+                    </h4>
+                  </div>
+                  <div className="space-y-3">
+                    {recipesByType.map((receta) => (
+                      <div
+                        key={receta.id}
+                        className="rounded-xl border border-gray-200 p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">{receta.nombre}</p>
+                          {receta.descripcion && (
+                            <p className="text-xs text-gray-500 mt-1">{receta.descripcion}</p>
+                          )}
+                          <p className="text-xs text-gray-500 mt-2">
+                            {receta.calorias_totales ?? '—'} kcal ·{' '}
+                            {receta.proteinas_totales ?? '—'}g P ·{' '}
+                            {receta.carbohidratos_totales ?? '—'}g C ·{' '}
+                            {receta.grasas_totales ?? '—'}g G ·{' '}
+                            {receta.porciones ?? 1} porciones
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleEditRecipe(receta)}
+                            className="rounded-full border border-primary px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary hover:text-white transition"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteRecipe(receta.id)}
+                            className="rounded-full border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:border-red-400 hover:text-red-500 transition"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )
+            })}
+          </div>
+        )}
+
+        <div className="border-t border-gray-200 pt-4">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-semibold text-gray-900">
+              {selectedRecipe ? 'Editar receta' : 'Nueva receta'}
+            </h4>
+            {selectedRecipe && (
+              <button
+                type="button"
+                onClick={resetRecipeForm}
+                className="text-xs text-primary hover:underline"
+              >
+                + Crear nueva
+              </button>
+            )}
+          </div>
+          <form onSubmit={handleSubmitRecipe} className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">Nombre</label>
+                <input
+                  type="text"
+                  value={recipeForm.nombre}
+                  onChange={(e) => setRecipeForm((prev) => ({ ...prev, nombre: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">Tipo de comida</label>
+                <select
+                  value={recipeForm.meal_type}
+                  onChange={(e) =>
+                    setRecipeForm((prev) => ({ ...prev, meal_type: e.target.value as 'lunch' | 'dinner' }))
+                  }
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                >
+                  <option value="lunch">Almuerzo</option>
+                  <option value="dinner">Cena</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">Descripción</label>
+              <textarea
+                rows={3}
+                value={recipeForm.descripcion}
+                onChange={(e) => setRecipeForm((prev) => ({ ...prev, descripcion: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                placeholder="Notas o instrucciones internas para cocina"
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              {[
+                { field: 'calorias_totales', label: 'Calorías (kcal)' },
+                { field: 'proteinas_totales', label: 'Proteínas (g)' },
+                { field: 'carbohidratos_totales', label: 'Carbohidratos (g)' },
+                { field: 'grasas_totales', label: 'Grasas (g)' },
+              ].map(({ field, label }) => (
+                <div key={field}>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">{label}</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={(recipeForm as any)[field]}
+                    onChange={(e) =>
+                      setRecipeForm((prev) => ({
+                        ...prev,
+                        [field]: e.target.value,
+                      }))
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">Porciones</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={recipeForm.porciones}
+                  onChange={(e) => setRecipeForm((prev) => ({ ...prev, porciones: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsRecipesModalOpen(false)
+                  setSelectedPlanBaseForRecipes(null)
+                  resetRecipeForm()
+                }}
+                className="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-50 transition"
+              >
+                Cerrar
+              </button>
+              <button
+                type="submit"
+                className="flex-1 bg-primary text-white rounded-lg px-4 py-2 hover:bg-primary/90 transition"
+              >
+                {selectedRecipe ? 'Actualizar receta' : 'Guardar receta'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    )}
+  </Modal>
+
+  <Modal
+    isOpen={isLibraryModalOpen}
+    onClose={() => {
+      setIsLibraryModalOpen(false)
+      setAssigningLibraryRecipe(null)
+      setLibrarySearch('')
+    }}
+    title="Agregar receta desde la biblioteca"
+    size="lg"
+  >
+    {libraryLoading ? (
+      <LoadingState message="Cargando biblioteca..." />
+    ) : (
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="md:col-span-2">
+            <label className="text-xs font-medium text-gray-600 mb-1 block">Buscar</label>
+            <input
+              type="text"
+              value={librarySearch}
+              onChange={(e) => setLibrarySearch(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2"
+              placeholder="Nombre o descripción"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600 mb-1 block">Tipo</label>
+            <select
+              value={libraryMealFilter}
+              onChange={(e) => setLibraryMealFilter(e.target.value as 'all' | 'lunch' | 'dinner')}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2"
+            >
+              <option value="all">Todos</option>
+              <option value="lunch">Almuerzo</option>
+              <option value="dinner">Cena</option>
+            </select>
+          </div>
+        </div>
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={loadLibraryRecipes}
+            className="rounded-full border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition"
+          >
+            Actualizar lista
+          </button>
+        </div>
+        {libraryRecipes.length === 0 ? (
+          <EmptyState
+            title="La biblioteca está vacía"
+            message="Crea comidas base desde la sección Administración → Comidas para planes."
+          />
+        ) : filteredLibraryRecipes.length === 0 ? (
+          <EmptyState title="Sin coincidencias" message="Prueba con otro término o tipo de comida." />
+        ) : (
+          <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+            {filteredLibraryRecipes.map((recipe) => (
+              <div
+                key={recipe.id}
+                className="rounded-xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition"
+              >
+                <div className="flex justify-between gap-4">
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-900">{recipe.nombre}</h4>
+                    <p className="text-xs text-gray-500">{mealTypeLabels[recipe.meal_type]}</p>
+                  </div>
+                  <div className="text-right text-xs text-gray-500 space-y-0.5">
+                    {recipe.calorias_totales != null && <p>🔥 {recipe.calorias_totales} kcal</p>}
+                    {recipe.proteinas_totales != null && <p>💪 {recipe.proteinas_totales} g P</p>}
+                  </div>
+                </div>
+                {recipe.descripcion && (
+                  <p className="text-xs text-gray-600 mt-2 line-clamp-2">{recipe.descripcion}</p>
+                )}
+                <p className="text-xs text-gray-500 mt-2">
+                  Ingredientes registrados: {recipe.recetas_ingredientes?.length || 0}
+                </p>
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => handleAssignLibraryRecipe(recipe.id)}
+                    disabled={assigningLibraryRecipe === recipe.id}
+                    className="rounded-full border border-primary px-4 py-1.5 text-xs font-semibold text-primary hover:bg-primary hover:text-white transition disabled:opacity-50"
+                  >
+                    {assigningLibraryRecipe === recipe.id ? 'Añadiendo...' : 'Añadir al plan'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    )}
+  </Modal>
+
+      <Modal
+        isOpen={isGenerateModalOpen}
+        onClose={() => setIsGenerateModalOpen(false)}
+        title="Generar plan semanal automático"
+        size="md"
+      >
+        {availableClients.length === 0 || planBases.length === 0 ? (
+          <div className="space-y-4 text-sm text-gray-600">
+            <p>Necesitas al menos un cliente y un plan base activo para generar un plan.</p>
+            <ul className="list-disc pl-5 text-xs text-gray-500 space-y-1">
+              <li>Asigna clientes desde la sección “Clientes”.</li>
+              <li>Crea planes base desde la pestaña actual.</li>
+            </ul>
+          </div>
+        ) : (
+          <form onSubmit={handleGeneratePlan} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
+              <select
+                value={generateForm.clientId}
+                onChange={(e) => setGenerateForm((prev) => ({ ...prev, clientId: e.target.value }))}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2"
+              >
+                {availableClients.map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Plan base</label>
+              <select
+                value={generateForm.planBaseId}
+                onChange={(e) => setGenerateForm((prev) => ({ ...prev, planBaseId: e.target.value }))}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2"
+              >
+                {planBases.map((plan) => (
+                  <option key={plan.id} value={plan.id}>
+                  {plan.nombre} · {plan.calorias_base} kcal · {formatPlanDurationLabel(plan.dias_plan || 5)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Semana (fecha inicio)</label>
+              <input
+                type="date"
+                value={generateForm.weekStartDate}
+                onChange={(e) => setGenerateForm((prev) => ({ ...prev, weekStartDate: e.target.value }))}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2"
+              />
+              <p className="mt-1 text-xs text-gray-500">Se generará un bloque de 5 días (lunes a viernes).</p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsGenerateModalOpen(false)}
+                className="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-50 transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isGeneratingPlan}
+                className="flex-1 bg-primary text-white rounded-lg px-4 py-2 hover:bg-primary/90 transition disabled:opacity-50"
+              >
+                {isGeneratingPlan ? 'Generando...' : 'Generar plan'}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
       <Modal
         isOpen={isMealModalOpen}
         onClose={() => {
@@ -1069,75 +1639,69 @@ export default function NutricionistaPlanesPage() {
           setSelectedMeal(null)
         }}
         title={selectedMeal ? 'Editar opción sugerida' : 'Agregar opción sugerida'}
+        size="md"
       >
         <form onSubmit={handleSubmitMeal} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Nombre del plato</label>
+            <label className="text-sm font-medium text-gray-700 mb-1 block">Nombre</label>
             <input
               type="text"
-              required
               value={mealFormData.name}
-              onChange={(e) => setMealFormData({ ...mealFormData, name: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-              placeholder="Ej: Avena con frutas"
+              onChange={(e) => setMealFormData((prev) => ({ ...prev, name: e.target.value }))}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2"
+              required
             />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Calorías</label>
-              <input
-                type="number"
-                min="0"
-                required
-                value={mealFormData.calories}
-                onChange={(e) => setMealFormData({ ...mealFormData, calories: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                placeholder="Ej: 350"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Categoría</label>
-              <select
-                value={mealFormData.category}
-                onChange={(e) =>
-                  setMealFormData({ ...mealFormData, category: e.target.value as SuggestedMeal['category'] })
-                }
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="breakfast">Desayuno</option>
-                <option value="lunch">Almuerzo</option>
-                <option value="dinner">Cena</option>
-                <option value="snack">Snack</option>
-              </select>
-            </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Descripción</label>
-            <textarea
+            <label className="text-sm font-medium text-gray-700 mb-1 block">Calorías</label>
+            <input
+              type="number"
+              min={0}
+              value={mealFormData.calories}
+              onChange={(e) => setMealFormData((prev) => ({ ...prev, calories: e.target.value }))}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2"
               required
-              value={mealFormData.description}
-              onChange={(e) => setMealFormData({ ...mealFormData, description: e.target.value })}
-              rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-              placeholder="Descripción del plato..."
             />
           </div>
-          <div className="flex gap-3 pt-4">
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1 block">Descripción</label>
+            <textarea
+              rows={3}
+              value={mealFormData.description}
+              onChange={(e) => setMealFormData((prev) => ({ ...prev, description: e.target.value }))}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2"
+              required
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1 block">Categoría</label>
+            <select
+              value={mealFormData.category}
+              onChange={(e) =>
+                setMealFormData((prev) => ({ ...prev, category: e.target.value as SuggestedMeal['category'] }))
+              }
+              className="w-full rounded-lg border border-gray-300 px-3 py-2"
+            >
+              <option value="lunch">Almuerzo</option>
+              <option value="dinner">Cena</option>
+            </select>
+          </div>
+          <div className="flex gap-3 pt-2">
             <button
               type="button"
               onClick={() => {
                 setIsMealModalOpen(false)
                 setSelectedMeal(null)
               }}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+              className="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-50 transition"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition"
+              className="flex-1 bg-primary text-white rounded-lg px-4 py-2 hover:bg-primary/90 transition"
             >
-              {selectedMeal ? 'Guardar cambios' : 'Crear opción'}
+              Guardar opción
             </button>
           </div>
         </form>
@@ -1145,3 +1709,4 @@ export default function NutricionistaPlanesPage() {
     </div>
   )
 }
+

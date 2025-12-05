@@ -224,9 +224,16 @@ self.addEventListener('push', (event) => {
     }
   }
 
+  // Asegurar que el título siempre incluya "Zona Azul" de forma prominente
+  // Esto minimiza la visibilidad del nombre del navegador
+  let finalTitle = notificationData.title
+  if (!finalTitle.includes('Zona Azul') && !finalTitle.startsWith('Zona Azul')) {
+    finalTitle = `Zona Azul: ${finalTitle}`
+  }
+
   // Mostrar notificación inmediatamente (no esperar nada)
   // Esto permite que las notificaciones aparezcan incluso si la app está cerrada
-  const promiseChain = self.registration.showNotification(notificationData.title, {
+  const promiseChain = self.registration.showNotification(finalTitle, {
     body: notificationData.body,
     icon: notificationData.icon || '/icon-192x192.png',
     badge: notificationData.badge || '/icon-192x192.png',

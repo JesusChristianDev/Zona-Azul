@@ -137,13 +137,7 @@ export default function NutricionistaModificacionesPage() {
   }
 
   const getMealTypeText = (type: string) => {
-    const types = {
-      breakfast: 'Desayuno',
-      lunch: 'Almuerzo',
-      dinner: 'Cena',
-      snack: 'Snack',
-    }
-    return types[type as keyof typeof types] || type
+    return type === 'lunch' ? 'Almuerzo' : type === 'dinner' ? 'Cena' : type
   }
 
   if (loading) {

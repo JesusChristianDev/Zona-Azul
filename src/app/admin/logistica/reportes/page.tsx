@@ -2,16 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
-
-interface Report {
-  id: string
-  report_type: string
-  period_start: string
-  period_end: string
-  report_data: any
-  is_shared_with_repartidores: boolean
-  created_at: string
-}
+import ActionButton from '@/components/ui/ActionButton'
+import type { Report } from '@/lib/types'
 
 export default function ReportesLogisticaPage() {
   const { userId } = useAuth()
@@ -154,15 +146,16 @@ export default function ReportesLogisticaPage() {
                     >
                       {report.is_shared_with_repartidores ? 'Compartido' : 'No compartido'}
                     </span>
-                    <button
+                    <ActionButton
                       onClick={() => {
                         setSelectedReport(report)
                         setIsShareModalOpen(true)
                       }}
-                      className="px-3 py-1 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 transition"
+                      variant={report.is_shared_with_repartidores ? 'soft-danger' : 'primary'}
+                      size="sm"
                     >
                       {report.is_shared_with_repartidores ? 'Ocultar' : 'Compartir'}
-                    </button>
+                    </ActionButton>
                   </div>
                 </div>
               </div>
@@ -186,25 +179,23 @@ export default function ReportesLogisticaPage() {
                 : '¿Deseas compartir este reporte con todos los repartidores?'}
             </p>
             <div className="flex gap-3">
-              <button
+              <ActionButton
                 onClick={() => {
                   setIsShareModalOpen(false)
                   setSelectedReport(null)
                 }}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+                variant="muted-outline"
+                fullWidth
               >
                 Cancelar
-              </button>
-              <button
+              </ActionButton>
+              <ActionButton
                 onClick={() => handleShareWithRepartidores(selectedReport, !selectedReport.is_shared_with_repartidores)}
-                className={`flex-1 px-4 py-2 rounded-lg text-white font-medium transition ${
-                  selectedReport.is_shared_with_repartidores
-                    ? 'bg-red-500 hover:bg-red-600'
-                    : 'bg-primary hover:bg-primary/90'
-                }`}
+                variant={selectedReport.is_shared_with_repartidores ? 'danger' : 'primary'}
+                fullWidth
               >
                 {selectedReport.is_shared_with_repartidores ? 'Ocultar' : 'Compartir'}
-              </button>
+              </ActionButton>
             </div>
           </div>
         </div>

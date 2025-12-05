@@ -101,13 +101,15 @@ export default function SuscriptorLayout({ children }: { children: ReactNode }) 
         subtitle="Mantén el foco en tus objetivos con planes, pedidos y seguimiento integral de hábitos saludables."
         links={links}
       >
-        {/* Si es ajustes, mostrar el dashboard por defecto para que sea visible detrás del overlay */}
-        {/* Si no es ajustes, renderizar children normalmente */}
-        {isAjustes ? <DashboardSuscriptor /> : children}
+        {/* SIEMPRE renderizar el dashboard cuando estamos en la ruta principal o en ajustes */}
+        {/* Esto evita que se desmonte y recargue cuando entras a ajustes */}
+        {(pathname === '/suscriptor' || isAjustes) ? <DashboardSuscriptor /> : children}
       </RoleLayoutShell>
       {/* Renderizar el componente de ajustes fuera del RoleLayoutShell para que flote como overlay */}
+      {/* Solo renderizar si estamos en la ruta de ajustes */}
       {isAjustes && children}
     </ProtectedRoute>
   )
 }
+
 

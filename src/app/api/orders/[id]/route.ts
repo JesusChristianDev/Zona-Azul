@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getOrderById, updateOrder } from '@/lib/db'
+import type { MealSettingResponse } from '../utils'
+import {
+  getOrderById,
+  updateOrder,
+  upsertOrderMealSettings,
+  getOrderMealSettingsByOrderId,
+} from '@/lib/db'
 import { cookies } from 'next/headers'
+import { groupMealSettingsByOrder, normalizeMealSettingsPayload } from '../utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,7 +44,14 @@ export async function GET(
       )
     }
 
-    return NextResponse.json({ order })
+    const mealSettings = await getOrderMealSettingsByOrderId(order.id)
+    const groupedSettings = groupMealSettingsByOrder(mealSettings)
+    return NextResponse.json({
+      order: {
+        ...order,
+        meal_settings: groupedSettings[order.id] || [],
+      },
+    })
   } catch (error) {
     console.error('Error fetching order:', error)
     return NextResponse.json(
@@ -65,7 +79,7 @@ export async function PATCH(
     }
 
     const body = await request.json()
-    const updateData: any = {}
+    const updateData: Record<string, any> = {}
 
     // Verificar que el pedido pertenece al usuario (excepto admin)
     const existingOrder = await getOrderById(params.id)
@@ -105,15 +119,49 @@ export async function PATCH(
       if (body.pickup_location !== undefined) updateData.pickup_location = body.pickup_location
     }
 
-    const order = await updateOrder(params.id, updateData)
-    if (!order) {
-      return NextResponse.json(
-        { error: 'Error al actualizar pedido' },
-        { status: 500 }
-      )
+    let order = existingOrder
+    if (Object.keys(updateData).length > 0) {
+      const updatedOrder = await updateOrder(params.id, updateData)
+      if (!updatedOrder) {
+        return NextResponse.json(
+          { error: 'Error al actualizar pedido' },
+          { status: 500 }
+        )
+      }
+      order = updatedOrder
     }
 
-    return NextResponse.json({ order })
+    const mealsPayload = Array.isArray(body.meal_settings)
+      ? body.meal_settings
+      : Array.isArray(body.meals)
+        ? body.meals
+        : []
+
+    let mealSettingsResponse: MealSettingResponse[] = []
+    if (mealsPayload.length > 0) {
+      try {
+        const normalizedMeals = normalizeMealSettingsPayload(mealsPayload)
+        const savedSettings = await upsertOrderMealSettings(order.id, normalizedMeals)
+        const groupedSettings = groupMealSettingsByOrder(savedSettings)
+        mealSettingsResponse = groupedSettings[order.id] || []
+      } catch (mealError: any) {
+        return NextResponse.json(
+          { error: mealError?.message || 'Error al guardar la configuración de entrega' },
+          { status: 400 }
+        )
+      }
+    } else {
+      const existingSettings = await getOrderMealSettingsByOrderId(order.id)
+      const groupedSettings = groupMealSettingsByOrder(existingSettings)
+      mealSettingsResponse = groupedSettings[order.id] || []
+    }
+
+    return NextResponse.json({
+      order: {
+        ...order,
+        meal_settings: mealSettingsResponse,
+      },
+    })
   } catch (error) {
     console.error('Error updating order:', error)
     return NextResponse.json(
@@ -122,4 +170,3 @@ export async function PATCH(
     )
   }
 }
-

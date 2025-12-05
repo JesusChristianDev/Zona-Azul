@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
 import SearchFilters from '@/components/ui/SearchFilters'
@@ -9,98 +9,152 @@ import ToastMessage from '@/components/ui/ToastMessage'
 import LoadingState from '@/components/ui/LoadingState'
 import EmptyState from '@/components/ui/EmptyState'
 import ResponsiveGrid from '@/components/ui/ResponsiveGrid'
-import { useMeals } from '@/hooks/useApi'
 import * as api from '@/lib/api'
 
-interface MealItem {
+type MealType = 'lunch' | 'dinner'
+
+interface IngredientOption {
   id: string
-  name: string
-  category: string
-  calories: number
-  description?: string
-  available: boolean
+  nombre: string
+  unidad_base: string
+  calorias_por_unidad?: number | null
+  proteinas_por_unidad?: number | null
+  carbohidratos_por_unidad?: number | null
+  grasas_por_unidad?: number | null
 }
 
-// Mapear tipo de meal a categoría para mostrar
-const typeToCategory: Record<string, string> = {
-  breakfast: 'Desayuno',
-  lunch: 'Plato principal',
+interface RecipeIngredientRow {
+  ingrediente_id: string
+  cantidad_base: string
+  unidad: string
+  porcentaje_merma: string
+}
+
+interface RecipeIngredientDisplay {
+  id: string
+  ingrediente_id: string
+  ingrediente_nombre: string
+  cantidad_base: number
+  unidad: string
+  porcentaje_merma?: number | null
+}
+
+interface LibraryRecipe {
+  id: string
+  nombre: string
+  meal_type: MealType
+  descripcion?: string | null
+  calorias_totales?: number | null
+  proteinas_totales?: number | null
+  carbohidratos_totales?: number | null
+  grasas_totales?: number | null
+  porciones?: number | null
+  tiempo_preparacion_min?: number | null
+  ingredientes: RecipeIngredientDisplay[]
+}
+
+const mealTypeLabels: Record<MealType, string> = {
+  lunch: 'Almuerzo',
   dinner: 'Cena',
-  snack: 'Bebida funcional',
 }
 
-// Mapear meal de API a MealItem para mostrar
-function mealToMealItem(meal: any): MealItem {
+const mealTypeFilterOptions: Array<{ value: 'all' | MealType; label: string }> = [
+  { value: 'all', label: 'Todas' },
+  { value: 'lunch', label: 'Almuerzo' },
+  { value: 'dinner', label: 'Cena' },
+]
+
+const emptyIngredientRow: RecipeIngredientRow = {
+  ingrediente_id: '',
+  cantidad_base: '',
+  unidad: '',
+  porcentaje_merma: '',
+}
+
+const macroFields = [
+  { field: 'calorias_totales', label: 'Calorías (kcal)', decimals: 0 },
+  { field: 'proteinas_totales', label: 'Proteínas (g)', decimals: 2 },
+  { field: 'carbohidratos_totales', label: 'Carbohidratos (g)', decimals: 2 },
+  { field: 'grasas_totales', label: 'Grasas (g)', decimals: 2 },
+] as const
+
+function formatMacroValue(value: number | null | undefined, decimals = 2): string {
+  if (value === null || value === undefined) return ''
+  const rounded = Number(value.toFixed(decimals))
+  return Number.isFinite(rounded) ? rounded.toString() : ''
+}
+
+function mapLibraryRecipe(apiRecipe: any): LibraryRecipe {
+  const ingredientes = (apiRecipe.recetas_ingredientes || []).map((item: any) => ({
+    id: item.id,
+    ingrediente_id: item.ingrediente_id,
+    ingrediente_nombre: item.ingredientes?.nombre || 'Ingrediente',
+    cantidad_base: Number(item.cantidad_base ?? 0),
+    unidad: item.unidad,
+    porcentaje_merma: item.porcentaje_merma ?? null,
+  }))
+
   return {
-    id: meal.id,
-    name: meal.name,
-    category: typeToCategory[meal.type] || meal.type,
-    calories: meal.calories,
-    description: meal.description || '',
-    available: meal.available,
+    id: apiRecipe.id,
+    nombre: apiRecipe.nombre,
+    meal_type: apiRecipe.meal_type,
+    descripcion: apiRecipe.descripcion,
+    calorias_totales: apiRecipe.calorias_totales,
+    proteinas_totales: apiRecipe.proteinas_totales,
+    carbohidratos_totales: apiRecipe.carbohidratos_totales,
+    grasas_totales: apiRecipe.grasas_totales,
+    porciones: apiRecipe.porciones,
+    tiempo_preparacion_min: apiRecipe.tiempo_preparacion_min,
+    ingredientes,
   }
 }
 
 export default function AdminComidasPlanesPage() {
-  const { meals, loading, error: apiError, refetch } = useMeals()
-  const [items, setItems] = useState<MealItem[]>([])
-  const [filteredItems, setFilteredItems] = useState<MealItem[]>([])
+  const [recipes, setRecipes] = useState<LibraryRecipe[]>([])
+  const [filteredRecipes, setFilteredRecipes] = useState<LibraryRecipe[]>([])
+  const [ingredientsCatalog, setIngredientsCatalog] = useState<IngredientOption[]>([])
   const [searchTerm, setSearchTerm] = useState('')
-  const [filterCategory, setFilterCategory] = useState<string>('todas')
-  const [filterAvailability, setFilterAvailability] = useState<string>('todas')
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [selectedItem, setSelectedItem] = useState<MealItem | null>(null)
-  const [formData, setFormData] = useState({
-    name: '',
-    category: 'Plato principal',
-    availability: 'Disponible',
-    calories: 0,
-    description: '',
+  const [mealFilter, setMealFilter] = useState<'all' | MealType>('all')
+  const [loadingRecipes, setLoadingRecipes] = useState(true)
+  const [loadingIngredients, setLoadingIngredients] = useState(true)
+  const [isRecipeModalOpen, setIsRecipeModalOpen] = useState(false)
+  const [selectedRecipe, setSelectedRecipe] = useState<LibraryRecipe | null>(null)
+  const [recipeForm, setRecipeForm] = useState({
+    nombre: '',
+    meal_type: 'lunch' as MealType,
+    descripcion: '',
+    calorias_totales: '',
+    proteinas_totales: '',
+    carbohidratos_totales: '',
+    grasas_totales: '',
+    porciones: '1',
+    tiempo_preparacion_min: '',
   })
+  const [recipeIngredientsForm, setRecipeIngredientsForm] = useState<RecipeIngredientRow[]>([emptyIngredientRow])
+  const [autoMacrosEnabled, setAutoMacrosEnabled] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
-  // Convertir meals a items cuando se cargan o cambian
-  // IMPORTANTE: Esta página solo muestra comidas para PLANES NUTRICIONALES (is_menu_item=false)
   useEffect(() => {
-    if (meals && meals.length > 0) {
-      // Filtrar solo comidas para planes nutricionales (NO del menú del local)
-      const planMeals = meals.filter((meal: any) => meal.is_menu_item === false)
-      setItems(planMeals.map(mealToMealItem))
-    } else if (!loading) {
-      setItems([])
-    }
-  }, [meals, loading])
+    loadIngredients()
+    loadRecipes()
+  }, [])
 
-  // Filtrar y buscar items
   useEffect(() => {
-    let filtered = [...items]
-
-    // Filtrar por categoría
-    if (filterCategory !== 'todas') {
-      filtered = filtered.filter(item => item.category === filterCategory)
+    let filtered = [...recipes]
+    if (mealFilter !== 'all') {
+      filtered = filtered.filter((recipe) => recipe.meal_type === mealFilter)
     }
-
-    // Filtrar por disponibilidad
-    if (filterAvailability !== 'todas') {
-      filtered = filtered.filter(item => 
-        filterAvailability === 'Disponible' ? item.available : !item.available
-      )
-    }
-
-    // Buscar por nombre o descripción
     if (searchTerm) {
       const term = searchTerm.toLowerCase()
-      filtered = filtered.filter(item =>
-        item.name.toLowerCase().includes(term) ||
-        (item.description && item.description.toLowerCase().includes(term)) ||
-        item.calories.toString().includes(term)
+      filtered = filtered.filter(
+        (recipe) =>
+          recipe.nombre.toLowerCase().includes(term) ||
+          (recipe.descripcion && recipe.descripcion.toLowerCase().includes(term))
       )
     }
-
-    setFilteredItems(filtered)
-  }, [items, filterCategory, filterAvailability, searchTerm])
+    setFilteredRecipes(filtered)
+  }, [recipes, mealFilter, searchTerm])
 
   const showToast = (message: string, isError = false) => {
     if (isError) {
@@ -112,477 +166,578 @@ export default function AdminComidasPlanesPage() {
     }
   }
 
-  const handleCreate = () => {
-    setFormData({
-      name: '',
-      category: 'Plato principal',
-      availability: 'Disponible',
-      calories: 0,
-      description: '',
+  const loadIngredients = async () => {
+    try {
+      setLoadingIngredients(true)
+      const catalog = await api.getIngredientesCatalog()
+      setIngredientsCatalog(
+        catalog.map((item: any) => ({
+          id: item.id,
+          nombre: item.nombre,
+          unidad_base: item.unidad_base,
+          calorias_por_unidad: item.calorias_por_unidad,
+          proteinas_por_unidad: item.proteinas_por_unidad,
+          carbohidratos_por_unidad: item.carbohidratos_por_unidad,
+          grasas_por_unidad: item.grasas_por_unidad,
+        }))
+      )
+    } catch (err: any) {
+      console.error('Error loading ingredientes:', err)
+      showToast(err.message || 'No se pudieron cargar los ingredientes', true)
+    } finally {
+      setLoadingIngredients(false)
+    }
+  }
+
+  const loadRecipes = async () => {
+    try {
+      setLoadingRecipes(true)
+      const list = await api.getRecipeLibrary()
+      setRecipes(list.map(mapLibraryRecipe))
+    } catch (err: any) {
+      console.error('Error loading recipe library:', err)
+      showToast(err.message || 'No se pudieron cargar las recetas', true)
+    } finally {
+      setLoadingRecipes(false)
+    }
+  }
+
+  const resetRecipeForm = () => {
+    setSelectedRecipe(null)
+    setRecipeForm({
+      nombre: '',
+      meal_type: 'lunch',
+      descripcion: '',
+      calorias_totales: '',
+      proteinas_totales: '',
+      carbohidratos_totales: '',
+      grasas_totales: '',
+      porciones: '1',
+      tiempo_preparacion_min: '',
     })
-    setError(null)
-    setIsCreateModalOpen(true)
+    setRecipeIngredientsForm([emptyIngredientRow])
+    setAutoMacrosEnabled(true)
   }
 
-  const handleEdit = (item: MealItem) => {
-    setSelectedItem(item)
-    setFormData({
-      name: item.name,
-      category: item.category,
-      availability: item.available ? 'Disponible' : 'No disponible',
-      calories: item.calories,
-      description: item.description || '',
+  const handleOpenCreateModal = () => {
+    resetRecipeForm()
+    setIsRecipeModalOpen(true)
+  }
+
+  const handleEditRecipe = (recipe: LibraryRecipe) => {
+    setSelectedRecipe(recipe)
+    setRecipeForm({
+      nombre: recipe.nombre,
+      meal_type: recipe.meal_type,
+      descripcion: recipe.descripcion || '',
+      calorias_totales: recipe.calorias_totales?.toString() || '',
+      proteinas_totales: recipe.proteinas_totales?.toString() || '',
+      carbohidratos_totales: recipe.carbohidratos_totales?.toString() || '',
+      grasas_totales: recipe.grasas_totales?.toString() || '',
+      porciones: recipe.porciones?.toString() || '1',
+      tiempo_preparacion_min: recipe.tiempo_preparacion_min?.toString() || '',
     })
-    setError(null)
-    setIsEditModalOpen(true)
+    setRecipeIngredientsForm(
+      recipe.ingredientes.length
+        ? recipe.ingredientes.map((item) => ({
+            ingrediente_id: item.ingrediente_id,
+            cantidad_base: item.cantidad_base.toString(),
+            unidad: item.unidad,
+            porcentaje_merma: item.porcentaje_merma?.toString() || '',
+          }))
+        : [emptyIngredientRow]
+    )
+    setAutoMacrosEnabled(true)
+    setIsRecipeModalOpen(true)
   }
 
-  const handleDelete = async (itemId: string) => {
-    if (!confirm('¿Estás seguro de eliminar esta comida para planes nutricionales?')) {
-      return
-    }
-
+  const handleDeleteRecipe = async (recipeId: string) => {
+    if (!confirm('¿Eliminar esta receta de la biblioteca?')) return
     try {
-      await api.deleteMeal(itemId)
-      await refetch()
-      showToast('Comida eliminada correctamente')
+      await api.deleteLibraryRecipe(recipeId)
+      showToast('Receta eliminada')
+      await loadRecipes()
     } catch (err: any) {
-      showToast(err.message || 'Error al eliminar la comida', true)
+      console.error('Error deleting recipe:', err)
+      showToast(err.message || 'Error al eliminar la receta', true)
     }
   }
 
-  const handleToggleAvailability = async (itemId: string) => {
-    try {
-      const currentMeal = meals.find((m) => m.id === itemId)
-      if (!currentMeal) return
-
-      await api.updateMeal(itemId, {
-        available: !currentMeal.available,
-      })
-      await refetch()
-      showToast('Disponibilidad actualizada')
-    } catch (err: any) {
-      showToast(err.message || 'Error al actualizar disponibilidad', true)
-    }
+  const handleIngredientChange = (index: number, field: keyof RecipeIngredientRow, value: string) => {
+    setRecipeIngredientsForm((prev) => {
+      const next = [...prev]
+      next[index] = { ...next[index], [field]: value }
+      if (field === 'ingrediente_id') {
+        const catalogItem = ingredientsCatalog.find((item) => item.id === value)
+        if (catalogItem) {
+          next[index].unidad = catalogItem.unidad_base
+        }
+      }
+      return next
+    })
   }
 
-  const handleSubmitCreate = async (e: React.FormEvent) => {
+  const handleAddIngredientRow = () => {
+    setRecipeIngredientsForm((prev) => [...prev, emptyIngredientRow])
+  }
+
+  const handleRemoveIngredientRow = (index: number) => {
+    setRecipeIngredientsForm((prev) => (prev.length === 1 ? prev : prev.filter((_, i) => i !== index)))
+  }
+
+  const buildIngredientesPayload = () => {
+    const rows = recipeIngredientsForm
+      .map((row) => ({
+        ingrediente_id: row.ingrediente_id,
+        cantidad_base: Number(row.cantidad_base),
+        unidad: row.unidad || ingredientsCatalog.find((opt) => opt.id === row.ingrediente_id)?.unidad_base || '',
+        porcentaje_merma: row.porcentaje_merma ? Number(row.porcentaje_merma) : undefined,
+      }))
+      .filter((row) => row.ingrediente_id && row.cantidad_base > 0 && row.unidad)
+
+    return rows
+  }
+
+  const recalculateMacrosFromIngredients = () => {
+    let calorias = 0
+    let proteinas = 0
+    let carbohidratos = 0
+    let grasas = 0
+
+    recipeIngredientsForm.forEach((row) => {
+      const catalogItem = ingredientsCatalog.find((item) => item.id === row.ingrediente_id)
+      if (!catalogItem) return
+      const cantidad = Number(row.cantidad_base)
+      if (!cantidad || Number.isNaN(cantidad)) return
+
+      calorias += (catalogItem.calorias_por_unidad ?? 0) * cantidad
+      proteinas += (catalogItem.proteinas_por_unidad ?? 0) * cantidad
+      carbohidratos += (catalogItem.carbohidratos_por_unidad ?? 0) * cantidad
+      grasas += (catalogItem.grasas_por_unidad ?? 0) * cantidad
+    })
+
+    const nextValues = {
+      calorias_totales: calorias > 0 ? Math.round(calorias).toString() : '',
+      proteinas_totales: proteinas > 0 ? formatMacroValue(proteinas) : '',
+      carbohidratos_totales: carbohidratos > 0 ? formatMacroValue(carbohidratos) : '',
+      grasas_totales: grasas > 0 ? formatMacroValue(grasas) : '',
+    }
+
+    setRecipeForm((prev) => {
+      if (
+        prev.calorias_totales === nextValues.calorias_totales &&
+        prev.proteinas_totales === nextValues.proteinas_totales &&
+        prev.carbohidratos_totales === nextValues.carbohidratos_totales &&
+        prev.grasas_totales === nextValues.grasas_totales
+      ) {
+        return prev
+      }
+      return { ...prev, ...nextValues }
+    })
+  }
+
+  useEffect(() => {
+    if (!autoMacrosEnabled || !ingredientsCatalog.length) return
+    recalculateMacrosFromIngredients()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipeIngredientsForm, ingredientsCatalog, autoMacrosEnabled])
+
+  const handleSubmitRecipe = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    setError(null)
-
-    if (!formData.name || formData.calories <= 0) {
-      setError('Por favor completa todos los campos requeridos')
+    if (!recipeForm.nombre.trim()) {
+      showToast('La receta necesita un nombre', true)
       return
     }
 
-    try {
-      const categoryToType: Record<string, string> = {
-        'Desayuno': 'breakfast',
-        'Plato principal': 'lunch',
-        'Cena': 'dinner',
-        'Bebida funcional': 'snack',
-      }
-
-      const mealData = {
-        name: formData.name,
-        description: formData.description || null,
-        type: categoryToType[formData.category] || 'lunch',
-        calories: formData.calories,
-        price: null, // Las comidas para planes NO tienen precio
-        available: formData.availability === 'Disponible',
-        is_menu_item: false, // IMPORTANTE: Esta página es para gestionar comidas para planes nutricionales
-      }
-
-      await api.createMeal(mealData)
-      await refetch()
-      setIsCreateModalOpen(false)
-      showToast('Comida creada correctamente')
-    } catch (err: any) {
-      setError(err.message || 'Error al crear la comida')
-      showToast(err.message || 'Error al crear la comida', true)
-    }
-  }
-
-  const handleSubmitEdit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-
-    if (!selectedItem) return
-
-    if (!formData.name || formData.calories <= 0) {
-      setError('Por favor completa todos los campos requeridos')
+    const ingredientesPayload = buildIngredientesPayload()
+    if (!ingredientesPayload.length) {
+      showToast('Agrega al menos un ingrediente con cantidad y unidad', true)
       return
     }
 
+    const payload = {
+      nombre: recipeForm.nombre.trim(),
+      meal_type: recipeForm.meal_type,
+      descripcion: recipeForm.descripcion.trim() || null,
+      calorias_totales: recipeForm.calorias_totales ? Number(recipeForm.calorias_totales) : null,
+      proteinas_totales: recipeForm.proteinas_totales ? Number(recipeForm.proteinas_totales) : null,
+      carbohidratos_totales: recipeForm.carbohidratos_totales ? Number(recipeForm.carbohidratos_totales) : null,
+      grasas_totales: recipeForm.grasas_totales ? Number(recipeForm.grasas_totales) : null,
+      porciones: recipeForm.porciones ? Number(recipeForm.porciones) : 1,
+      tiempo_preparacion_min: recipeForm.tiempo_preparacion_min ? Number(recipeForm.tiempo_preparacion_min) : null,
+      ingredientes: ingredientesPayload,
+    }
+
     try {
-      const categoryToType: Record<string, string> = {
-        'Desayuno': 'breakfast',
-        'Plato principal': 'lunch',
-        'Cena': 'dinner',
-        'Bebida funcional': 'snack',
+      if (selectedRecipe) {
+        await api.updateLibraryRecipe(selectedRecipe.id, payload)
+        showToast('Receta actualizada')
+      } else {
+        await api.createLibraryRecipe(payload)
+        showToast('Receta creada')
       }
-
-      const mealData = {
-        name: formData.name,
-        description: formData.description || null,
-        type: categoryToType[formData.category] || 'lunch',
-        calories: formData.calories,
-        available: formData.availability === 'Disponible',
-        is_menu_item: false, // IMPORTANTE: Mantener como comida para planes
-      }
-
-      await api.updateMeal(selectedItem.id, mealData)
-      await refetch()
-      setIsEditModalOpen(false)
-      setSelectedItem(null)
-      showToast('Comida actualizada correctamente')
+      setIsRecipeModalOpen(false)
+      resetRecipeForm()
+      await loadRecipes()
     } catch (err: any) {
-      setError(err.message || 'Error al actualizar la comida')
-      showToast(err.message || 'Error al actualizar la comida', true)
+      console.error('Error saving recipe:', err)
+      showToast(err.message || 'Error al guardar la receta', true)
     }
   }
 
-  const categories = ['todas', 'Desayuno', 'Plato principal', 'Cena', 'Bebida funcional']
-  const availabilityOptions = ['todas', 'Disponible', 'No disponible']
+  const recipesResultsCount = useMemo(() => {
+    if (mealFilter !== 'all' || searchTerm) {
+      return { showing: filteredRecipes.length, total: recipes.length }
+    }
+    return undefined
+  }, [filteredRecipes.length, recipes.length, mealFilter, searchTerm])
 
   const plusIcon = (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+    <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+      <path
+        fillRule="evenodd"
+        d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"
+        clipRule="evenodd"
+      />
     </svg>
   )
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Header */}
       <PageHeader
-        title="Comidas para Planes Nutricionales"
-        description="Gestiona las comidas disponibles para planes nutricionales de suscriptores"
+        title="Biblioteca de comidas base"
+        description="Centraliza las recetas reutilizables para que el equipo de nutrición las asigne a los planes base."
         action={
-          <ActionButton
-            onClick={handleCreate}
-            icon={plusIcon}
-            fullWidth
-          >
-            <span className="hidden sm:inline">Nueva Comida</span>
-            <span className="sm:hidden">Nueva</span>
+          <ActionButton onClick={handleOpenCreateModal} icon={plusIcon}>
+            Nueva comida base
           </ActionButton>
         }
       />
 
-      {/* Mensajes de error/éxito */}
-      {error && (
-        <ToastMessage
-          message={error}
-          type="error"
-          onClose={() => setError(null)}
-        />
-      )}
-      {success && (
-        <ToastMessage
-          message={success}
-          type="success"
-          onClose={() => setSuccess(null)}
-        />
-      )}
+      {error && <ToastMessage type="error" message={error} onClose={() => setError(null)} />}
+      {success && <ToastMessage type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {/* Filtros y búsqueda */}
       <SearchFilters
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
-        searchPlaceholder="Buscar por nombre, descripción o calorías..."
+        searchPlaceholder="Buscar por nombre o descripción..."
         filters={
-          <>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Categoría</label>
-              <select
-                value={filterCategory}
-                onChange={(e) => setFilterCategory(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-              >
-                {categories.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat === 'todas' ? 'Todas' : cat}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Disponibilidad</label>
-              <select
-                value={filterAvailability}
-                onChange={(e) => setFilterAvailability(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-              >
-                {availabilityOptions.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt === 'todas' ? 'Todas' : opt}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de comida</label>
+            <select
+              value={mealFilter}
+              onChange={(e) => setMealFilter(e.target.value as 'all' | MealType)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+            >
+              {mealTypeFilterOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
         }
-        resultsCount={
-          filteredItems.length !== items.length
-            ? { showing: filteredItems.length, total: items.length }
-            : undefined
-        }
+        resultsCount={recipesResultsCount}
       />
 
-      {/* Lista de comidas */}
-      {loading ? (
-        <LoadingState message="Cargando comidas..." />
-      ) : apiError ? (
-        <ToastMessage
-          message={`Error al cargar comidas: ${apiError}`}
-          type="error"
-        />
-      ) : filteredItems.length === 0 ? (
+      {loadingRecipes ? (
+        <LoadingState message="Cargando biblioteca de comidas..." />
+      ) : filteredRecipes.length === 0 ? (
         <EmptyState
-          title="No hay comidas disponibles"
-          message={
-            items.length === 0
-              ? "No hay comidas para planes nutricionales. Crea la primera comida."
-              : "No se encontraron comidas con los filtros seleccionados."
-          }
+          title="Todavía no hay recetas"
+          message="Crea la primera comida base para que los planes puedan reutilizarla."
           action={
-            items.length === 0 ? (
-              <ActionButton onClick={handleCreate} icon={plusIcon}>
-                Crear Primera Comida
-              </ActionButton>
-            ) : undefined
+            <ActionButton onClick={handleOpenCreateModal} icon={plusIcon}>
+              Crear comida base
+            </ActionButton>
           }
         />
       ) : (
         <ResponsiveGrid cols={{ mobile: 1, tablet: 2, desktop: 3 }} gap="md">
-          {filteredItems.map((item) => (
+          {filteredRecipes.map((recipe) => (
             <div
-              key={item.id}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-shadow"
+              key={recipe.id}
+              className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow"
             >
-              <div className="flex justify-between items-start mb-3">
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1">{item.name}</h3>
-                  <p className="text-sm text-gray-500 mb-2">{item.category}</p>
-                  {item.description && (
-                    <p className="text-sm text-gray-600 mb-2 line-clamp-2">{item.description}</p>
-                  )}
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <span>🔥 {item.calories} cal</span>
-                  </div>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">{recipe.nombre}</h3>
+                  <p className="text-sm text-gray-500">{mealTypeLabels[recipe.meal_type]}</p>
                 </div>
-                <div className={`px-2 py-1 rounded text-xs font-medium ${
-                  item.available ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                }`}>
-                  {item.available ? 'Disponible' : 'No disponible'}
+                <div className="text-right text-sm text-gray-500 space-y-0.5">
+                  {recipe.calorias_totales != null && <p>🔥 {recipe.calorias_totales} kcal</p>}
+                  {recipe.proteinas_totales != null && <p>💪 {recipe.proteinas_totales} g P</p>}
                 </div>
               </div>
+              {recipe.descripcion && (
+                <p className="text-sm text-gray-600 mt-2 line-clamp-2">{recipe.descripcion}</p>
+              )}
+              <div className="mt-3">
+                <p className="text-sm font-medium text-gray-900">Ingredientes</p>
+                <ul className="mt-1 text-sm text-gray-600 space-y-1">
+                  {recipe.ingredientes.slice(0, 4).map((ingredient) => (
+                    <li key={ingredient.id}>
+                      {ingredient.ingrediente_nombre}: {ingredient.cantidad_base} {ingredient.unidad}
+                      {ingredient.porcentaje_merma ? ` (merma ${ingredient.porcentaje_merma}%)` : ''}
+                    </li>
+                  ))}
+                  {recipe.ingredientes.length === 0 && <li className="text-gray-400">Aún sin ingredientes</li>}
+                  {recipe.ingredientes.length > 4 && (
+                    <li className="text-gray-400">+ {recipe.ingredientes.length - 4} ingredientes</li>
+                  )}
+                </ul>
+              </div>
               <div className="flex flex-col sm:flex-row gap-2 mt-4">
-                <button
-                  onClick={() => handleEdit(item)}
-                  className="flex-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
+                <ActionButton
+                  onClick={() => handleEditRecipe(recipe)}
+                  variant="muted"
+                  size="sm"
+                  fullWidth
                 >
                   Editar
-                </button>
-                <button
-                  onClick={() => handleToggleAvailability(item.id)}
-                  className={`flex-1 px-3 py-2 rounded-lg transition-colors text-sm font-medium ${
-                    item.available
-                      ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
-                      : 'bg-green-100 text-green-800 hover:bg-green-200'
-                  }`}
-                >
-                  {item.available ? 'Desactivar' : 'Activar'}
-                </button>
-                <button
-                  onClick={() => handleDelete(item.id)}
-                  className="flex-1 sm:flex-initial px-3 py-2 bg-red-100 text-red-800 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium"
+                </ActionButton>
+                <ActionButton
+                  onClick={() => handleDeleteRecipe(recipe.id)}
+                  variant="soft-danger"
+                  size="sm"
+                  fullWidth
                 >
                   Eliminar
-                </button>
+                </ActionButton>
               </div>
             </div>
           ))}
         </ResponsiveGrid>
       )}
 
-      {/* Modal Crear */}
       <Modal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        title="Nueva Comida para Planes Nutricionales"
-      >
-        <form onSubmit={handleSubmitCreate} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Nombre *</label>
-            <input
-              type="text"
-              required
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-              placeholder="Ej: Bowl de Quinoa Personalizado"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Categoría *</label>
-            <select
-              required
-              value={formData.category}
-              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              <option value="Desayuno">Desayuno</option>
-              <option value="Plato principal">Plato principal</option>
-              <option value="Cena">Cena</option>
-              <option value="Bebida funcional">Bebida funcional</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Calorías *</label>
-            <input
-              type="number"
-              required
-              min="0"
-              value={formData.calories || ''}
-              onChange={(e) => setFormData({ ...formData, calories: parseInt(e.target.value) || 0 })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-              placeholder="Ej: 450"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Descripción</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-              placeholder="Descripción de la comida..."
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Disponibilidad</label>
-            <select
-              value={formData.availability}
-              onChange={(e) => setFormData({ ...formData, availability: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              <option value="Disponible">Disponible</option>
-              <option value="No disponible">No disponible</option>
-            </select>
-          </div>
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm">
-              {error}
-            </div>
-          )}
-          <div className="flex flex-col sm:flex-row gap-3 pt-4">
-            <button
-              type="button"
-              onClick={() => setIsCreateModalOpen(false)}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-medium"
-            >
-              Crear Comida
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Modal Editar */}
-      <Modal
-        isOpen={isEditModalOpen}
+        isOpen={isRecipeModalOpen}
         onClose={() => {
-          setIsEditModalOpen(false)
-          setSelectedItem(null)
+          setIsRecipeModalOpen(false)
+          resetRecipeForm()
         }}
-        title="Editar Comida para Planes Nutricionales"
+        title={selectedRecipe ? 'Editar comida base' : 'Nueva comida base'}
+        size="lg"
       >
-        <form onSubmit={handleSubmitEdit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Nombre *</label>
-            <input
-              type="text"
-              required
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Categoría *</label>
-            <select
-              required
-              value={formData.category}
-              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              <option value="Desayuno">Desayuno</option>
-              <option value="Plato principal">Plato principal</option>
-              <option value="Cena">Cena</option>
-              <option value="Bebida funcional">Bebida funcional</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Calorías *</label>
-            <input
-              type="number"
-              required
-              min="0"
-              value={formData.calories || ''}
-              onChange={(e) => setFormData({ ...formData, calories: parseInt(e.target.value) || 0 })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Descripción</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Disponibilidad</label>
-            <select
-              value={formData.availability}
-              onChange={(e) => setFormData({ ...formData, availability: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              <option value="Disponible">Disponible</option>
-              <option value="No disponible">No disponible</option>
-            </select>
-          </div>
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm">
-              {error}
+        {loadingIngredients ? (
+          <LoadingState message="Cargando ingredientes..." />
+        ) : (
+          <form onSubmit={handleSubmitRecipe} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">Nombre</label>
+                <input
+                  type="text"
+                  value={recipeForm.nombre}
+                  onChange={(e) => setRecipeForm((prev) => ({ ...prev, nombre: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">Tipo</label>
+                <select
+                  value={recipeForm.meal_type}
+                  onChange={(e) =>
+                    setRecipeForm((prev) => ({ ...prev, meal_type: e.target.value as MealType }))
+                  }
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                >
+                  <option value="lunch">Almuerzo</option>
+                  <option value="dinner">Cena</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">Porciones</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={recipeForm.porciones}
+                  onChange={(e) => setRecipeForm((prev) => ({ ...prev, porciones: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">Tiempo preparación (min)</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={recipeForm.tiempo_preparacion_min}
+                  onChange={(e) =>
+                    setRecipeForm((prev) => ({ ...prev, tiempo_preparacion_min: e.target.value }))
+                  }
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                />
+              </div>
             </div>
-          )}
-          <div className="flex flex-col sm:flex-row gap-3 pt-4">
-            <button
-              type="button"
-              onClick={() => {
-                setIsEditModalOpen(false)
-                setSelectedItem(null)
-              }}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-medium"
-            >
-              Guardar Cambios
-            </button>
-          </div>
-        </form>
+
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">Descripción</label>
+              <textarea
+                rows={3}
+                value={recipeForm.descripcion}
+                onChange={(e) => setRecipeForm((prev) => ({ ...prev, descripcion: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                placeholder="Notas adicionales o instrucciones para cocina"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium text-gray-900">Macros calculadas</p>
+                <label className="flex items-center gap-2 text-xs font-medium text-gray-600">
+                  <span>Auto</span>
+                  <input
+                    type="checkbox"
+                    checked={autoMacrosEnabled}
+                    onChange={(e) => {
+                      setAutoMacrosEnabled(e.target.checked)
+                      if (e.target.checked) {
+                        recalculateMacrosFromIngredients()
+                      }
+                    }}
+                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  />
+                </label>
+              </div>
+              <p className="text-xs text-gray-500">
+                Cuando está activo, las calorías y macros se recalculan automáticamente según los ingredientes y sus
+                cantidades. Desactívalo si necesitas ajustar manualmente.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {macroFields.map(({ field, label, decimals }) => (
+                  <div key={field}>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">{label}</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={decimals === 0 ? 1 : 0.01}
+                      value={(recipeForm as any)[field]}
+                      onChange={(e) =>
+                        setRecipeForm((prev) => ({
+                          ...prev,
+                          [field]: e.target.value,
+                        }))
+                      }
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                      disabled={autoMacrosEnabled}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Ingredientes</p>
+                  <p className="text-xs text-gray-500">Define cantidades base para la receta.</p>
+                </div>
+                 <ActionButton
+                   type="button"
+                   onClick={handleAddIngredientRow}
+                   variant="muted-outline"
+                   size="sm"
+                 >
+                   <span className="text-base leading-none">+</span>
+                   Agregar ingrediente
+                 </ActionButton>
+              </div>
+
+              {recipeIngredientsForm.map((row, index) => {
+                const catalogItem = ingredientsCatalog.find((item) => item.id === row.ingrediente_id)
+                return (
+                  <div
+                    key={`${row.ingrediente_id || 'nuevo'}-${index}`}
+                    className="grid grid-cols-1 md:grid-cols-6 gap-3 border border-gray-200 rounded-lg p-3"
+                  >
+                    <div className="md:col-span-2">
+                      <label className="text-xs font-medium text-gray-600 mb-1 block">Ingrediente</label>
+                      <select
+                        value={row.ingrediente_id}
+                        onChange={(e) => handleIngredientChange(index, 'ingrediente_id', e.target.value)}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      >
+                        <option value="">Selecciona ingrediente</option>
+                        {ingredientsCatalog.map((ingredient) => (
+                          <option key={ingredient.id} value={ingredient.id}>
+                            {ingredient.nombre}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 mb-1 block">Cantidad base</label>
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={row.cantidad_base}
+                        onChange={(e) => handleIngredientChange(index, 'cantidad_base', e.target.value)}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div className="md:col-span-1">
+                      <label className="text-xs font-medium text-gray-600 mb-1 block">Unidad</label>
+                      <input
+                        type="text"
+                        value={row.unidad || catalogItem?.unidad_base || ''}
+                        placeholder={catalogItem?.unidad_base || 'Unidad'}
+                        onChange={(e) => handleIngredientChange(index, 'unidad', e.target.value)}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 mb-1 block">% merma</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step="0.1"
+                        value={row.porcentaje_merma}
+                        onChange={(e) => handleIngredientChange(index, 'porcentaje_merma', e.target.value)}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <ActionButton
+                        type="button"
+                        onClick={() => handleRemoveIngredientRow(index)}
+                        variant="soft-danger"
+                        size="sm"
+                        className="w-full md:w-auto"
+                        disabled={recipeIngredientsForm.length === 1}
+                      >
+                        Eliminar
+                      </ActionButton>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+             <div className="flex gap-3 pt-4">
+               <ActionButton
+                 type="button"
+                 onClick={() => {
+                   setIsRecipeModalOpen(false)
+                   resetRecipeForm()
+                 }}
+                 variant="muted-outline"
+                 fullWidth
+               >
+                 Cancelar
+               </ActionButton>
+               <ActionButton
+                 type="submit"
+                 fullWidth
+               >
+                 {selectedRecipe ? 'Actualizar receta' : 'Guardar receta'}
+               </ActionButton>
+             </div>
+          </form>
+        )}
       </Modal>
     </div>
   )

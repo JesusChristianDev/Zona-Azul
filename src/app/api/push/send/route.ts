@@ -92,9 +92,16 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // Asegurar que el título siempre incluya "Zona Azul" de forma prominente
+    // Esto minimiza la visibilidad del nombre del navegador
+    let finalTitle = title
+    if (!finalTitle.includes('Zona Azul') && !finalTitle.startsWith('Zona Azul')) {
+      finalTitle = `Zona Azul: ${title}`
+    }
+
     // Preparar payload de notificación
     const payload = JSON.stringify({
-      title,
+      title: finalTitle,
       body: message,
       icon: icon || '/icon-192x192.png',
       badge: '/icon-192x192.png',

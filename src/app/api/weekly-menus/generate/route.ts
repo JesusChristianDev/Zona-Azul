@@ -7,10 +7,73 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+interface GenerationOptions {
+  weekStartParam: string | null
+  weekEndParam: string | null
+  forceRegenerate: boolean
+}
+
+const MEAL_TYPE_CYCLE: Array<'lunch' | 'dinner'> = ['lunch', 'dinner']
+
+function computeWeekRange(weekStartParam: string | null, weekEndParam: string | null) {
+  const today = new Date()
+  const dayOfWeek = today.getDay()
+
+  let saturday = new Date(today)
+  if (dayOfWeek !== 6) {
+    const daysUntilSaturday = (6 - dayOfWeek + 7) % 7 || 7
+    saturday.setDate(today.getDate() + daysUntilSaturday)
+  }
+
+  const defaultMonday = new Date(saturday)
+  defaultMonday.setDate(saturday.getDate() - 5)
+
+  const defaultSunday = new Date(defaultMonday)
+  defaultSunday.setDate(defaultMonday.getDate() + 6)
+
+  const monday = weekStartParam ? new Date(`${weekStartParam}T00:00:00`) : defaultMonday
+  const sunday = weekEndParam ? new Date(`${weekEndParam}T00:00:00`) : defaultSunday
+
+  return {
+    monday,
+    sunday,
+    weekStart: monday.toISOString().split('T')[0],
+    weekEnd: sunday.toISOString().split('T')[0],
+  }
+}
+
+async function removeExistingWeeklyMenu(menuId: string) {
+  const { error } = await supabase.from('weekly_menus').delete().eq('id', menuId)
+  if (error) {
+    console.error(`Error deleting weekly menu ${menuId}:`, error)
+    throw new Error('No se pudo regenerar el menú existente')
+  }
+}
+
+function resolveFallbackMealType(
+  mealsPerDay: number,
+  mealIndex: number
+): 'lunch' | 'dinner' {
+  if (mealsPerDay <= 1) {
+    return 'lunch'
+  }
+  if (mealsPerDay === 2) {
+    return mealIndex % 2 === 0 ? 'lunch' : 'dinner'
+  }
+  return MEAL_TYPE_CYCLE[mealIndex % MEAL_TYPE_CYCLE.length] || 'lunch'
+}
+
 // POST: Generar menús semanales para todos los usuarios activos
 // Esta función debe ser llamada cada sábado a las 00:00 mediante un cron job
 export async function POST(request: NextRequest) {
   try {
+    const searchParams = request.nextUrl?.searchParams ?? new URL(request.url).searchParams
+    const generationOptions: GenerationOptions = {
+      weekStartParam: searchParams.get('week_start'),
+      weekEndParam: searchParams.get('week_end'),
+      forceRegenerate: searchParams.get('force_regenerate') === 'true',
+    }
+
     // Verificar que es una llamada autorizada (puedes usar un secret token)
     const authHeader = request.headers.get('authorization')
     const expectedToken = process.env.CRON_SECRET_TOKEN || 'default-secret-token'
@@ -22,26 +85,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Calcular fechas de la semana (lunes a domingo)
-    const today = new Date()
-    const dayOfWeek = today.getDay() // 0 = domingo, 6 = sábado
-    
-    // Si no es sábado, calcular el próximo sábado
-    let saturday = new Date(today)
-    if (dayOfWeek !== 6) {
-      const daysUntilSaturday = (6 - dayOfWeek + 7) % 7 || 7
-      saturday.setDate(today.getDate() + daysUntilSaturday)
-    }
-    
-    // Calcular lunes (inicio de semana) y domingo (fin de semana)
-    const monday = new Date(saturday)
-    monday.setDate(saturday.getDate() - 5) // Retroceder 5 días desde sábado
-    
-    const sunday = new Date(saturday)
-    sunday.setDate(saturday.getDate() + 1) // Avanzar 1 día desde sábado
-    
-    const weekStart = monday.toISOString().split('T')[0]
-    const weekEnd = sunday.toISOString().split('T')[0]
+    const { monday, sunday, weekStart, weekEnd } = computeWeekRange(
+      generationOptions.weekStartParam,
+      generationOptions.weekEndParam
+    )
 
     // Obtener todas las suscripciones activas
     const { data: subscriptions, error: subError } = await supabase
@@ -75,6 +122,11 @@ export async function POST(request: NextRequest) {
         // Determinar usuarios para los que generar menú
         let usersToGenerate: Array<{ user_id: string; meals_per_week: number }> = []
 
+        const subscriptionMealsPerDay =
+          typeof subscription.meals_per_day === 'number' && subscription.meals_per_day > 0
+            ? subscription.meals_per_day
+            : 1
+
         if (subscription.group_id && subscription.subscription_groups) {
           // Es un grupo, generar menú para cada miembro
           const members = subscription.subscription_groups.subscription_group_members || []
@@ -82,13 +134,13 @@ export async function POST(request: NextRequest) {
             .filter((m: any) => !m.removed_at)
             .map((m: any) => ({
               user_id: m.user_id,
-              meals_per_week: m.meals_per_week || 7,
+              meals_per_week: m.meals_per_week || subscriptionMealsPerDay * 7,
             }))
         } else {
           // Es individual
           usersToGenerate = [{
             user_id: subscription.user_id,
-            meals_per_week: 7, // Por defecto
+            meals_per_week: subscriptionMealsPerDay * 7,
           }]
         }
 
@@ -103,8 +155,15 @@ export async function POST(request: NextRequest) {
             .single()
 
           if (existingMenu) {
-            console.log(`Menú ya existe para usuario ${userInfo.user_id} en semana ${weekStart}`)
-            continue
+            if (generationOptions.forceRegenerate) {
+              await removeExistingWeeklyMenu(existingMenu.id)
+              console.log(
+                `Menú existente eliminado para usuario ${userInfo.user_id} en semana ${weekStart} (regenerando)`
+              )
+            } else {
+              console.log(`Menú ya existe para usuario ${userInfo.user_id} en semana ${weekStart}`)
+              continue
+            }
           }
 
           // Obtener plan nutricional del usuario (si existe)
@@ -198,7 +257,7 @@ export async function POST(request: NextRequest) {
                       // Buscar sustitución automática
                       const substituteId = await findAutomaticSubstitution(
                         meal.id,
-                        meal.type as 'breakfast' | 'lunch' | 'dinner' | 'snack',
+                        meal.type as 'lunch' | 'dinner',
                         meal.calories
                       )
 
@@ -249,60 +308,42 @@ export async function POST(request: NextRequest) {
               }
             } else {
               // Si no hay plan, obtener comidas disponibles aleatoriamente
-              // IMPORTANTE: Solo usar comidas para planes nutricionales (NO del menú del local)
-              const mealTypes = ['breakfast', 'lunch', 'dinner']
-              
               for (let mealIndex = 0; mealIndex < mealsPerDay; mealIndex++) {
-                const mealType = mealTypes[mealIndex % mealTypes.length] || 'lunch'
-                
+                const mealType = resolveFallbackMealType(mealsPerDay, mealIndex)
+
                 // Obtener comidas para planes nutricionales (is_menu_item = false)
-                // NO usar comidas del menú del local (is_menu_item = true)
-                // Filtrar también por stock disponible
                 const { data: allMeals } = await supabase
                   .from('meals')
                   .select('id, type, calories')
                   .eq('type', mealType)
                   .eq('available', true)
-                  .eq('is_menu_item', false) // Solo comidas para planes, NO del menú del local
+                  .eq('is_menu_item', false)
                   .limit(20)
 
-                if (allMeals && allMeals.length > 0) {
-                  // Filtrar comidas con stock disponible
-                  const mealsWithStock = []
-                  for (const meal of allMeals) {
-                    const hasStock = await checkMealStock(meal.id)
-                    if (hasStock) {
-                      mealsWithStock.push(meal)
-                    }
-                  }
+                if (!allMeals || allMeals.length === 0) {
+                  continue
+                }
 
-                  // Si hay comidas con stock, seleccionar una aleatoria
-                  if (mealsWithStock.length > 0) {
-                    const randomMeal = mealsWithStock[Math.floor(Math.random() * mealsWithStock.length)]
-                    
-                    await supabase
-                      .from('weekly_menu_day_meals')
-                      .insert({
-                        weekly_menu_day_id: menuDay.id,
-                        meal_id: randomMeal.id,
-                        meal_type: mealType,
-                        order_index: mealIndex,
-                        is_original: true,
-                      })
-                  } else {
-                    // Si no hay comidas con stock, usar la primera disponible (se notificará al nutricionista)
-                    const fallbackMeal = allMeals[0]
-                    await supabase
-                      .from('weekly_menu_day_meals')
-                      .insert({
-                        weekly_menu_day_id: menuDay.id,
-                        meal_id: fallbackMeal.id,
-                        meal_type: mealType,
-                        order_index: mealIndex,
-                        is_original: true,
-                      })
+                const mealsWithStock = []
+                for (const meal of allMeals) {
+                  const hasStock = await checkMealStock(meal.id)
+                  if (hasStock) {
+                    mealsWithStock.push(meal)
                   }
                 }
+
+                const selectedMeal =
+                  mealsWithStock.length > 0
+                    ? mealsWithStock[Math.floor(Math.random() * mealsWithStock.length)]
+                    : allMeals[0]
+
+                await supabase.from('weekly_menu_day_meals').insert({
+                  weekly_menu_day_id: menuDay.id,
+                  meal_id: selectedMeal.id,
+                  meal_type: mealType,
+                  order_index: mealIndex,
+                  is_original: true,
+                })
               }
             }
           }
@@ -407,18 +448,23 @@ export async function POST(request: NextRequest) {
 // GET: Generar menús manualmente (para testing o administración)
 export async function GET(request: NextRequest) {
   // Permitir generación manual solo en desarrollo o con autenticación admin
-  const { searchParams } = new URL(request.url)
-  const force = searchParams.get('force') === 'true'
+  const searchParams = request.nextUrl?.searchParams ?? new URL(request.url).searchParams
+  const options: Record<string, string> = {}
 
-  if (process.env.NODE_ENV === 'production' && !force) {
+  searchParams.forEach((value, key) => {
+    options[key] = value
+  })
+
+  if (process.env.NODE_ENV === 'production' && options.force !== 'true') {
     return NextResponse.json(
       { error: 'Generación manual no permitida en producción' },
       { status: 403 }
     )
   }
 
-  // Llamar a la misma lógica que POST pero sin verificación de token
-  const response = await POST(request)
-  return response
+  const fakeRequest = new NextRequest(request.url, {
+    method: 'POST',
+    headers: request.headers,
+  })
+  return POST(fakeRequest)
 }
-

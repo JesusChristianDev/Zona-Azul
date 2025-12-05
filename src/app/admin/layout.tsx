@@ -10,6 +10,7 @@ const links = [
   { href: '/admin', label: 'Visión general', description: 'KPIs generales y salud del negocio' },
   { href: '/admin/menu', label: 'Menú del local', description: 'Platos fijos del restaurante para compra individual' },
   { href: '/admin/comidas-planes', label: 'Comidas para planes', description: 'Comidas para planes nutricionales de suscriptores' },
+  { href: '/admin/ingredientes', label: 'Ingredientes', description: 'Catálogo base y valores nutricionales para recetas y stock' },
   { href: '/admin/stock', label: 'Stock', description: 'Gestionar stock de platos y alertas' },
   { href: '/admin/usuarios', label: 'Usuarios', description: 'Administradores, nutricionistas y clientes' },
   { href: '/admin/citas', label: 'Citas', description: 'Gestionar citas y crear usuarios' },

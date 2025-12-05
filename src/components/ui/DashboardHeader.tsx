@@ -44,7 +44,7 @@ function NotificationButton() {
         setIsSettingsOpen(false)
         setIsNotificationsOpen(!isNotificationsOpen)
       }}
-      className="relative p-2 text-gray-600 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors flex-shrink-0"
+      className="relative p-2 text-gray-600 dark:text-gray-400 hover:text-primary hover:bg-primary/5 dark:hover:bg-primary/10 rounded-lg transition-colors flex-shrink-0"
       aria-label="Notificaciones"
       title="Notificaciones"
     >
@@ -108,7 +108,7 @@ function MessageButton() {
         setIsSettingsOpen(false)
         setIsMessagesOpen(!isMessagesOpen)
       }}
-      className="relative p-2 text-gray-600 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors flex-shrink-0"
+      className="relative p-2 text-gray-600 dark:text-gray-400 hover:text-primary hover:bg-primary/5 dark:hover:bg-primary/10 rounded-lg transition-colors flex-shrink-0"
       aria-label="Mensajes"
       title="Mensajes"
     >
@@ -133,7 +133,7 @@ export default function DashboardHeader() {
   const pathname = usePathname()
   const router = useRouter()
   const { role, logout, userId, isAuthenticated } = useAuth()
-  const { isNotificationsOpen, isMessagesOpen, isSettingsOpen, setIsNotificationsOpen, setIsMessagesOpen } = usePanel()
+  const { isNotificationsOpen, isMessagesOpen, isSettingsOpen, setIsNotificationsOpen, setIsMessagesOpen, setIsSettingsOpen } = usePanel()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   
   // Ocultar navbar cuando algún panel está abierto
@@ -199,14 +199,14 @@ export default function DashboardHeader() {
   const breadcrumbTitle = detailTitles[sectionPath] ?? baseTitles[sectionKey ?? ''] ?? null
 
   const dashboardRoots = ['invitado', 'admin', 'suscriptor', 'nutricionista', 'repartidor']
-  const isDashboardPage = sectionKey ? dashboardRoots.includes(sectionKey) : false
+  const isDashboardPage = sectionKey ? dashboardRoots.includes(sectionKey as string) : false
 
   return (
     <>
       {/* Overlay de fade out para logout */}
       {isLoggingOut && (
         <div
-          className="fixed inset-0 bg-white z-[9999] animate-in fade-in duration-300"
+          className="fixed inset-0 bg-white dark:bg-slate-900 z-[9999] animate-in fade-in duration-300"
           style={{
             pointerEvents: 'auto',
           }}
@@ -214,14 +214,14 @@ export default function DashboardHeader() {
           <div className="flex items-center justify-center h-full">
             <div className="text-center animate-in fade-in slide-in-from-bottom-2">
               <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent mx-auto mb-4"></div>
-              <p className="text-gray-600 font-medium">Cerrando sesión...</p>
+              <p className="text-gray-600 dark:text-gray-400 font-medium">Cerrando sesión...</p>
             </div>
           </div>
         </div>
       )}
       {/* Ocultar header completo solo en móviles cuando cualquier panel está abierto */}
       {/* En desktop, siempre mostrar el header pero con z-index menor que los paneles */}
-      <header className={`bg-white shadow-sm sticky top-0 z-[40] border-b w-full ${isAnyPanelOpen ? 'hidden sm:block' : ''}`}>
+      <header className={`bg-white dark:bg-slate-800 shadow-sm sticky top-0 z-[40] border-b border-gray-200 dark:border-slate-700 w-full ${isAnyPanelOpen ? 'hidden sm:block' : ''}`}>
       <div className="max-w-7xl mx-auto w-full">
         {/* Navegación principal */}
         <div className="flex items-center justify-between py-2.5 sm:py-3 md:py-4 px-3 sm:px-4 gap-2 w-full">
@@ -231,7 +231,7 @@ export default function DashboardHeader() {
               <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-base flex-shrink-0">
                 ZA
               </div>
-              <h1 className="text-sm sm:text-base md:text-lg font-semibold truncate">Zona Azul</h1>
+              <h1 className="text-sm sm:text-base md:text-lg font-semibold truncate text-gray-900 dark:text-gray-100">Zona Azul</h1>
             </div>
           ) : (
             // Logo con link cuando está en páginas públicas
@@ -239,14 +239,14 @@ export default function DashboardHeader() {
               <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-base flex-shrink-0">
                 ZA
               </div>
-              <h1 className="text-sm sm:text-base md:text-lg font-semibold truncate">Zona Azul</h1>
+              <h1 className="text-sm sm:text-base md:text-lg font-semibold truncate text-gray-900 dark:text-gray-100">Zona Azul</h1>
             </Link>
           )}
 
           {/* Navegación desktop - solo en páginas públicas */}
           {!isDashboardPage && (
             <nav className="hidden sm:flex space-x-4">
-              <Link href="/" className="text-sm text-gray-700 hover:text-primary transition-colors">
+              <Link href="/" className="text-sm text-gray-700 dark:text-gray-300 hover:text-primary transition-colors">
                 Inicio
               </Link>
               <Link href="/booking" className="text-sm text-gray-700 hover:text-primary transition-colors">
@@ -268,7 +268,7 @@ export default function DashboardHeader() {
                 <>
                   {/* Indicador de rol */}
                   <div className="flex items-center gap-2 text-xs flex-shrink-0">
-                    <span className="text-gray-500">Rol:</span>
+                    <span className="text-gray-500 dark:text-gray-400">Rol:</span>
                     <span className="px-2 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium capitalize">
                       {role}
                     </span>
@@ -279,14 +279,15 @@ export default function DashboardHeader() {
                   <MessageButton />
                   
                   {/* Siempre mostrar ajustes y logout en desktop (incluso cuando algún panel está abierto) */}
-                  <Link
-                    href={`/${role}/ajustes`}
+                  <button
                     onClick={() => {
                       // Cerrar otros paneles al abrir ajustes
                       setIsNotificationsOpen(false)
                       setIsMessagesOpen(false)
+                      // Abrir panel de ajustes (sin navegar)
+                      setIsSettingsOpen(!isSettingsOpen)
                     }}
-                    className="relative p-2 text-gray-600 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors flex-shrink-0"
+                    className={`relative p-2 text-gray-600 dark:text-gray-400 hover:text-primary hover:bg-primary/5 dark:hover:bg-primary/10 rounded-lg transition-colors flex-shrink-0 ${isSettingsOpen ? 'text-primary bg-primary/10' : ''}`}
                     aria-label="Ajustes"
                     title="Ajustes"
                   >
@@ -299,11 +300,11 @@ export default function DashboardHeader() {
                       />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
-                  </Link>
+                  </button>
                   <button
                     onClick={handleLogout}
                     disabled={isLoggingOut}
-                    className="px-3 py-1.5 text-sm text-gray-700 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                    className="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                   >
                     {isLoggingOut ? 'Saliendo...' : 'Salir'}
                   </button>
@@ -342,14 +343,15 @@ export default function DashboardHeader() {
                   </div>
                   
                   {/* Siempre mostrar ajustes y logout en móvil (excepto cuando algún panel está abierto, que se oculta todo el navbar) */}
-                  <Link
-                    href={`/${role}/ajustes`}
+                  <button
                     onClick={() => {
                       // Cerrar otros paneles al abrir ajustes
                       setIsNotificationsOpen(false)
                       setIsMessagesOpen(false)
+                      // Abrir panel de ajustes (sin navegar)
+                      setIsSettingsOpen(!isSettingsOpen)
                     }}
-                    className="p-1.5 text-gray-700 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors flex-shrink-0 relative z-10"
+                    className={`p-1.5 text-gray-700 dark:text-gray-300 hover:text-primary hover:bg-primary/5 dark:hover:bg-primary/10 rounded-lg transition-colors flex-shrink-0 relative z-10 ${isSettingsOpen ? 'text-primary bg-primary/10' : ''}`}
                     aria-label="Ajustes"
                     title="Ajustes"
                   >
@@ -362,11 +364,11 @@ export default function DashboardHeader() {
                       />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
-                  </Link>
+                  </button>
                   <button
                     onClick={handleLogout}
                     disabled={isLoggingOut}
-                    className="p-1.5 text-gray-700 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 relative z-10"
+                    className="p-1.5 text-gray-700 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 relative z-10"
                     aria-label={isLoggingOut ? 'Saliendo...' : 'Salir'}
                     title={isLoggingOut ? 'Saliendo...' : 'Salir'}
                   >
@@ -384,4 +386,6 @@ export default function DashboardHeader() {
     </>
   )
 }
+
+
 

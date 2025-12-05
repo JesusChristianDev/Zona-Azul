@@ -21,7 +21,7 @@ export default function RestaurantMenuItem({ recipe }: RestaurantMenuItemProps) 
   return (
     <Link
       href={`/menu/${recipe.id}`}
-      className="group bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-200 hover:border-primary/40 overflow-hidden transform hover:-translate-y-2 active:scale-[0.98]"
+      className="group bg-white dark:bg-slate-900 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-200 dark:border-slate-700 hover:border-primary/40 overflow-hidden transform hover:-translate-y-2 active:scale-[0.98]"
     >
       {/* Imagen con overlay */}
       <div className="relative h-56 sm:h-64 overflow-hidden bg-gradient-to-br from-primary/20 via-accent/20 to-highlight/20">
@@ -42,7 +42,7 @@ export default function RestaurantMenuItem({ recipe }: RestaurantMenuItemProps) 
           <div className="bg-primary/95 backdrop-blur-md px-3 py-1.5 rounded-full shadow-lg border border-white/20">
             <span className="text-xs font-bold text-white uppercase tracking-wider">📋 Carta</span>
           </div>
-          <div className="bg-white/95 backdrop-blur-md px-4 py-2 rounded-full shadow-lg border border-white/20">
+          <div className="bg-white/95 dark:bg-slate-900/80 backdrop-blur-md px-4 py-2 rounded-full shadow-lg border border-white/20 dark:border-white/10">
             <span className="text-lg font-bold text-primary">€{recipe.price.toFixed(2)}</span>
           </div>
         </div>
@@ -51,43 +51,43 @@ export default function RestaurantMenuItem({ recipe }: RestaurantMenuItemProps) 
       {/* Contenido */}
       <div className="p-6">
         {/* Título */}
-        <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-3 group-hover:text-primary transition-colors duration-300 leading-tight">
+        <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-3 group-hover:text-primary transition-colors duration-300 leading-tight">
           {recipe.name}
         </h3>
         
         {/* Descripción */}
-        <p className="text-sm sm:text-base text-gray-600 mb-5 line-clamp-2 leading-relaxed min-h-[3rem]">
+        <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 mb-5 line-clamp-2 leading-relaxed min-h-[3rem]">
           {recipe.description}
         </p>
 
         {/* Info nutricional mejorada */}
-        <div className="mb-5 pb-5 border-b border-gray-200">
+        <div className="mb-5 pb-5 border-b border-gray-200 dark:border-slate-700">
           <div className="grid grid-cols-4 gap-3">
-            <div className="text-center p-2 rounded-lg bg-red-50/50 group-hover:bg-red-50 transition-colors">
-              <div className="text-xs font-medium text-gray-600 mb-1.5 uppercase tracking-wide">Calorías</div>
+            <div className="text-center p-2 rounded-lg bg-red-50/50 dark:bg-red-900/20 group-hover:bg-red-50 dark:group-hover:bg-red-900/40 transition-colors">
+              <div className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-1.5 uppercase tracking-wide">Calorías</div>
               <div className="text-base font-bold text-red-600">{recipe.calories}</div>
-              <div className="text-[10px] text-gray-500 mt-0.5">kcal</div>
+              <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">kcal</div>
             </div>
-            <div className="text-center p-2 rounded-lg bg-blue-50/50 group-hover:bg-blue-50 transition-colors">
-              <div className="text-xs font-medium text-gray-600 mb-1.5 uppercase tracking-wide">Proteína</div>
+            <div className="text-center p-2 rounded-lg bg-blue-50/50 dark:bg-blue-900/20 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/40 transition-colors">
+              <div className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-1.5 uppercase tracking-wide">Proteína</div>
               <div className="text-base font-bold text-blue-600">{recipe.protein}g</div>
-              <div className="text-[10px] text-gray-500 mt-0.5">proteína</div>
+              <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">proteína</div>
             </div>
-            <div className="text-center p-2 rounded-lg bg-green-50/50 group-hover:bg-green-50 transition-colors">
-              <div className="text-xs font-medium text-gray-600 mb-1.5 uppercase tracking-wide">Carbs</div>
+            <div className="text-center p-2 rounded-lg bg-green-50/50 dark:bg-emerald-900/20 group-hover:bg-green-50 dark:group-hover:bg-emerald-900/40 transition-colors">
+              <div className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-1.5 uppercase tracking-wide">Carbs</div>
               <div className="text-base font-bold text-green-600">{recipe.carbs}g</div>
-              <div className="text-[10px] text-gray-500 mt-0.5">carbos</div>
+              <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">carbos</div>
             </div>
-            <div className="text-center p-2 rounded-lg bg-yellow-50/50 group-hover:bg-yellow-50 transition-colors">
-              <div className="text-xs font-medium text-gray-600 mb-1.5 uppercase tracking-wide">Grasas</div>
+            <div className="text-center p-2 rounded-lg bg-yellow-50/50 dark:bg-yellow-900/20 group-hover:bg-yellow-50 dark:group-hover:bg-yellow-900/40 transition-colors">
+              <div className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-1.5 uppercase tracking-wide">Grasas</div>
               <div className="text-base font-bold text-yellow-600">{recipe.fats}g</div>
-              <div className="text-[10px] text-gray-500 mt-0.5">grasas</div>
+              <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">grasas</div>
             </div>
           </div>
         </div>
 
         {/* CTA mejorado */}
-        <div className="flex items-center justify-between text-primary font-semibold text-sm sm:text-base group-hover:gap-3 transition-all">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-primary font-semibold text-sm sm:text-base group-hover:gap-3 transition-all">
           <span className="flex items-center gap-2">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />

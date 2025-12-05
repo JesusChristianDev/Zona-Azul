@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAllOrders, getOrdersByUserId, createOrder } from '@/lib/db'
+import {
+  getAllOrders,
+  getOrdersByUserId,
+  createOrder,
+  upsertOrderMealSettings,
+  getOrderMealSettingsByOrderIds,
+} from '@/lib/db'
 import { cookies } from 'next/headers'
+import { groupMealSettingsByOrder, normalizeMealSettingsPayload } from './utils'
+import type { DatabaseOrder } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,7 +40,8 @@ export async function GET(request: NextRequest) {
       orders = await getOrdersByUserId(userId)
     }
 
-    return NextResponse.json({ orders })
+    const ordersWithMeals = await attachMealSettingsToOrders(orders)
+    return NextResponse.json({ orders: ordersWithMeals })
   } catch (error: any) {
     console.error('Error fetching orders:', error)
     console.error('Error details:', {
@@ -61,47 +70,39 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { 
-      total_amount, 
-      delivery_address, 
+    const {
+      total_amount,
+      delivery_address,
       delivery_instructions,
       delivery_mode,
       delivery_address_id,
       pickup_location,
+      meals,
+      meal_settings,
     } = body
 
-    if (!total_amount || total_amount <= 0) {
-      return NextResponse.json(
-        { error: 'El monto total es requerido y debe ser mayor a 0' },
-        { status: 400 }
-      )
-    }
+    const mealsPayload = Array.isArray(meal_settings)
+      ? meal_settings
+      : Array.isArray(meals)
+        ? meals
+        : []
 
-    // Validar que si es delivery, tenga dirección
-    if (delivery_mode === 'delivery' && !delivery_address_id && !delivery_address) {
-      return NextResponse.json(
-        { error: 'Se requiere una dirección de entrega para delivery' },
-        { status: 400 }
-      )
-    }
-
-    // Validar que si es pickup, tenga ubicación
-    if (delivery_mode === 'pickup' && !pickup_location) {
-      return NextResponse.json(
-        { error: 'Se requiere una ubicación de recogida para pickup' },
-        { status: 400 }
-      )
-    }
+    const normalizedTotalAmount =
+      typeof total_amount === 'number'
+        ? total_amount
+        : total_amount
+        ? Number.parseFloat(total_amount)
+        : 0
 
     const order = await createOrder({
       user_id: userId,
       status: 'pendiente',
-      total_amount: parseFloat(total_amount),
+      total_amount: Number.isFinite(normalizedTotalAmount) ? normalizedTotalAmount : 0,
       delivery_address: delivery_address || null,
       delivery_instructions: delivery_instructions || null,
-      delivery_mode: delivery_mode || 'delivery',
-      delivery_address_id: delivery_address_id || null,
-      pickup_location: pickup_location || null,
+      delivery_mode: delivery_mode === 'pickup' ? 'pickup' : 'delivery',
+      delivery_address_id: delivery_mode === 'delivery' ? delivery_address_id || null : null,
+      pickup_location: delivery_mode === 'pickup' ? pickup_location || null : null,
     })
 
     if (!order) {
@@ -111,7 +112,30 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({ order }, { status: 201 })
+    let mealSettingsResponse = []
+    if (mealsPayload.length > 0) {
+      try {
+        const normalizedMeals = normalizeMealSettingsPayload(mealsPayload)
+        const savedSettings = await upsertOrderMealSettings(order.id, normalizedMeals)
+        const grouped = groupMealSettingsByOrder(savedSettings)
+        mealSettingsResponse = grouped[order.id] || []
+      } catch (mealError: any) {
+        return NextResponse.json(
+          { error: mealError?.message || 'Error al configurar la entrega de las comidas' },
+          { status: 400 }
+        )
+      }
+    }
+
+    return NextResponse.json(
+      {
+        order: {
+          ...order,
+          meal_settings: mealSettingsResponse,
+        },
+      },
+      { status: 201 }
+    )
   } catch (error) {
     console.error('Error creating order:', error)
     return NextResponse.json(
@@ -119,5 +143,15 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
+}
+
+async function attachMealSettingsToOrders(orders: DatabaseOrder[]) {
+  if (!orders.length) return orders
+  const mealSettings = await getOrderMealSettingsByOrderIds(orders.map((order) => order.id))
+  const grouped = groupMealSettingsByOrder(mealSettings)
+  return orders.map((order) => ({
+    ...order,
+    meal_settings: grouped[order.id] || [],
+  }))
 }
 

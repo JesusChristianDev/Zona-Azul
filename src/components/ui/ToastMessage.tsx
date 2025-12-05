@@ -17,10 +17,10 @@ export default function ToastMessage({
   className = ""
 }: ToastMessageProps) {
   const typeStyles = {
-    success: "bg-green-50 border-green-200 text-green-800",
-    error: "bg-red-50 border-red-200 text-red-800",
-    info: "bg-blue-50 border-blue-200 text-blue-800",
-    warning: "bg-yellow-50 border-yellow-200 text-yellow-800"
+    success: "bg-green-50 dark:bg-emerald-900/20 border-green-200 dark:border-emerald-700 text-green-800 dark:text-emerald-100",
+    error: "bg-red-50 dark:bg-rose-900/20 border-red-200 dark:border-rose-700 text-red-800 dark:text-rose-100",
+    info: "bg-blue-50 dark:bg-sky-900/20 border-blue-200 dark:border-sky-700 text-blue-800 dark:text-sky-100",
+    warning: "bg-yellow-50 dark:bg-amber-900/30 border-yellow-200 dark:border-amber-700 text-yellow-800 dark:text-amber-100"
   }
 
   const icons = {

@@ -199,26 +199,20 @@ export default function AdminStockPage() {
       {/* Filtros */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
         <div className="flex flex-wrap gap-2">
-          <button
+          <ActionButton
             onClick={() => setFilterOutOfStock(false)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              !filterOutOfStock
-                ? 'bg-primary text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            variant={filterOutOfStock ? 'muted' : 'primary'}
+            size="sm"
           >
             Todos
-          </button>
-          <button
+          </ActionButton>
+          <ActionButton
             onClick={() => setFilterOutOfStock(true)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              filterOutOfStock
-                ? 'bg-red-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            variant={filterOutOfStock ? 'danger' : 'muted'}
+            size="sm"
           >
             Sin Stock
-          </button>
+          </ActionButton>
         </div>
       </div>
 
@@ -292,7 +286,7 @@ export default function AdminStockPage() {
                       }}
                       className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm"
                     />
-                    <button
+                    <ActionButton
                       onClick={() => {
                         setSelectedStock(item)
                         setFormData({
@@ -302,10 +296,11 @@ export default function AdminStockPage() {
                         })
                         setIsEditModalOpen(true)
                       }}
-                      className="px-3 py-2 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition"
+                      variant="muted"
+                      size="sm"
                     >
                       Editar
-                    </button>
+                    </ActionButton>
                   </div>
                 </div>
               </div>
@@ -387,8 +382,8 @@ export default function AdminStockPage() {
               ⚠️ Los platos sin stock se bloquean automáticamente y se notifica al nutricionista.
             </p>
           </div>
-          <div className="flex gap-3 pt-4">
-            <button
+          <div className="flex flex-col sm:flex-row gap-3 pt-4">
+            <ActionButton
               type="button"
               onClick={() => {
                 setIsCreateModalOpen(false)
@@ -400,17 +395,18 @@ export default function AdminStockPage() {
                   min_stock_threshold: '5',
                 })
               }}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+              variant="muted-outline"
+              fullWidth
             >
               Cancelar
-            </button>
-            <button
+            </ActionButton>
+            <ActionButton
               type="button"
               onClick={handleCreateOrUpdate}
-              className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition"
+              fullWidth
             >
               {isEditModalOpen ? 'Actualizar' : 'Crear'}
-            </button>
+            </ActionButton>
           </div>
         </div>
       </Modal>

@@ -8,6 +8,7 @@ import SearchFilters from '@/components/ui/SearchFilters'
 import ToastMessage from '@/components/ui/ToastMessage'
 import LoadingState from '@/components/ui/LoadingState'
 import EmptyState from '@/components/ui/EmptyState'
+import ActionButton from '@/components/ui/ActionButton'
 import type { PaymentHistory } from '@/lib/types'
 
 export default function AdminPagosPage() {
@@ -139,17 +140,14 @@ export default function AdminPagosPage() {
             <label className="block text-sm font-medium text-gray-700 mb-2">Filtrar por estado:</label>
             <div className="flex gap-2 flex-wrap">
               {['all', 'pending', 'completed', 'failed', 'refunded'].map((status) => (
-                <button
+                <ActionButton
                   key={status}
                   onClick={() => setFilterStatus(status)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    filterStatus === status
-                      ? 'bg-primary text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
+                  variant={filterStatus === status ? 'primary' : 'muted'}
+                  size="sm"
                 >
                   {status === 'all' ? 'Todos' : getStatusText(status)}
-                </button>
+                </ActionButton>
               ))}
             </div>
           </div>
@@ -204,7 +202,7 @@ export default function AdminPagosPage() {
                       )}
                     </div>
                   </div>
-                  <button
+                  <ActionButton
                     onClick={(e) => {
                       e.stopPropagation()
                       setSelectedPayment(payment)
@@ -214,10 +212,11 @@ export default function AdminPagosPage() {
                       })
                       setIsEditModalOpen(true)
                     }}
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition text-sm font-medium"
+                    variant="muted-outline"
+                    size="sm"
                   >
                     Actualizar Estado
-                  </button>
+                  </ActionButton>
                 </div>
               </div>
             ))}
@@ -336,23 +335,24 @@ export default function AdminPagosPage() {
             />
           </div>
           <div className="flex gap-3 pt-4">
-            <button
+            <ActionButton
               type="button"
               onClick={() => {
                 setIsEditModalOpen(false)
                 setSelectedPayment(null)
               }}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+              variant="muted-outline"
+              fullWidth
             >
               Cancelar
-            </button>
-            <button
+            </ActionButton>
+            <ActionButton
               type="button"
               onClick={handleUpdatePayment}
-              className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition"
+              fullWidth
             >
               Actualizar
-            </button>
+            </ActionButton>
           </div>
         </div>
       </Modal>

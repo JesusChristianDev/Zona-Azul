@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
+import ActionButton from '@/components/ui/ActionButton'
 import type { DeliveryRating } from '@/lib/types'
 
 export default function ValoracionesPage() {
@@ -143,15 +144,16 @@ export default function ValoracionesPage() {
                     >
                       {rating.is_visible_to_repartidor ? 'Compartida' : 'No compartida'}
                     </span>
-                    <button
+                    <ActionButton
                       onClick={() => {
                         setSelectedRating(rating)
                         setIsShareModalOpen(true)
                       }}
-                      className="px-3 py-1 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 transition"
+                      variant={rating.is_visible_to_repartidor ? 'soft-danger' : 'primary'}
+                      size="sm"
                     >
                       {rating.is_visible_to_repartidor ? 'Ocultar' : 'Compartir'}
-                    </button>
+                    </ActionButton>
                   </div>
                 </div>
               </div>
@@ -175,25 +177,23 @@ export default function ValoracionesPage() {
                 : '¿Deseas compartir esta valoración con el repartidor?'}
             </p>
             <div className="flex gap-3">
-              <button
+              <ActionButton
                 onClick={() => {
                   setIsShareModalOpen(false)
                   setSelectedRating(null)
                 }}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+                variant="muted-outline"
+                fullWidth
               >
                 Cancelar
-              </button>
-              <button
+              </ActionButton>
+              <ActionButton
                 onClick={() => handleShareWithRepartidor(selectedRating, !selectedRating.is_visible_to_repartidor)}
-                className={`flex-1 px-4 py-2 rounded-lg text-white font-medium transition ${
-                  selectedRating.is_visible_to_repartidor
-                    ? 'bg-red-500 hover:bg-red-600'
-                    : 'bg-primary hover:bg-primary/90'
-                }`}
+                variant={selectedRating.is_visible_to_repartidor ? 'danger' : 'primary'}
+                fullWidth
               >
                 {selectedRating.is_visible_to_repartidor ? 'Ocultar' : 'Compartir'}
-              </button>
+              </ActionButton>
             </div>
           </div>
         </div>

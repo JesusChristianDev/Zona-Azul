@@ -137,17 +137,17 @@ export default function RepartidorPage() {
       </div>
       <section className="grid gap-3 sm:gap-4 md:grid-cols-3">
         {metrics.map((metric) => (
-          <article key={metric.label} className="rounded-2xl border border-highlight/30 bg-white p-4 sm:p-5 shadow-sm">
+          <article key={metric.label} className="rounded-2xl border border-highlight/30 dark:border-highlight/40 bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wider text-highlight/80">{metric.label}</p>
-            <p className="mt-2 sm:mt-3 text-2xl sm:text-3xl font-bold text-gray-900">{metric.value}</p>
-            <p className="mt-1 sm:mt-2 text-xs font-medium text-gray-500">{metric.delta}</p>
+            <p className="mt-2 sm:mt-3 text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100">{metric.value}</p>
+            <p className="mt-1 sm:mt-2 text-xs font-medium text-gray-500 dark:text-gray-400">{metric.delta}</p>
           </article>
         ))}
       </section>
 
-      <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-gray-900">Tips de excelencia Zona Azul</h2>
-        <ul className="mt-4 space-y-2 text-sm text-gray-600">
+      <section className="rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 sm:p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Tips de excelencia Zona Azul</h2>
+        <ul className="mt-4 space-y-2 text-sm text-gray-600 dark:text-gray-300">
           {safetyTips.map((tip) => (
             <li key={tip} className="flex items-start gap-2">
               <span className="mt-1 block h-2 w-2 rounded-full bg-accent"></span>

@@ -22,14 +22,14 @@ export default function SummaryCard({
 }: SummaryCardProps) {
   return (
     <div 
-      className={`bg-white rounded-xl shadow-md p-4 sm:p-6 transition-all duration-200 ease-out hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] animate-in fade-in slide-in-from-bottom-2 ${className}`}
+      className={`bg-white dark:bg-slate-800 rounded-xl shadow-md border border-gray-100 dark:border-slate-700 p-4 sm:p-6 transition-all duration-200 ease-out hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] animate-in fade-in slide-in-from-bottom-2 ${className}`}
       style={{ willChange: 'transform, box-shadow' }}
     >
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <p className="text-sm text-gray-600 mb-1 transition-colors duration-150">{title}</p>
-          <p className="text-2xl sm:text-3xl font-bold text-gray-900 transition-all duration-200">{value}</p>
-          {subtitle && <p className="text-xs sm:text-sm text-gray-500 mt-1 transition-colors duration-150">{subtitle}</p>}
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-1 transition-colors duration-150">{title}</p>
+          <p className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100 transition-all duration-200">{value}</p>
+          {subtitle && <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1 transition-colors duration-150">{subtitle}</p>}
           {trend && (
             <div className="flex items-center gap-1 mt-2 animate-in fade-in slide-in-from-left-2">
               <svg

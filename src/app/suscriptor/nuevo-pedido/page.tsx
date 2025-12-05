@@ -7,7 +7,7 @@ import PageHeader from '@/components/ui/PageHeader'
 import ToastMessage from '@/components/ui/ToastMessage'
 import LoadingState from '@/components/ui/LoadingState'
 import EmptyState from '@/components/ui/EmptyState'
-import type { DeliveryAddress, WeeklyMenu, WeeklyMenuDay } from '@/lib/types'
+import type { DeliveryAddress, WeeklyMenu, WeeklyMenuDay, Subscription } from '@/lib/types'
 
 interface ScheduledOrder {
   id?: string
@@ -16,12 +16,13 @@ interface ScheduledOrder {
   meals: Array<{
     id: string
     name: string
-    type: 'breakfast' | 'lunch' | 'dinner' | 'snack'
+    type: 'lunch' | 'dinner'
     meal_type: string
+    delivery_mode?: 'delivery' | 'pickup'
+    delivery_address_id?: string
+    pickup_location?: string
+    delivery_time?: string // Hora de entrega (HH:mm)
   }>
-  delivery_mode: 'delivery' | 'pickup'
-  delivery_address_id?: string
-  pickup_location?: string
   can_modify: boolean
   modification_deadline: string
 }
@@ -33,6 +34,9 @@ export default function ConfigurarEntregaPage() {
   const [scheduledOrders, setScheduledOrders] = useState<ScheduledOrder[]>([])
   const [addresses, setAddresses] = useState<DeliveryAddress[]>([])
   const [currentWeekMenu, setCurrentWeekMenu] = useState<WeeklyMenu | null>(null)
+  const [subscription, setSubscription] = useState<Subscription | null>(null)
+  const [mealPlanPreferences, setMealPlanPreferences] = useState<Record<string, 'lunch' | 'dinner'>>({}) // meal_plan_day_id -> preferred_meal_type
+  const [mealPlanDayMapping, setMealPlanDayMapping] = useState<Record<number, string>>({}) // day_number -> meal_plan_day_id
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [saving, setSaving] = useState<string | null>(null) // ID del pedido que se está guardando
@@ -48,13 +52,70 @@ export default function ConfigurarEntregaPage() {
 
     setLoading(true)
     try {
+      // Cargar suscripción activa para obtener meals_per_day
+      let activeSub: Subscription | null = null
+      const subResponse = await fetch(`/api/subscriptions?user_id=${userId}&status=active`)
+      if (subResponse.ok) {
+        const subData = await subResponse.json()
+        activeSub = Array.isArray(subData) ? subData.find((sub: Subscription) => sub.status === 'active') : null
+        if (activeSub) {
+          setSubscription(activeSub)
+        }
+      }
+
+      // Cargar plan nutricional y preferencias si meals_per_day = 1
+      if (activeSub && activeSub.meals_per_day === 1) {
+        try {
+          const planResponse = await fetch(`/api/plans?user_id=${userId}`)
+          if (planResponse.ok) {
+            const planData = await planResponse.json()
+            const mealPlan = planData.plan
+            
+            if (mealPlan && mealPlan.id) {
+              // Crear mapeo de day_number a meal_plan_day_id
+              const dayMapping: Record<number, string> = {}
+              if (mealPlan.days && Array.isArray(mealPlan.days)) {
+                mealPlan.days.forEach((day: any) => {
+                  // El plan tiene días con day_number (1-5 para lunes-viernes)
+                  // Necesitamos obtener el day_number del nombre del día
+                  const dayNumberMap: Record<string, number> = {
+                    'Lunes': 1,
+                    'Martes': 2,
+                    'Miércoles': 3,
+                    'Jueves': 4,
+                    'Viernes': 5,
+                  }
+                  const dayNumber = dayNumberMap[day.day] || day.day_number
+                  if (day.id && dayNumber) {
+                    dayMapping[dayNumber] = day.id
+                  }
+                })
+              }
+              setMealPlanDayMapping(dayMapping)
+              
+              // Cargar preferencias del plan
+              const prefsResponse = await fetch(`/api/meal-plan-preferences?meal_plan_id=${mealPlan.id}`)
+              if (prefsResponse.ok) {
+                const prefsData = await prefsResponse.json()
+                if (prefsData.preferences) {
+                  setMealPlanPreferences(prefsData.preferences)
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error loading meal plan preferences:', error)
+        }
+      }
+
       // Cargar menú semanal actual
+      let currentMenu: WeeklyMenu | null = null
       const menuResponse = await fetch(`/api/weekly-menus?user_id=${userId}`)
       if (menuResponse.ok) {
         const menus = await menuResponse.json()
         // Obtener el menú de la semana actual o próxima
         const today = new Date()
-        const currentMenu = menus.find((m: WeeklyMenu) => {
+        currentMenu = menus.find((m: WeeklyMenu) => {
           const weekStart = new Date(m.week_start_date)
           const weekEnd = new Date(m.week_end_date)
           return today >= weekStart && today <= weekEnd
@@ -62,8 +123,12 @@ export default function ConfigurarEntregaPage() {
 
         if (currentMenu) {
           setCurrentWeekMenu(currentMenu)
-          await loadScheduledOrders(currentMenu.id)
         }
+      }
+
+      // Cargar pedidos programados después de tener la suscripción y el menú
+      if (currentMenu) {
+        await loadScheduledOrders(currentMenu.id, activeSub)
       }
 
       // Cargar direcciones
@@ -80,7 +145,7 @@ export default function ConfigurarEntregaPage() {
     }
   }
 
-  const loadScheduledOrders = async (weeklyMenuId: string) => {
+  const loadScheduledOrders = async (weeklyMenuId: string, subscriptionInfo: Subscription | null = subscription) => {
     try {
       // Obtener detalles del menú semanal con días y comidas
       const menuDetailResponse = await fetch(`/api/weekly-menus/${weeklyMenuId}`)
@@ -89,13 +154,23 @@ export default function ConfigurarEntregaPage() {
         
         // Obtener pedidos existentes para esta semana (si existen)
         const ordersResponse = await fetch(`/api/orders?user_id=${userId}`)
-        const orders = ordersResponse.ok ? await ordersResponse.json() : []
+        let orders: any[] = []
+        if (ordersResponse.ok) {
+          const ordersData = await ordersResponse.json()
+          orders = Array.isArray(ordersData) ? ordersData : (ordersData.orders || [])
+        }
 
         // Construir pedidos programados desde el menú
         const scheduled: ScheduledOrder[] = []
         
         if (menuDetail.days) {
           for (const day of menuDetail.days) {
+            // Solo procesar días laborables (lunes a viernes, day_number 1-5)
+            // Sábado y domingo no tienen entregas porque el local cierra
+            if (day.day_number && (day.day_number < 1 || day.day_number > 5)) {
+              continue // Saltar sábado (6) y domingo (7)
+            }
+
             const dayDate = new Date(day.date)
             const now = new Date()
             const hoursUntilDelivery = (dayDate.getTime() - now.getTime()) / (1000 * 60 * 60)
@@ -109,19 +184,115 @@ export default function ConfigurarEntregaPage() {
               return orderDate === day.date
             })
 
+            // Filtrar comidas según meals_per_day
+            let mealsToShow = day.meals || []
+            if (subscriptionInfo && subscriptionInfo.meals_per_day === 1) {
+              // Si solo tiene 1 comida por día, usar la preferencia del plan de comidas
+              // Filtrar solo lunch y dinner
+              const lunchDinnerMeals = mealsToShow.filter((m: any) => {
+                const mealType = m.meal_type || m.type
+                return mealType === 'lunch' || mealType === 'dinner'
+              })
+
+              const normalizedMeals =
+                lunchDinnerMeals.length > 0
+                  ? lunchDinnerMeals
+                  : mealsToShow.length > 0
+                    ? [
+                        {
+                          ...mealsToShow[0],
+                          meal_type: 'lunch',
+                          type: 'lunch',
+                        },
+                      ]
+                    : []
+              
+              // Obtener la preferencia del plan usando day_number
+              let preferredMealType: 'lunch' | 'dinner' | null = null
+              
+              // Mapear day_number del menú semanal a meal_plan_day_id
+              const dayNumber = day.day_number
+              const mealPlanDayId = mealPlanDayMapping[dayNumber]
+              
+              if (mealPlanDayId && mealPlanPreferences[mealPlanDayId]) {
+                preferredMealType = mealPlanPreferences[mealPlanDayId]
+              }
+              
+              const lunchMeals = normalizedMeals.filter((m: any) => (m.meal_type || m.type) === 'lunch')
+              const dinnerMeals = normalizedMeals.filter((m: any) => (m.meal_type || m.type) === 'dinner')
+              
+              // Si hay preferencia guardada, usarla; sino, usar lunch por defecto
+              if (preferredMealType === 'dinner' && dinnerMeals.length > 0) {
+                mealsToShow = [dinnerMeals[0]]
+              } else if (preferredMealType === 'lunch' && lunchMeals.length > 0) {
+                mealsToShow = [lunchMeals[0]]
+              } else if (lunchMeals.length > 0) {
+                // Por defecto, usar lunch si existe
+                mealsToShow = [lunchMeals[0]]
+              } else if (dinnerMeals.length > 0) {
+                mealsToShow = [dinnerMeals[0]]
+              } else {
+                mealsToShow = normalizedMeals.slice(0, 1)
+              }
+            } else if (subscriptionInfo && subscriptionInfo.meals_per_day === 2) {
+              // Si tiene 2 comidas por día, mostrar AMBAS: lunch y dinner
+              mealsToShow = mealsToShow.filter((m: any) => {
+                const mealType = m.meal_type || m.type
+                return mealType === 'lunch' || mealType === 'dinner'
+              })
+              // Asegurar que haya máximo 1 lunch y 1 dinner
+              const lunchMeals = mealsToShow.filter((m: any) => (m.meal_type || m.type) === 'lunch')
+              const dinnerMeals = mealsToShow.filter((m: any) => (m.meal_type || m.type) === 'dinner')
+              mealsToShow = [
+                ...(lunchMeals.length > 0 ? [lunchMeals[0]] : []),
+                ...(dinnerMeals.length > 0 ? [dinnerMeals[0]] : [])
+              ]
+            }
+
+            const orderMealSettings = (existingOrder?.meal_settings || []) as any[]
+
+            const mealsWithConfig = mealsToShow.map((m: any) => {
+              const mealType = m.meal_type || m.type
+              const mealId = m.id || m.meal_id
+              const defaultTime = mealType === 'dinner' ? '20:00' : '14:00'
+
+              const matchedSetting = orderMealSettings.find((setting: any) => {
+                if (setting.meal_id && mealId) {
+                  return setting.meal_id === mealId
+                }
+                return !setting.meal_id && setting.meal_type === mealType
+              })
+
+              const deliveryMode = matchedSetting?.delivery_mode || existingOrder?.delivery_mode || 'delivery'
+              const deliveryAddressId =
+                deliveryMode === 'delivery'
+                  ? matchedSetting?.delivery_address_id || existingOrder?.delivery_address_id || undefined
+                  : undefined
+              const pickupLocation =
+                deliveryMode === 'pickup'
+                  ? matchedSetting?.pickup_location || existingOrder?.pickup_location || ''
+                  : undefined
+              const deliveryTime = matchedSetting?.delivery_time
+                ? matchedSetting.delivery_time.slice(0, 5)
+                : defaultTime
+
+              return {
+                id: mealId,
+                name: m.name || 'Comida',
+                type: m.type || m.meal_type,
+                meal_type: m.meal_type || m.type,
+                delivery_mode: deliveryMode,
+                delivery_address_id: deliveryAddressId,
+                pickup_location: pickupLocation,
+                delivery_time: deliveryTime,
+              }
+            })
+
             scheduled.push({
               id: existingOrder?.id,
               date: day.date,
               dayName: day.day_name,
-              meals: (day.meals || []).map((m: any) => ({
-              id: m.id || m.meal_id,
-              name: m.name || 'Comida',
-              type: m.type || m.meal_type,
-              meal_type: m.meal_type || m.type,
-            })),
-              delivery_mode: existingOrder?.delivery_mode || 'delivery',
-              delivery_address_id: existingOrder?.delivery_address_id,
-              pickup_location: existingOrder?.pickup_location,
+              meals: mealsWithConfig,
               can_modify: canModify,
               modification_deadline: new Date(dayDate.getTime() - 60 * 60 * 1000).toISOString(),
             })
@@ -135,24 +306,9 @@ export default function ConfigurarEntregaPage() {
     }
   }
 
-  const handleDeliveryModeChange = async (orderIndex: number, mode: 'delivery' | 'pickup') => {
-    const order = scheduledOrders[orderIndex]
-    if (!order.can_modify) {
-      setError('No puedes modificar este pedido. El plazo de modificación ha expirado (1 hora antes de la entrega).')
-      return
-    }
 
-    const updated = [...scheduledOrders]
-    updated[orderIndex] = {
-      ...order,
-      delivery_mode: mode,
-      delivery_address_id: mode === 'delivery' ? (addresses[0]?.id || '') : undefined,
-      pickup_location: mode === 'pickup' ? '' : undefined,
-    }
-    setScheduledOrders(updated)
-  }
-
-  const handleAddressChange = (orderIndex: number, addressId: string) => {
+  // Cambiar modo de entrega por comida individual
+  const handleMealDeliveryModeChange = (orderIndex: number, mealIndex: number, mode: 'delivery' | 'pickup') => {
     const order = scheduledOrders[orderIndex]
     if (!order.can_modify) {
       setError('No puedes modificar este pedido. El plazo de modificación ha expirado.')
@@ -162,12 +318,23 @@ export default function ConfigurarEntregaPage() {
     const updated = [...scheduledOrders]
     updated[orderIndex] = {
       ...order,
-      delivery_address_id: addressId,
+      meals: order.meals.map((meal, idx) => {
+        if (idx === mealIndex) {
+          return {
+            ...meal,
+            delivery_mode: mode,
+            delivery_address_id: mode === 'delivery' ? (addresses[0]?.id || '') : undefined,
+            pickup_location: mode === 'pickup' ? '' : undefined,
+          }
+        }
+        return meal
+      }),
     }
     setScheduledOrders(updated)
   }
 
-  const handlePickupLocationChange = (orderIndex: number, location: string) => {
+  // Cambiar dirección por comida individual
+  const handleMealAddressChange = (orderIndex: number, mealIndex: number, addressId: string) => {
     const order = scheduledOrders[orderIndex]
     if (!order.can_modify) {
       setError('No puedes modificar este pedido. El plazo de modificación ha expirado.')
@@ -177,9 +344,80 @@ export default function ConfigurarEntregaPage() {
     const updated = [...scheduledOrders]
     updated[orderIndex] = {
       ...order,
-      pickup_location: location,
+      meals: order.meals.map((meal, idx) => {
+        if (idx === mealIndex) {
+          return {
+            ...meal,
+            delivery_address_id: addressId,
+          }
+        }
+        return meal
+      }),
     }
     setScheduledOrders(updated)
+  }
+
+  // Cambiar ubicación de recogida por comida individual
+  const handleMealPickupLocationChange = (orderIndex: number, mealIndex: number, location: string) => {
+    const order = scheduledOrders[orderIndex]
+    if (!order.can_modify) {
+      setError('No puedes modificar este pedido. El plazo de modificación ha expirado.')
+      return
+    }
+
+    const updated = [...scheduledOrders]
+    updated[orderIndex] = {
+      ...order,
+      meals: order.meals.map((meal, idx) => {
+        if (idx === mealIndex) {
+          return {
+            ...meal,
+            pickup_location: location,
+          }
+        }
+        return meal
+      }),
+    }
+    setScheduledOrders(updated)
+  }
+
+  // Cambiar hora de entrega por comida individual
+  const handleMealDeliveryTimeChange = (orderIndex: number, mealIndex: number, time: string) => {
+    const order = scheduledOrders[orderIndex]
+    if (!order.can_modify) {
+      setError('No puedes modificar este pedido. El plazo de modificación ha expirado.')
+      return
+    }
+
+    const meal = order.meals[mealIndex]
+    const mealType = meal.meal_type || meal.type
+    const hour = parseInt(time.split(':')[0])
+
+    // Validar rango de horas
+    if (mealType === 'lunch' && (hour < 12 || hour > 16)) {
+      setError('La hora de entrega para el almuerzo debe estar entre las 12:00 y las 16:00')
+      return
+    }
+    if (mealType === 'dinner' && (hour < 19 || hour > 23)) {
+      setError('La hora de entrega para la cena debe estar entre las 19:00 y las 23:00')
+      return
+    }
+
+    const updated = [...scheduledOrders]
+    updated[orderIndex] = {
+      ...order,
+      meals: order.meals.map((m, idx) => {
+        if (idx === mealIndex) {
+          return {
+            ...m,
+            delivery_time: time,
+          }
+        }
+        return m
+      }),
+    }
+    setScheduledOrders(updated)
+    setError(null)
   }
 
   const handleSaveOrder = async (orderIndex: number) => {
@@ -190,13 +428,43 @@ export default function ConfigurarEntregaPage() {
       return
     }
 
-    if (order.delivery_mode === 'delivery' && !order.delivery_address_id) {
-      setError('Debes seleccionar una dirección de entrega')
-      return
+    // Validar todas las comidas
+    const mealsToSave = order.meals.filter((m) => {
+      const mealType = m.meal_type || m.type
+      return mealType === 'lunch' || mealType === 'dinner'
+    })
+
+    for (const meal of mealsToSave) {
+      if (meal.delivery_mode === 'delivery' && !meal.delivery_address_id) {
+        setError(`Debes seleccionar una dirección de entrega para ${getMealTypeText(meal.meal_type || meal.type)}`)
+        return
+      }
+
+      if (meal.delivery_mode === 'pickup' && !meal.pickup_location?.trim()) {
+        setError(`Debes especificar una ubicación de recogida para ${getMealTypeText(meal.meal_type || meal.type)}`)
+        return
+      }
+
+      if (!meal.delivery_time) {
+        setError(`Debes especificar una hora de entrega para ${getMealTypeText(meal.meal_type || meal.type)}`)
+        return
+      }
+
+      // Validar rango de horas
+      const hour = parseInt(meal.delivery_time.split(':')[0])
+      const mealType = meal.meal_type || meal.type
+      if (mealType === 'lunch' && (hour < 12 || hour > 16)) {
+        setError('La hora de entrega para el almuerzo debe estar entre las 12:00 y las 16:00')
+        return
+      }
+      if (mealType === 'dinner' && (hour < 19 || hour > 23)) {
+        setError('La hora de entrega para la cena debe estar entre las 19:00 y las 23:00')
+        return
+      }
     }
 
-    if (order.delivery_mode === 'pickup' && !order.pickup_location?.trim()) {
-      setError('Debes especificar una ubicación de recogida')
+    if (mealsToSave.length === 0) {
+      setError('No hay comidas configuradas para guardar')
       return
     }
 
@@ -204,40 +472,91 @@ export default function ConfigurarEntregaPage() {
     setError(null)
 
     try {
+      const mealsPayload = mealsToSave.map((meal) => {
+        const mealId = meal.id || ('meal_id' in meal ? meal.meal_id : undefined)
+        if (!mealId) {
+          throw new Error('No se pudo identificar una de las comidas del pedido')
+        }
+        const normalizedType = (meal.meal_type || meal.type) === 'dinner' ? 'dinner' : 'lunch'
+        return {
+          meal_id: mealId,
+          meal_type: normalizedType,
+          delivery_mode: meal.delivery_mode,
+          delivery_address_id: meal.delivery_mode === 'delivery' ? meal.delivery_address_id || null : null,
+          pickup_location: meal.delivery_mode === 'pickup' ? (meal.pickup_location || '').trim() || null : null,
+          delivery_time: meal.delivery_time,
+          scheduled_date: order.date,
+        }
+      })
+
+      const baseMeal = mealsPayload[0]
+      let responseData: any = null
+
       if (order.id) {
-        // Actualizar pedido existente
         const response = await fetch(`/api/orders/${order.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            delivery_mode: order.delivery_mode,
-            delivery_address_id: order.delivery_mode === 'delivery' ? order.delivery_address_id : null,
-            pickup_location: order.delivery_mode === 'pickup' ? order.pickup_location : null,
-          }),
+          body: JSON.stringify({ meal_settings: mealsPayload }),
         })
 
         if (!response.ok) {
           throw new Error('Error al actualizar el pedido')
         }
+
+        responseData = await response.json()
       } else {
-        // Crear nuevo pedido (aunque normalmente deberían existir)
-        // Esto es un fallback por si acaso
         const response = await fetch('/api/orders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            total_amount: 0, // Se calculará automáticamente
-            delivery_mode: order.delivery_mode,
-            delivery_address_id: order.delivery_mode === 'delivery' ? order.delivery_address_id : undefined,
-            pickup_location: order.delivery_mode === 'pickup' ? order.pickup_location : undefined,
-            scheduled_date: order.date,
+            total_amount: 0,
+            delivery_mode: baseMeal?.delivery_mode,
+            delivery_address_id:
+              baseMeal?.delivery_mode === 'delivery' ? baseMeal?.delivery_address_id : undefined,
+            pickup_location: baseMeal?.delivery_mode === 'pickup' ? baseMeal?.pickup_location : undefined,
+            meal_settings: mealsPayload,
           }),
         })
 
         if (!response.ok) {
           throw new Error('Error al crear el pedido')
         }
+
+        responseData = await response.json()
       }
+
+      const updatedOrderData = responseData?.order
+      const updatedMealSettings = updatedOrderData?.meal_settings || []
+
+      setScheduledOrders((prev) => {
+        const next = [...prev]
+        next[orderIndex] = {
+          ...next[orderIndex],
+          id: updatedOrderData?.id || next[orderIndex].id,
+          meals: next[orderIndex].meals.map((meal) => {
+            const mealId = meal.id || ('meal_id' in meal ? meal.meal_id : undefined)
+            const setting = updatedMealSettings.find((s: any) => s.meal_id === mealId)
+            if (!setting) {
+              return meal
+            }
+            const normalizedTime = setting.delivery_time ? setting.delivery_time.slice(0, 5) : meal.delivery_time
+            return {
+              ...meal,
+              delivery_mode: setting.delivery_mode,
+              delivery_address_id:
+                setting.delivery_mode === 'delivery'
+                  ? setting.delivery_address_id || meal.delivery_address_id
+                  : undefined,
+              pickup_location:
+                setting.delivery_mode === 'pickup'
+                  ? setting.pickup_location || meal.pickup_location || ''
+                  : undefined,
+              delivery_time: normalizedTime,
+            }
+          }),
+        }
+        return next
+      })
 
       setSuccess(`Configuración guardada para ${order.dayName}`)
       setTimeout(() => setSuccess(null), 3000)
@@ -259,13 +578,7 @@ export default function ConfigurarEntregaPage() {
   }
 
   const getMealTypeText = (type: string) => {
-    const types: Record<string, string> = {
-      breakfast: 'Desayuno',
-      lunch: 'Almuerzo',
-      dinner: 'Cena',
-      snack: 'Snack',
-    }
-    return types[type] || type
+    return type === 'lunch' ? 'Almuerzo' : type === 'dinner' ? 'Cena' : type
   }
 
   const getTimeUntilDeadline = (deadline: string) => {
@@ -276,6 +589,184 @@ export default function ConfigurarEntregaPage() {
     if (hours < 0) return 'Expirado'
     if (hours < 1) return `${Math.floor((deadlineDate.getTime() - now.getTime()) / (1000 * 60))} minutos`
     return `${hours} hora${hours !== 1 ? 's' : ''}`
+  }
+
+  // Componente para configuración de entrega por comida
+  const MealDeliveryConfig = ({
+    order,
+    orderIndex,
+    mealIndex,
+    addresses,
+    router,
+    canModify,
+    onDeliveryModeChange,
+    onAddressChange,
+    onPickupLocationChange,
+    onDeliveryTimeChange,
+    onSave,
+    saving,
+  }: {
+    order: ScheduledOrder
+    orderIndex: number
+    mealIndex: number
+    addresses: DeliveryAddress[]
+    router: any
+    canModify: boolean
+    onDeliveryModeChange: (orderIndex: number, mealIndex: number, mode: 'delivery' | 'pickup') => void
+    onAddressChange: (orderIndex: number, mealIndex: number, addressId: string) => void
+    onPickupLocationChange: (orderIndex: number, mealIndex: number, location: string) => void
+    onDeliveryTimeChange: (orderIndex: number, mealIndex: number, time: string) => void
+    onSave: () => void
+    saving: boolean
+  }) => {
+    const meal = order.meals[mealIndex]
+    if (!meal) return null
+
+    const mealType = meal.meal_type || meal.type
+    const isLunch = mealType === 'lunch'
+    const minHour = isLunch ? 12 : 19
+    const maxHour = isLunch ? 16 : 23
+
+    // Validar si puede guardar
+    const canSave = meal.delivery_mode === 'delivery' 
+      ? meal.delivery_address_id 
+      : meal.pickup_location?.trim()
+
+    return (
+      <div className="space-y-4">
+        {/* Método de entrega */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-3">
+            Método de Entrega
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => onDeliveryModeChange(orderIndex, mealIndex, 'delivery')}
+              disabled={!canModify}
+              className={`p-4 rounded-lg border-2 transition-all ${
+                meal.delivery_mode === 'delivery'
+                  ? 'border-primary bg-primary/5'
+                  : 'border-gray-200 hover:border-gray-300'
+              } ${!canModify ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <div className="flex flex-col items-center gap-2">
+                <span className="text-2xl">🚚</span>
+                <span className="font-medium text-gray-900 text-sm">Delivery</span>
+              </div>
+            </button>
+            <button
+              onClick={() => onDeliveryModeChange(orderIndex, mealIndex, 'pickup')}
+              disabled={!canModify}
+              className={`p-4 rounded-lg border-2 transition-all ${
+                meal.delivery_mode === 'pickup'
+                  ? 'border-primary bg-primary/5'
+                  : 'border-gray-200 hover:border-gray-300'
+              } ${!canModify ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <div className="flex flex-col items-center gap-2">
+                <span className="text-2xl">📦</span>
+                <span className="font-medium text-gray-900 text-sm">Pickup</span>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        {/* Hora de entrega */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Hora de Entrega {canModify && <span className="text-red-500 ml-1">*</span>}
+            <span className="text-xs text-gray-500 ml-2">({minHour}:00 - {maxHour}:00)</span>
+          </label>
+          <input
+            type="time"
+            value={meal.delivery_time || ''}
+            onChange={(e) => onDeliveryTimeChange(orderIndex, mealIndex, e.target.value)}
+            disabled={!canModify}
+            min={`${minHour.toString().padStart(2, '0')}:00`}
+            max={`${maxHour.toString().padStart(2, '0')}:59`}
+            className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary ${
+              !canModify ? 'opacity-50 cursor-not-allowed bg-gray-100' : ''
+            }`}
+          />
+        </div>
+
+        {/* Dirección de entrega */}
+        {meal.delivery_mode === 'delivery' && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Dirección de Entrega
+              {canModify && <span className="text-red-500 ml-1">*</span>}
+            </label>
+            {addresses.length === 0 ? (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <p className="text-sm text-yellow-800 mb-2">
+                  No tienes direcciones registradas.{' '}
+                  <button
+                    onClick={() => router.push('/suscriptor/direcciones')}
+                    className="underline font-medium"
+                  >
+                    Agregar dirección
+                  </button>
+                </p>
+              </div>
+            ) : (
+              <select
+                value={meal.delivery_address_id || ''}
+                onChange={(e) => onAddressChange(orderIndex, mealIndex, e.target.value)}
+                disabled={!canModify}
+                className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary ${
+                  !canModify ? 'opacity-50 cursor-not-allowed bg-gray-100' : ''
+                }`}
+              >
+                <option value="">Seleccionar dirección</option>
+                {addresses.map((address) => (
+                  <option key={address.id} value={address.id}>
+                    {address.address_line1}
+                    {address.address_line2 && `, ${address.address_line2}`}
+                    {address.is_primary && ' (Principal)'}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
+
+        {/* Ubicación de recogida */}
+        {meal.delivery_mode === 'pickup' && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Ubicación de Recogida
+              {canModify && <span className="text-red-500 ml-1">*</span>}
+            </label>
+            <input
+              type="text"
+              value={meal.pickup_location || ''}
+              onChange={(e) => onPickupLocationChange(orderIndex, mealIndex, e.target.value)}
+              disabled={!canModify}
+              placeholder="Ej: Local Zona Azul - Calle Principal 123"
+              className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary ${
+                !canModify ? 'opacity-50 cursor-not-allowed bg-gray-100' : ''
+              }`}
+            />
+          </div>
+        )}
+
+        {/* Botón guardar */}
+        {canModify && (
+          <button
+            onClick={onSave}
+            disabled={saving || !canSave}
+            className={`w-full px-4 py-2 rounded-lg font-medium transition ${
+              saving || !canSave
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-primary text-white hover:bg-primary/90'
+            }`}
+          >
+            {saving ? 'Guardando...' : 'Guardar Configuración'}
+          </button>
+        )}
+      </div>
+    )
   }
 
   if (loading) {
@@ -351,8 +842,10 @@ export default function ConfigurarEntregaPage() {
             <p className="font-semibold mb-1">Recordatorio importante:</p>
             <ul className="list-disc list-inside space-y-1">
               <li>Los pedidos se generan automáticamente según tu plan (1 comida, 1 cena, o ambas)</li>
+              <li>Las entregas solo están disponibles de <strong>lunes a viernes</strong> (sábado y domingo el local cierra)</li>
               <li>Puedes cambiar el método de entrega hasta 1 hora antes de la fecha programada</li>
               <li>Si eliges delivery, asegúrate de tener una dirección configurada</li>
+              <li>Horarios de entrega: Almuerzo (12:00-16:00), Cena (19:00-23:00)</li>
             </ul>
           </div>
         </div>
@@ -386,135 +879,82 @@ export default function ConfigurarEntregaPage() {
               </div>
             </div>
 
-            {/* Comidas programadas */}
-            <div className="mb-4">
-              <p className="text-sm font-medium text-gray-700 mb-2">Comidas incluidas:</p>
-              <div className="flex flex-wrap gap-2">
-                {order.meals.map((meal, mealIndex) => (
-                  <span
-                    key={mealIndex}
-                    className="px-3 py-1 bg-gray-100 text-gray-700 rounded-lg text-sm"
-                  >
-                    {getMealTypeText(meal.meal_type || meal.type)}: {meal.name}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            {/* Configuración de entrega */}
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Método de Entrega
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => handleDeliveryModeChange(index, 'delivery')}
-                    disabled={!order.can_modify}
-                    className={`p-4 rounded-lg border-2 transition-all ${
-                      order.delivery_mode === 'delivery'
-                        ? 'border-primary bg-primary/5'
-                        : 'border-gray-200 hover:border-gray-300'
-                    } ${!order.can_modify ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    <div className="flex flex-col items-center gap-2">
-                      <span className="text-2xl">🚚</span>
-                      <span className="font-medium text-gray-900 text-sm">Delivery</span>
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => handleDeliveryModeChange(index, 'pickup')}
-                    disabled={!order.can_modify}
-                    className={`p-4 rounded-lg border-2 transition-all ${
-                      order.delivery_mode === 'pickup'
-                        ? 'border-primary bg-primary/5'
-                        : 'border-gray-200 hover:border-gray-300'
-                    } ${!order.can_modify ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    <div className="flex flex-col items-center gap-2">
-                      <span className="text-2xl">📦</span>
-                      <span className="font-medium text-gray-900 text-sm">Pickup</span>
-                    </div>
-                  </button>
-                </div>
-              </div>
-
-              {/* Dirección de entrega */}
-              {order.delivery_mode === 'delivery' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Dirección de Entrega
-                    {order.can_modify && <span className="text-red-500 ml-1">*</span>}
-                  </label>
-                  {addresses.length === 0 ? (
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                      <p className="text-sm text-yellow-800 mb-2">
-                        No tienes direcciones registradas.{' '}
-                        <button
-                          onClick={() => router.push('/suscriptor/direcciones')}
-                          className="underline font-medium"
-                        >
-                          Agregar dirección
-                        </button>
-                      </p>
-                    </div>
-                  ) : (
-                    <select
-                      value={order.delivery_address_id || ''}
-                      onChange={(e) => handleAddressChange(index, e.target.value)}
-                      disabled={!order.can_modify}
-                      className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary ${
-                        !order.can_modify ? 'opacity-50 cursor-not-allowed bg-gray-100' : ''
-                      }`}
-                    >
-                      <option value="">Seleccionar dirección</option>
-                      {addresses.map((address) => (
-                        <option key={address.id} value={address.id}>
-                          {address.address_line1}
-                          {address.address_line2 && `, ${address.address_line2}`}
-                          {address.is_primary && ' (Principal)'}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              )}
-
-              {/* Ubicación de recogida */}
-              {order.delivery_mode === 'pickup' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Ubicación de Recogida
-                    {order.can_modify && <span className="text-red-500 ml-1">*</span>}
-                  </label>
-                  <input
-                    type="text"
-                    value={order.pickup_location || ''}
-                    onChange={(e) => handlePickupLocationChange(index, e.target.value)}
-                    disabled={!order.can_modify}
-                    placeholder="Ej: Local Zona Azul - Calle Principal 123"
-                    className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary ${
-                      !order.can_modify ? 'opacity-50 cursor-not-allowed bg-gray-100' : ''
-                    }`}
+            {/* Configuración de entrega por comida */}
+            {subscription && subscription.meals_per_day === 1 ? (
+              // Si solo tiene 1 comida por día, mostrar la comida seleccionada en el plan de comidas
+              // La selección se hace en el apartado de "Plan de Comidas", no aquí
+              order.meals.length > 0 ? (
+                <div className="space-y-4">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                    <p className="text-sm text-blue-800">
+                      <strong>ℹ️ Nota:</strong> La selección entre almuerzo o cena se realiza en el apartado de <strong>"Plan de Comidas"</strong>.
+                      Aquí solo puedes configurar el método y hora de entrega.
+                    </p>
+                  </div>
+                  <MealDeliveryConfig
+                    order={order}
+                    orderIndex={index}
+                    mealIndex={0}
+                    addresses={addresses}
+                    router={router}
+                    canModify={order.can_modify}
+                    onDeliveryModeChange={handleMealDeliveryModeChange}
+                    onAddressChange={handleMealAddressChange}
+                    onPickupLocationChange={handleMealPickupLocationChange}
+                    onDeliveryTimeChange={handleMealDeliveryTimeChange}
+                    onSave={() => handleSaveOrder(index)}
+                    saving={saving === order.date}
                   />
                 </div>
-              )}
-
-              {/* Botón guardar */}
-              {order.can_modify && (
-                <button
-                  onClick={() => handleSaveOrder(index)}
-                  disabled={!!saving || (order.delivery_mode === 'delivery' && !order.delivery_address_id) || (order.delivery_mode === 'pickup' && !order.pickup_location?.trim())}
-                  className={`w-full px-4 py-2 rounded-lg font-medium transition ${
-                    saving === order.date || (order.delivery_mode === 'delivery' && !order.delivery_address_id) || (order.delivery_mode === 'pickup' && !order.pickup_location?.trim())
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-primary text-white hover:bg-primary/90'
-                  }`}
-                >
-                  {saving === order.date ? 'Guardando...' : 'Guardar Configuración'}
-                </button>
-              )}
-            </div>
+              ) : (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <p className="text-sm text-yellow-800">
+                    No hay comida configurada para este día. Por favor, selecciona tu comida en el apartado de <strong>"Plan de Comidas"</strong>.
+                  </p>
+                </div>
+              )
+            ) : (
+              // Si tiene 2 comidas por día, mostrar configuración para cada una (almuerzo y cena)
+              <div className="space-y-6">
+                {order.meals
+                  .filter((meal) => {
+                    const mealType = meal.meal_type || meal.type
+                    return mealType === 'lunch' || mealType === 'dinner'
+                  })
+                  .sort((a, b) => {
+                    // Ordenar: lunch primero, luego dinner
+                    const typeA = a.meal_type || a.type
+                    const typeB = b.meal_type || b.type
+                    if (typeA === 'lunch' && typeB === 'dinner') return -1
+                    if (typeA === 'dinner' && typeB === 'lunch') return 1
+                    return 0
+                  })
+                  .map((meal, mealIndex) => {
+                    const actualIndex = order.meals.findIndex((m) => m.id === meal.id)
+                    return (
+                      <div key={meal.id || mealIndex} className="border border-gray-200 dark:border-slate-700 rounded-lg p-4 bg-gray-50 dark:bg-slate-800/50">
+                        <h4 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4">
+                          {getMealTypeText(meal.meal_type || meal.type)}: {meal.name}
+                        </h4>
+                        <MealDeliveryConfig
+                          order={order}
+                          orderIndex={index}
+                          mealIndex={actualIndex}
+                          addresses={addresses}
+                          router={router}
+                          canModify={order.can_modify}
+                          onDeliveryModeChange={handleMealDeliveryModeChange}
+                          onAddressChange={handleMealAddressChange}
+                          onPickupLocationChange={handleMealPickupLocationChange}
+                          onDeliveryTimeChange={handleMealDeliveryTimeChange}
+                          onSave={() => handleSaveOrder(index)}
+                          saving={saving === order.date}
+                        />
+                      </div>
+                    )
+                  })}
+              </div>
+            )}
           </div>
         ))}
       </div>

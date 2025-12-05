@@ -7,6 +7,7 @@ import SummaryCard from '../ui/SummaryCard'
 import InteractiveGreeting from '../ui/InteractiveGreeting'
 import { useAuth } from '../../hooks/useAuth'
 import { getSubscribers } from '../../lib/subscribers'
+import { useDarkMode } from '../../hooks/useDarkMode'
 
 interface Order {
   id: string
@@ -19,6 +20,7 @@ interface Order {
 
 export default function DashboardAdmin() {
   const { userName } = useAuth()
+  const isDarkMode = useDarkMode()
   const [stats, setStats] = useState({
     // Métricas financieras
     monthlyRevenue: 0,
@@ -78,6 +80,13 @@ export default function DashboardAdmin() {
     newSubscribersThisWeek: 0,
     cancellationRate: 0,
   })
+
+  const chartAxisColor = isDarkMode ? '#cbd5e1' : '#475569'
+  const chartGridColor = isDarkMode ? '#334155' : '#e5e7eb'
+  const chartTooltipBg = isDarkMode ? '#0f172a' : '#ffffff'
+  const chartTooltipBorder = isDarkMode ? '#1e293b' : '#e5e7eb'
+  const chartTooltipText = isDarkMode ? '#cbd5e1' : '#475569'
+  const chartLegendColor = isDarkMode ? '#cbd5e1' : '#475569'
 
   useEffect(() => {
     const loadStats = async () => {
@@ -588,7 +597,7 @@ export default function DashboardAdmin() {
       </div>
 
       {/* Dashboard Financiero Profesional */}
-      <section className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 sm:p-6 border border-blue-100">
+      <section className="bg-gradient-to-br from-white via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 rounded-xl p-4 sm:p-6 border border-transparent dark:border-transparent shadow-lg ring-1 ring-blue-100/60 dark:ring-slate-700/80">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 gap-3">
           <div>
             <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1 sm:mb-2 flex items-center gap-2">
@@ -696,7 +705,7 @@ export default function DashboardAdmin() {
         {/* Gráficos */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
           {/* Tendencia de Ingresos */}
-          <div className="bg-white rounded-lg p-3 sm:p-4 lg:p-6 shadow-sm border border-gray-200 overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 rounded-lg p-3 sm:p-4 lg:p-6 shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden">
             <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Tendencia de Ingresos (7 días)</h3>
             <ResponsiveContainer width="100%" height={200} className="sm:h-[250px]">
               <AreaChart data={stats.revenueTrend}>
@@ -706,20 +715,30 @@ export default function DashboardAdmin() {
                     <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" tick={{ fontSize: 10 }} className="sm:text-xs" />
-                <YAxis tick={{ fontSize: 10 }} className="sm:text-xs" />
-                <Tooltip formatter={(value: number) => {
-                  const numValue = typeof value === 'number' && !isNaN(value) ? value : 0
-                  return [`€${numValue.toFixed(2)}`, 'Ingresos']
-                }} contentStyle={{ fontSize: '12px' }} />
+                <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: chartAxisColor }} />
+                <YAxis tick={{ fontSize: 10, fill: chartAxisColor }} />
+                <Tooltip 
+                  formatter={(value: number) => {
+                    const numValue = typeof value === 'number' && !isNaN(value) ? value : 0
+                    return [`€${numValue.toFixed(2)}`, 'Ingresos']
+                  }} 
+                  contentStyle={{ 
+                    fontSize: '12px', 
+                    backgroundColor: chartTooltipBg,
+                    border: `1px solid ${chartTooltipBorder}`,
+                    borderRadius: 8,
+                    color: chartTooltipText
+                  }} 
+                  labelStyle={{ color: chartTooltipText }}
+                />
                 <Area type="monotone" dataKey="revenue" stroke="#3b82f6" fillOpacity={1} fill="url(#colorRevenue)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
 
           {/* Distribución por Estado */}
-          <div className="bg-white rounded-lg p-3 sm:p-4 lg:p-6 shadow-sm border border-gray-200 overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 rounded-lg p-3 sm:p-4 lg:p-6 shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden">
             <div className="mb-3 sm:mb-4">
               <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-1">Distribución de Ingresos por Estado</h3>
               <p className="text-xs text-gray-500">
@@ -765,12 +784,19 @@ export default function DashboardAdmin() {
                     const entry = payload?.[0]?.payload
                     return entry?.label || entry?.status || label
                   }}
-                  contentStyle={{ fontSize: '12px' }}
+                  contentStyle={{ 
+                    fontSize: '12px',
+                    backgroundColor: chartTooltipBg,
+                    border: `1px solid ${chartTooltipBorder}`,
+                    borderRadius: 8,
+                    color: chartTooltipText
+                  }}
+                  labelStyle={{ color: chartTooltipText }}
                 />
                 <Legend 
                   verticalAlign="bottom" 
                   height={50}
-                  wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
+                  wrapperStyle={{ fontSize: '12px', paddingTop: '10px', color: chartLegendColor }}
                   formatter={(value, entry: any) => {
                     const data = entry?.payload
                     if (data && typeof data.value === 'number' && !isNaN(data.value)) {
@@ -842,7 +868,7 @@ export default function DashboardAdmin() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Link
             href="/admin/pedidos"
-            className="block p-4 bg-white border-2 border-gray-200 rounded-lg hover:bg-primary/5 hover:border-primary/40 transition-all group"
+            className="block p-4 bg-white dark:bg-slate-900/80 border-2 border-gray-200 dark:border-slate-700 rounded-lg hover:bg-primary/5 dark:hover:bg-primary/10 hover:border-primary/40 transition-all group"
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
@@ -860,7 +886,7 @@ export default function DashboardAdmin() {
           </Link>
           <Link
             href="/admin/pedidos"
-            className="block p-4 bg-white border-2 border-gray-200 rounded-lg hover:bg-primary/5 hover:border-primary/40 transition-all group"
+            className="block p-4 bg-white dark:bg-slate-900/80 border-2 border-gray-200 dark:border-slate-700 rounded-lg hover:bg-primary/5 dark:hover:bg-primary/10 hover:border-primary/40 transition-all group"
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
@@ -880,7 +906,7 @@ export default function DashboardAdmin() {
           </Link>
           <Link
             href="/admin/pedidos"
-            className="block p-4 bg-white border-2 border-gray-200 rounded-lg hover:bg-primary/5 hover:border-primary/40 transition-all group"
+            className="block p-4 bg-white dark:bg-slate-900/80 border-2 border-gray-200 dark:border-slate-700 rounded-lg hover:bg-primary/5 dark:hover:bg-primary/10 hover:border-primary/40 transition-all group"
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
@@ -900,7 +926,7 @@ export default function DashboardAdmin() {
           </Link>
           <Link
             href="/admin/pedidos"
-            className="block p-4 bg-white border-2 border-gray-200 rounded-lg hover:bg-primary/5 hover:border-primary/40 transition-all group"
+            className="block p-4 bg-white dark:bg-slate-900/80 border-2 border-gray-200 dark:border-slate-700 rounded-lg hover:bg-primary/5 dark:hover:bg-primary/10 hover:border-primary/40 transition-all group"
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
@@ -930,7 +956,7 @@ export default function DashboardAdmin() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Link
             href="/admin/usuarios"
-            className="block p-4 bg-white border-2 border-gray-200 rounded-lg hover:bg-primary/5 hover:border-primary/40 transition-all group"
+            className="block p-4 bg-white dark:bg-slate-900/80 border-2 border-gray-200 dark:border-slate-700 rounded-lg hover:bg-primary/5 dark:hover:bg-primary/10 hover:border-primary/40 transition-all group"
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
@@ -948,7 +974,7 @@ export default function DashboardAdmin() {
           </Link>
           <Link
             href="/admin/usuarios"
-            className="block p-4 bg-white border-2 border-gray-200 rounded-lg hover:bg-primary/5 hover:border-primary/40 transition-all group"
+            className="block p-4 bg-white dark:bg-slate-900/80 border-2 border-gray-200 dark:border-slate-700 rounded-lg hover:bg-primary/5 dark:hover:bg-primary/10 hover:border-primary/40 transition-all group"
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
@@ -966,7 +992,7 @@ export default function DashboardAdmin() {
           </Link>
           <Link
             href="/admin/menu"
-            className="block p-4 bg-white border-2 border-gray-200 rounded-lg hover:bg-primary/5 hover:border-primary/40 transition-all group"
+            className="block p-4 bg-white dark:bg-slate-900/80 border-2 border-gray-200 dark:border-slate-700 rounded-lg hover:bg-primary/5 dark:hover:bg-primary/10 hover:border-primary/40 transition-all group"
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
@@ -984,7 +1010,7 @@ export default function DashboardAdmin() {
           </Link>
           <Link
             href="/admin/pedidos"
-            className="block p-4 bg-white border-2 border-gray-200 rounded-lg hover:bg-primary/5 hover:border-primary/40 transition-all group"
+            className="block p-4 bg-white dark:bg-slate-900/80 border-2 border-gray-200 dark:border-slate-700 rounded-lg hover:bg-primary/5 dark:hover:bg-primary/10 hover:border-primary/40 transition-all group"
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
@@ -1110,81 +1136,81 @@ export default function DashboardAdmin() {
             {stats.delayedOrders > 0 && (
               <Link
                 href="/admin/pedidos"
-                className="block p-4 bg-red-50 border-2 border-red-200 rounded-lg hover:bg-red-100 hover:border-red-300 transition-all group"
+                className="block p-4 bg-red-50 dark:bg-red-950/30 border-2 border-red-200 dark:border-red-900 rounded-lg hover:bg-red-100 dark:hover:bg-red-950/50 hover:border-red-300 dark:hover:border-red-800 transition-all group"
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 text-red-600 dark:text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <h3 className="font-semibold text-red-900 group-hover:text-red-700">Pedidos con Retraso</h3>
+                    <h3 className="font-semibold text-red-900 dark:text-red-100 group-hover:text-red-700 dark:group-hover:text-red-200">Pedidos con Retraso</h3>
                   </div>
-                  <svg className="w-5 h-5 text-red-400 group-hover:text-red-600 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 text-red-400 dark:text-red-200 group-hover:text-red-600 dark:group-hover:text-red-300 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
-                <p className="text-2xl font-bold text-red-700 mb-1">{stats.delayedOrders}</p>
-                <p className="text-sm text-red-600">Requieren atención inmediata</p>
+                <p className="text-2xl font-bold text-red-700 dark:text-red-200 mb-1">{stats.delayedOrders}</p>
+                <p className="text-sm text-red-600 dark:text-red-300">Requieren atención inmediata</p>
               </Link>
             )}
             {stats.subscribersWithoutPlan > 0 && (
               <Link
                 href="/admin/usuarios"
-                className="block p-4 bg-yellow-50 border-2 border-yellow-200 rounded-lg hover:bg-yellow-100 hover:border-yellow-300 transition-all group"
+                className="block p-4 bg-yellow-50 dark:bg-yellow-950/30 border-2 border-yellow-200 dark:border-yellow-900 rounded-lg hover:bg-yellow-100 dark:hover:bg-yellow-900/40 hover:border-yellow-300 dark:hover:border-yellow-800 transition-all group"
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 text-yellow-600 dark:text-yellow-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <h3 className="font-semibold text-yellow-900 group-hover:text-yellow-700">Sin Plan Asignado</h3>
+                    <h3 className="font-semibold text-yellow-900 dark:text-yellow-100 group-hover:text-yellow-700 dark:group-hover:text-yellow-200">Sin Plan Asignado</h3>
                   </div>
-                  <svg className="w-5 h-5 text-yellow-400 group-hover:text-yellow-600 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 text-yellow-400 dark:text-yellow-200 group-hover:text-yellow-600 dark:group-hover:text-yellow-300 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
-                <p className="text-2xl font-bold text-yellow-700 mb-1">{stats.subscribersWithoutPlan}</p>
-                <p className="text-sm text-yellow-600">Suscriptores pendientes de plan</p>
+                <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-200 mb-1">{stats.subscribersWithoutPlan}</p>
+                <p className="text-sm text-yellow-600 dark:text-yellow-300">Suscriptores pendientes de plan</p>
               </Link>
             )}
             {stats.unavailableMenuItems > 0 && (
               <Link
                 href="/admin/menu"
-                className="block p-4 bg-orange-50 border-2 border-orange-200 rounded-lg hover:bg-orange-100 hover:border-orange-300 transition-all group"
+                className="block p-4 bg-orange-50 dark:bg-orange-950/30 border-2 border-orange-200 dark:border-orange-900 rounded-lg hover:bg-orange-100 dark:hover:bg-orange-900/40 hover:border-orange-300 dark:hover:border-orange-800 transition-all group"
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 text-orange-600 dark:text-orange-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                     </svg>
-                    <h3 className="font-semibold text-orange-900 group-hover:text-orange-700">Items No Disponibles</h3>
+                    <h3 className="font-semibold text-orange-900 dark:text-orange-100 group-hover:text-orange-700 dark:group-hover:text-orange-200">Items No Disponibles</h3>
                   </div>
-                  <svg className="w-5 h-5 text-orange-400 group-hover:text-orange-600 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 text-orange-400 dark:text-orange-200 group-hover:text-orange-600 dark:group-hover:text-orange-300 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
-                <p className="text-2xl font-bold text-orange-700 mb-1">{stats.unavailableMenuItems}</p>
-                <p className="text-sm text-orange-600">Revisar disponibilidad</p>
+                <p className="text-2xl font-bold text-orange-700 dark:text-orange-200 mb-1">{stats.unavailableMenuItems}</p>
+                <p className="text-sm text-orange-600 dark:text-orange-300">Revisar disponibilidad</p>
               </Link>
             )}
             {stats.cancellationRate > 20 && (
               <Link
                 href="/admin/pedidos"
-                className="block p-4 bg-purple-50 border-2 border-purple-200 rounded-lg hover:bg-purple-100 hover:border-purple-300 transition-all group"
+                className="block p-4 bg-purple-50 dark:bg-purple-950/40 border-2 border-purple-200 dark:border-purple-900 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/40 hover:border-purple-300 dark:hover:border-purple-800 transition-all group"
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 text-purple-600 dark:text-purple-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
-                    <h3 className="font-semibold text-purple-900 group-hover:text-purple-700">Tasa de Cancelación</h3>
+                    <h3 className="font-semibold text-purple-900 dark:text-purple-100 group-hover:text-purple-700 dark:group-hover:text-purple-200">Tasa de Cancelación</h3>
                   </div>
-                  <svg className="w-5 h-5 text-purple-400 group-hover:text-purple-600 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 text-purple-400 dark:text-purple-200 group-hover:text-purple-600 dark:group-hover:text-purple-300 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
-                <p className="text-2xl font-bold text-purple-700 mb-1">{stats.cancellationRate}%</p>
-                <p className="text-sm text-purple-600">Por encima del objetivo</p>
+                <p className="text-2xl font-bold text-purple-700 dark:text-purple-200 mb-1">{stats.cancellationRate}%</p>
+                <p className="text-sm text-purple-600 dark:text-purple-200">Por encima del objetivo</p>
               </Link>
             )}
           </div>
@@ -1202,7 +1228,7 @@ export default function DashboardAdmin() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <Link
             href="/admin/pedidos"
-            className="block p-4 bg-white border-2 border-gray-200 rounded-lg hover:bg-primary/5 hover:border-primary/40 transition-all group"
+            className="block p-4 bg-white dark:bg-slate-900/80 border-2 border-gray-200 dark:border-slate-700 rounded-lg hover:bg-primary/5 dark:hover:bg-primary/10 hover:border-primary/40 transition-all group"
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
@@ -1222,7 +1248,7 @@ export default function DashboardAdmin() {
           </Link>
           <Link
             href="/admin/usuarios"
-            className="block p-4 bg-white border-2 border-gray-200 rounded-lg hover:bg-primary/5 hover:border-primary/40 transition-all group"
+            className="block p-4 bg-white dark:bg-slate-900/80 border-2 border-gray-200 dark:border-slate-700 rounded-lg hover:bg-primary/5 dark:hover:bg-primary/10 hover:border-primary/40 transition-all group"
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
@@ -1240,7 +1266,7 @@ export default function DashboardAdmin() {
           </Link>
           <Link
             href="/admin/menu"
-            className="block p-4 bg-white border-2 border-gray-200 rounded-lg hover:bg-primary/5 hover:border-primary/40 transition-all group"
+            className="block p-4 bg-white dark:bg-slate-900/80 border-2 border-gray-200 dark:border-slate-700 rounded-lg hover:bg-primary/5 dark:hover:bg-primary/10 hover:border-primary/40 transition-all group"
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
@@ -1260,7 +1286,7 @@ export default function DashboardAdmin() {
       </section>
 
       {/* Gestión del Sistema */}
-      <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <section className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6">
         <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
           <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -1271,7 +1297,7 @@ export default function DashboardAdmin() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <Link
             href="/admin/usuarios"
-            className="block p-4 text-left border rounded-lg hover:bg-primary/5 hover:border-primary/40 transition-all group"
+            className="block p-4 text-left border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900/80 hover:bg-primary/5 hover:border-primary/40 dark:hover:bg-primary/10 transition-all group"
           >
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-semibold text-gray-900 group-hover:text-primary">Usuarios y Roles</h3>
@@ -1285,7 +1311,7 @@ export default function DashboardAdmin() {
           </Link>
           <Link
             href="/admin/pedidos"
-            className="block p-4 text-left border rounded-lg hover:bg-primary/5 hover:border-primary/40 transition-all group"
+            className="block p-4 text-left border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900/80 hover:bg-primary/5 hover:border-primary/40 dark:hover:bg-primary/10 transition-all group"
           >
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-semibold text-gray-900 group-hover:text-primary">Gestión de Pedidos</h3>
@@ -1299,7 +1325,7 @@ export default function DashboardAdmin() {
           </Link>
           <Link
             href="/admin/menu"
-            className="block p-4 text-left border rounded-lg hover:bg-primary/5 hover:border-primary/40 transition-all group"
+            className="block p-4 text-left border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900/80 hover:bg-primary/5 hover:border-primary/40 dark:hover:bg-primary/10 transition-all group"
           >
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-semibold text-gray-900 group-hover:text-primary">Gestión del Menú</h3>
@@ -1312,7 +1338,7 @@ export default function DashboardAdmin() {
             </p>
           </Link>
         </div>
-        <div className="mt-4 p-3 text-sm text-gray-600 bg-gray-50 rounded-lg border border-gray-100">
+        <div className="mt-4 p-3 text-sm text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-slate-800/70 rounded-lg border border-gray-100 dark:border-slate-700">
           <p className="font-medium text-gray-700 mb-1">Nota:</p>
           <p>Los planes nutricionales se gestionan desde el dashboard de Nutricionista.</p>
         </div>

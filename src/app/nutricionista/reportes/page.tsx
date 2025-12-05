@@ -2,15 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
-
-interface Report {
-  id: string
-  report_type: string
-  period_start: string
-  period_end: string
-  report_data: any
-  created_at: string
-}
+import type { Report } from '@/lib/types'
 
 export default function ReportesPage() {
   const { userId } = useAuth()

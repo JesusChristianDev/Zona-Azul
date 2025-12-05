@@ -2,14 +2,31 @@
 
 import { ReactNode } from 'react'
 
+type ButtonVariant =
+  | 'primary'
+  | 'secondary'
+  | 'muted'
+  | 'muted-outline'
+  | 'outline'
+  | 'ghost'
+  | 'success'
+  | 'danger'
+  | 'warning'
+  | 'soft-success'
+  | 'soft-warning'
+  | 'soft-danger'
+  | 'link'
+
 interface ActionButtonProps {
-  onClick: () => void
+  onClick?: () => void
   children: ReactNode
-  variant?: 'primary' | 'secondary' | 'danger' | 'success'
+  variant?: ButtonVariant
   size?: 'sm' | 'md' | 'lg'
   icon?: ReactNode
   fullWidth?: boolean
   className?: string
+  type?: 'button' | 'submit' | 'reset'
+  disabled?: boolean
 }
 
 /**
@@ -22,29 +39,40 @@ export default function ActionButton({
   size = 'md',
   icon,
   fullWidth = false,
-  className = ""
+  className = '',
+  type = 'button',
+  disabled = false,
 }: ActionButtonProps) {
-  const baseClasses = "inline-flex items-center justify-center gap-2 font-medium rounded-lg transition-colors"
-  
-  const variantClasses = {
-    primary: "bg-primary text-white hover:bg-primary/90",
-    secondary: "bg-gray-100 text-gray-700 hover:bg-gray-200",
-    danger: "bg-red-100 text-red-800 hover:bg-red-200",
-    success: "bg-green-100 text-green-800 hover:bg-green-200"
+  const variantClasses: Record<ButtonVariant, string> = {
+    primary: 'btn-primary',
+    secondary: 'btn-secondary',
+    muted: 'btn-muted',
+    'muted-outline': 'btn-muted-outline',
+    outline: 'btn-outline',
+    ghost: 'btn-ghost',
+    success: 'btn-success',
+    danger: 'btn-danger',
+    warning: 'btn-warning',
+    'soft-success': 'btn-soft-success',
+    'soft-warning': 'btn-soft-warning',
+    'soft-danger': 'btn-soft-danger',
+    link: 'btn-link',
   }
 
-  const sizeClasses = {
-    sm: "px-3 py-1.5 text-sm",
-    md: "px-4 py-2 text-sm",
-    lg: "px-6 py-3 text-base"
+  const sizeClasses: Record<'sm' | 'md' | 'lg', string> = {
+    sm: 'btn-sm',
+    md: '',
+    lg: 'btn-lg',
   }
 
-  const widthClass = fullWidth ? "w-full sm:w-auto" : ""
+  const widthClass = fullWidth ? 'w-full sm:w-auto' : ''
 
   return (
     <button
+      type={type}
       onClick={onClick}
-      className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${widthClass} ${className}`}
+      disabled={disabled}
+      className={['btn', variantClasses[variant], sizeClasses[size], widthClass, className].filter(Boolean).join(' ')}
     >
       {icon && <span className="flex-shrink-0">{icon}</span>}
       <span>{children}</span>

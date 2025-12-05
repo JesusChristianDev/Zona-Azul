@@ -25,26 +25,6 @@ export async function getSubscribers(): Promise<User[]> {
 }
 
 /**
- * Obtiene un suscriptor por ID
- * @param id ID del suscriptor
- * @returns Promise con el suscriptor o undefined
- */
-export async function getSubscriberById(id: string): Promise<User | undefined> {
-  const allSubscribers = await getSubscribers()
-  return allSubscribers.find((user) => user.id === id)
-}
-
-/**
- * Obtiene un suscriptor por email
- * @param email Email del suscriptor
- * @returns Promise con el suscriptor o undefined
- */
-export async function getSubscriberByEmail(email: string): Promise<User | undefined> {
-  const allSubscribers = await getSubscribers()
-  return allSubscribers.find((user) => user.email.toLowerCase() === email.toLowerCase())
-}
-
-/**
  * Genera direcciones de ejemplo para suscriptores
  */
 export function getSubscriberAddress(subscriberId: string): string {

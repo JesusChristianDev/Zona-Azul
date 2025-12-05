@@ -81,6 +81,289 @@ export interface DatabaseProgress {
   updated_at: string
 }
 
+export type ObjetivoNutricional =
+  | 'perder_grasa'
+  | 'mantener'
+  | 'ganar_masa'
+  | 'antiinflamatorio'
+  | 'deportivo'
+  | 'recomp_corporal'
+
+export type ActivityLevel = 'sedentario' | 'ligero' | 'moderado' | 'intenso' | 'atleta'
+
+export type TrabajoIntensity = 'baja' | 'moderada' | 'alta'
+
+export interface MealMacroBreakdown {
+  calorias: number
+  proteinas: number
+  grasas: number
+  carbohidratos: number
+}
+
+export interface DatabaseFichaTecnica {
+  id: string
+  user_id: string
+  sexo: 'hombre' | 'mujer'
+  edad: number | null
+  peso_kg: number | null
+  altura_cm: number | null
+  imc: number | null
+  densidad_osea: number | null
+  masa_magra: number | null
+  masa_grasa: number | null
+  trabajo: 'sedentario' | 'moderado' | 'intenso' | null
+  nivel_actividad: ActivityLevel | null
+  puesto_trabajo?: string | null
+  intensidad_trabajo?: TrabajoIntensity | null
+  entrenamientos_semanales: number | null
+  nivel_entrenamiento: 'principiante' | 'intermedio' | 'avanzado' | null
+  patologias?: string | null
+  preferencias?: string | null
+  objetivo: 'perder_grasa' | 'mantener' | 'ganar_masa' | 'recomp_corporal'
+  comidas_por_dia?: number | null
+  fecha_revision?: string | null
+  calorias_objetivo?: number | null
+  get_total?: number | null
+  tmb?: number | null
+  factor_actividad?: number | null
+  proteinas_objetivo?: number | null
+  grasas_objetivo?: number | null
+  carbohidratos_objetivo?: number | null
+  fibra_objetivo?: number | null
+  distribucion_calorias?: Record<'lunch' | 'dinner', number> | null
+  distribucion_macros?: Record<'lunch' | 'dinner', MealMacroBreakdown> | null
+  observaciones?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface DatabasePlanBase {
+  id: string
+  nombre: string
+  descripcion?: string | null
+  objetivo: ObjetivoNutricional | null
+  dias_plan: number
+  calorias_base: number
+  proteinas_base?: number | null
+  carbohidratos_base?: number | null
+  grasas_base?: number | null
+  created_by?: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface DatabaseIngrediente {
+  id: string
+  nombre: string
+  unidad_base: string
+  calorias_por_unidad?: number | null
+  proteinas_por_unidad?: number | null
+  carbohidratos_por_unidad?: number | null
+  grasas_por_unidad?: number | null
+  stock_minimo?: number | null
+  created_at: string
+  updated_at: string
+}
+
+export interface DatabaseReceta {
+  id: string
+  plan_base_id?: string | null
+  nombre: string
+  descripcion?: string | null
+  meal_type: 'lunch' | 'dinner'
+  calorias_totales?: number | null
+  proteinas_totales?: number | null
+  carbohidratos_totales?: number | null
+  grasas_totales?: number | null
+  porciones: number
+  formula_escalado?: string | null
+  tiempo_preparacion_min?: number | null
+  es_biblioteca: boolean
+  created_by?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface DatabaseRecetaWithIngredientes extends DatabaseReceta {
+  recetas_ingredientes?: DatabaseRecetaIngrediente[]
+}
+
+type CreateRecetaInput = {
+  plan_base_id?: string | null
+  nombre: string
+  descripcion?: string | null
+  meal_type: 'lunch' | 'dinner'
+  calorias_totales?: number | null
+  proteinas_totales?: number | null
+  carbohidratos_totales?: number | null
+  grasas_totales?: number | null
+  porciones?: number
+  formula_escalado?: string | null
+  tiempo_preparacion_min?: number | null
+  es_biblioteca?: boolean
+  created_by?: string | null
+}
+
+export interface DatabaseRecetaIngrediente {
+  id: string
+  receta_id: string
+  ingrediente_id: string
+  cantidad_base: number
+  unidad: string
+  porcentaje_merma?: number | null
+  created_at: string
+}
+
+export interface DatabasePlanSemanal {
+  id: string
+  user_id: string
+  ficha_tecnica_id?: string | null
+  plan_base_id?: string | null
+  week_start_date: string
+  week_end_date: string
+  status: 'pendiente' | 'generado' | 'aprobado' | 'archivado'
+  total_calorias?: number | null
+  comentarios?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface DatabasePlanSemanalComida {
+  id: string
+  plan_semanal_id: string
+  day_number: number
+  meal_type: 'lunch' | 'dinner'
+  receta_id?: string | null
+  calorias_adaptadas?: number | null
+  proteinas_adaptadas?: number | null
+  carbohidratos_adaptados?: number | null
+  grasas_adaptadas?: number | null
+  cantidad_total?: number | null
+  unidad?: string | null
+  notas?: string | null
+  created_at: string
+}
+
+export type PlanSemanalComidaInput = {
+  plan_semanal_id: string
+  day_number: number
+  meal_type: DatabasePlanSemanalComida['meal_type']
+  receta_id?: string | null
+  calorias_adaptadas?: number | null
+  proteinas_adaptadas?: number | null
+  carbohidratos_adaptados?: number | null
+  grasas_adaptadas?: number | null
+  cantidad_total?: number | null
+  unidad?: string | null
+  notas?: string | null
+}
+
+export interface DatabasePlanSemanalIngrediente {
+  id: string
+  plan_semanal_id: string
+  plan_semanal_comida_id: string
+  user_id: string
+  plan_base_id: string
+  receta_id: string
+  ingrediente_id: string
+  cantidad_base: number
+  unidad: string
+  porcentaje_merma?: number | null
+  cantidad_adaptada: number
+  consumo_fecha: string
+  created_at: string
+}
+
+export type PlanSemanalIngredienteInput = Omit<DatabasePlanSemanalIngrediente, 'id' | 'created_at'>
+
+export type PlanSemanalComidaWithReceta = DatabasePlanSemanalComida & {
+  receta?: (DatabaseReceta & {
+    recetas_ingredientes?: Array<
+      DatabaseRecetaIngrediente & {
+        ingredientes?: DatabaseIngrediente | null
+      }
+    >
+  }) | null
+}
+
+export type PlanSemanalWithDetalles = DatabasePlanSemanal & {
+  plan_base?: DatabasePlanBase | null
+  comidas?: PlanSemanalComidaWithReceta[]
+}
+
+export interface DatabaseStock {
+  id: string
+  ingrediente_id: string
+  cantidad_disponible: number
+  unidad: string
+  actualizado_en: string
+}
+
+export interface DatabasePedidoProveedor {
+  id: string
+  proveedor: string
+  fecha_solicitud: string
+  fecha_entrega_estimada?: string | null
+  estado: 'pendiente' | 'en_proceso' | 'recibido' | 'cancelado'
+  margen_error?: number | null
+  notas?: string | null
+}
+
+export interface DatabasePedidoProveedorDetalle {
+  id: string
+  pedido_id: string
+  ingrediente_id: string
+  cantidad: number
+  unidad: string
+  costo_unitario?: number | null
+  creado_en: string
+}
+
+export interface DatabaseProduccionDiaria {
+  id: string
+  fecha: string
+  plan_semanal_id?: string | null
+  estado: 'pendiente' | 'en_proceso' | 'completado'
+  comentarios?: string | null
+  creado_en: string
+  actualizado_en: string
+}
+
+export interface DatabaseProduccionDiariaDetalle {
+  id: string
+  produccion_id: string
+  receta_id?: string | null
+  cantidad_programada?: number | null
+  cantidad_producida?: number | null
+  unidad?: string | null
+  estado: 'pendiente' | 'en_proceso' | 'listo'
+  notas?: string | null
+}
+
+export interface DatabaseRutaLogistica {
+  id: string
+  fecha: string
+  repartidor_id?: string | null
+  nombre?: string | null
+  estado: 'pendiente' | 'en_ruta' | 'completada' | 'cancelada'
+  ventana_inicio?: string | null
+  ventana_fin?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface DatabaseRutaLogisticaParada {
+  id: string
+  ruta_id: string
+  order_id?: string | null
+  cliente_id?: string | null
+  posicion?: number | null
+  hora_estimada?: string | null
+  estado: 'pendiente' | 'en_camino' | 'entregado' | 'incidencia'
+  notas?: string | null
+}
+
 // Funciones para usuarios
 export async function getUserByEmail(email: string): Promise<DatabaseUser | null> {
   const { data, error } = await supabase
@@ -328,6 +611,676 @@ export async function getProgressByUserId(
   return data as DatabaseProgress[]
 }
 
+// ===============================
+// Fichas técnicas y planes base
+// ===============================
+
+export type RecetaIngredienteInput = {
+  ingrediente_id: string
+  cantidad_base: number
+  unidad: string
+  porcentaje_merma?: number
+}
+
+export async function getFichaTecnicaByUserId(userId: string): Promise<DatabaseFichaTecnica | null> {
+  const { data, error } = await supabase
+    .from('fichas_tecnicas')
+    .select('*')
+    .eq('user_id', userId)
+    .single()
+
+  if (error) {
+    if (error.code !== 'PGRST116') {
+      console.error('Error fetching ficha tecnica:', error)
+    }
+    return null
+  }
+  return data as DatabaseFichaTecnica
+}
+
+export async function upsertFichaTecnica(
+  userId: string,
+  payload: Partial<Omit<DatabaseFichaTecnica, 'id' | 'user_id' | 'created_at' | 'updated_at'>>
+): Promise<DatabaseFichaTecnica | null> {
+  const { data, error } = await supabase
+    .from('fichas_tecnicas')
+    .upsert({ user_id: userId, ...payload }, { onConflict: 'user_id' })
+    .select()
+    .single()
+
+  if (error || !data) {
+    console.error('Error upserting ficha tecnica:', error)
+    return null
+  }
+  return data as DatabaseFichaTecnica
+}
+
+export async function getPlanesBase(): Promise<DatabasePlanBase[]> {
+  const { data, error } = await supabase
+    .from('planes_base')
+    .select('*')
+    .eq('is_active', true)
+    .order('nombre', { ascending: true })
+
+  if (error || !data) {
+    console.error('Error fetching planes base:', error)
+    return []
+  }
+  return data as DatabasePlanBase[]
+}
+
+export async function getPlanBaseById(planBaseId: string): Promise<DatabasePlanBase | null> {
+  const { data, error } = await supabase.from('planes_base').select('*').eq('id', planBaseId).single()
+
+  if (error || !data) {
+    if (error?.code !== 'PGRST116') {
+      console.error('Error fetching plan base:', error)
+    }
+    return null
+  }
+
+  return data as DatabasePlanBase
+}
+
+export async function createPlanBase(
+  planData: Omit<DatabasePlanBase, 'id' | 'created_at' | 'updated_at'>
+): Promise<DatabasePlanBase | null> {
+  const { data, error } = await supabase.from('planes_base').insert(planData).select().single()
+
+  if (error || !data) {
+    console.error('Error creating plan base:', error)
+    return null
+  }
+  return data as DatabasePlanBase
+}
+
+export async function updatePlanBase(
+  planBaseId: string,
+  payload: Partial<Omit<DatabasePlanBase, 'id' | 'created_at' | 'updated_at'>>
+): Promise<DatabasePlanBase | null> {
+  const { data, error } = await supabase
+    .from('planes_base')
+    .update({ ...payload, updated_at: new Date().toISOString() })
+    .eq('id', planBaseId)
+    .select()
+    .single()
+
+  if (error || !data) {
+    console.error('Error updating plan base:', error)
+    return null
+  }
+  return data as DatabasePlanBase
+}
+
+export async function deletePlanBase(planBaseId: string): Promise<boolean> {
+  const { error } = await supabase.from('planes_base').delete().eq('id', planBaseId)
+  if (error) {
+    console.error('Error deleting plan base:', error)
+    return false
+  }
+  return true
+}
+
+// ===============================
+// Recetas e ingredientes
+// ===============================
+
+export async function getIngredientes(): Promise<DatabaseIngrediente[]> {
+  const { data, error } = await supabase.from('ingredientes').select('*').order('nombre', { ascending: true })
+
+  if (error || !data) {
+    console.error('Error fetching ingredientes:', error)
+    return []
+  }
+  return data as DatabaseIngrediente[]
+}
+
+export async function upsertIngrediente(
+  ingredienteData: Partial<Omit<DatabaseIngrediente, 'id' | 'created_at' | 'updated_at'>> & { nombre: string }
+): Promise<DatabaseIngrediente | null> {
+  const { data, error } = await supabase
+    .from('ingredientes')
+    .upsert(ingredienteData, { onConflict: 'id' })
+    .select()
+    .single()
+
+  if (error || !data) {
+    console.error('Error upserting ingrediente:', error)
+    return null
+  }
+  return data as DatabaseIngrediente
+}
+
+export async function deleteIngrediente(id: string): Promise<boolean> {
+  const { error } = await supabase.from('ingredientes').delete().eq('id', id)
+  if (error) {
+    console.error('Error deleting ingrediente:', error)
+    return false
+  }
+  return true
+}
+
+export async function getRecetasByPlanBase(planBaseId: string): Promise<DatabaseRecetaWithIngredientes[]> {
+  const { data, error } = await supabase
+    .from('recetas')
+    .select('*, recetas_ingredientes(*, ingredientes:ingrediente_id(nombre, unidad_base))')
+    .eq('plan_base_id', planBaseId)
+    .order('meal_type', { ascending: true })
+    .order('nombre', { ascending: true })
+
+  if (error || !data) {
+    console.error('Error fetching recetas:', error)
+    return []
+  }
+  return data as DatabaseRecetaWithIngredientes[]
+}
+
+export async function getLibraryRecetas(mealType?: 'lunch' | 'dinner'): Promise<DatabaseRecetaWithIngredientes[]> {
+  let query = supabase
+    .from('recetas')
+    .select('*, recetas_ingredientes(*, ingredientes:ingrediente_id(nombre, unidad_base))')
+    .eq('es_biblioteca', true)
+
+  if (mealType) {
+    query = query.eq('meal_type', mealType)
+  }
+
+  const { data, error } = await query.order('nombre', { ascending: true })
+
+  if (error || !data) {
+    console.error('Error fetching library recipes:', error)
+    return []
+  }
+
+  return data as DatabaseRecetaWithIngredientes[]
+}
+
+export async function getRecetaById(recetaId: string): Promise<DatabaseReceta | null> {
+  const { data, error } = await supabase.from('recetas').select('*').eq('id', recetaId).single()
+
+  if (error || !data) {
+    if (error?.code !== 'PGRST116') {
+      console.error('Error fetching receta by id:', error)
+    }
+    return null
+  }
+
+  return data as DatabaseReceta
+}
+
+export async function createReceta(recetaData: CreateRecetaInput): Promise<DatabaseReceta | null> {
+  const payload = {
+    plan_base_id: recetaData.plan_base_id ?? null,
+    nombre: recetaData.nombre,
+    descripcion: recetaData.descripcion ?? null,
+    meal_type: recetaData.meal_type,
+    calorias_totales: recetaData.calorias_totales ?? null,
+    proteinas_totales: recetaData.proteinas_totales ?? null,
+    carbohidratos_totales: recetaData.carbohidratos_totales ?? null,
+    grasas_totales: recetaData.grasas_totales ?? null,
+    porciones: recetaData.porciones ?? 1,
+    formula_escalado: recetaData.formula_escalado ?? null,
+    tiempo_preparacion_min: recetaData.tiempo_preparacion_min ?? null,
+    es_biblioteca: recetaData.es_biblioteca ?? false,
+    created_by: recetaData.created_by ?? null,
+  }
+
+  const { data, error } = await supabase.from('recetas').insert(payload).select().single()
+
+  if (error || !data) {
+    console.error('Error creating receta:', error)
+    return null
+  }
+  return data as DatabaseReceta
+}
+
+export async function updateReceta(
+  recetaId: string,
+  payload: Partial<CreateRecetaInput>
+): Promise<DatabaseReceta | null> {
+  const { data, error } = await supabase
+    .from('recetas')
+    .update({ ...payload, updated_at: new Date().toISOString() })
+    .eq('id', recetaId)
+    .select()
+    .single()
+
+  if (error || !data) {
+    console.error('Error updating receta:', error)
+    return null
+  }
+  return data as DatabaseReceta
+}
+
+export async function deleteReceta(recetaId: string): Promise<boolean> {
+  const { error } = await supabase.from('recetas').delete().eq('id', recetaId)
+  if (error) {
+    console.error('Error deleting receta:', error)
+    return false
+  }
+  return true
+}
+
+export async function upsertRecetaIngredientes(
+  recetaId: string,
+  ingredientes: RecetaIngredienteInput[]
+): Promise<DatabaseRecetaIngrediente[]> {
+  await supabase.from('recetas_ingredientes').delete().eq('receta_id', recetaId)
+
+  if (ingredientes.length === 0) {
+    return []
+  }
+
+  const payload = ingredientes.map((item) => ({
+    receta_id: recetaId,
+    ingrediente_id: item.ingrediente_id,
+    cantidad_base: item.cantidad_base,
+    unidad: item.unidad,
+    porcentaje_merma: item.porcentaje_merma ?? 0,
+  }))
+
+  const { data, error } = await supabase.from('recetas_ingredientes').insert(payload).select()
+
+  if (error || !data) {
+    console.error('Error inserting receta ingredientes:', error)
+    return []
+  }
+
+  return data as DatabaseRecetaIngrediente[]
+}
+
+export async function getRecetaIngredientesByRecetaId(
+  recetaId: string
+): Promise<DatabaseRecetaIngrediente[]> {
+  const { data, error } = await supabase
+    .from('recetas_ingredientes')
+    .select('*')
+    .eq('receta_id', recetaId)
+
+  if (error || !data) {
+    console.error('Error fetching receta ingredientes:', error)
+    return []
+  }
+
+  return data as DatabaseRecetaIngrediente[]
+}
+
+// ===============================
+// Planes semanales adaptados
+// ===============================
+
+export async function createPlanSemanal(
+  plan: Omit<DatabasePlanSemanal, 'id' | 'created_at' | 'updated_at'>
+): Promise<DatabasePlanSemanal | null> {
+  const { data, error } = await supabase.from('planes_semanales').insert(plan).select().single()
+
+  if (error || !data) {
+    console.error('Error creating plan semanal:', error)
+    return null
+  }
+  return data as DatabasePlanSemanal
+}
+
+export async function getPlanSemanalByUserAndWeek(
+  userId: string,
+  weekStart: string
+): Promise<DatabasePlanSemanal | null> {
+  const { data, error } = await supabase
+    .from('planes_semanales')
+    .select('*, planes_semanales_comidas(*)')
+    .eq('user_id', userId)
+    .eq('week_start_date', weekStart)
+    .single()
+
+  if (error) {
+    if (error.code !== 'PGRST116') {
+      console.error('Error fetching plan semanal:', error)
+    }
+    return null
+  }
+  return data as DatabasePlanSemanal
+}
+
+function getPlanSemanalSelectClause(includeMeals: boolean) {
+  const basePlanSelect =
+    '*, plan_base:plan_base_id(id,nombre,descripcion,objetivo,dias_plan,calorias_base,proteinas_base,carbohidratos_base,grasas_base)'
+  if (!includeMeals) return basePlanSelect
+  return `${basePlanSelect}, planes_semanales_comidas(
+    *,
+    recetas:receta_id(
+      *,
+      recetas_ingredientes(
+        *,
+        ingredientes:ingrediente_id(id,nombre,unidad_base)
+      )
+    )
+  )`
+}
+
+function mapPlanSemanalDetalle(row: any, includeMeals: boolean): PlanSemanalWithDetalles {
+  const { planes_semanales_comidas, plan_base, ...rest } = row
+
+  const plan: PlanSemanalWithDetalles = {
+    ...(rest as DatabasePlanSemanal),
+    plan_base: plan_base || null,
+  }
+
+  if (includeMeals) {
+    plan.comidas = (planes_semanales_comidas || []).map((meal: any) => {
+      const { recetas, ...restMeal } = meal
+      return {
+        ...(restMeal as DatabasePlanSemanalComida),
+        receta: recetas
+          ? {
+              ...(recetas as DatabaseReceta),
+              recetas_ingredientes: (recetas.recetas_ingredientes || []).map((ingrediente: any) => ({
+                ...(ingrediente as DatabaseRecetaIngrediente),
+                ingredientes: ingrediente.ingredientes || null,
+              })),
+            }
+          : null,
+      }
+    })
+  }
+
+  return plan
+}
+
+export async function getPlanSemanalDetailedByWeek(
+  userId: string,
+  weekStart: string,
+  includeMeals = true
+): Promise<PlanSemanalWithDetalles | null> {
+  const selectClause = getPlanSemanalSelectClause(includeMeals)
+  const { data, error } = await supabase
+    .from('planes_semanales')
+    .select(selectClause)
+    .eq('user_id', userId)
+    .eq('week_start_date', weekStart)
+    .maybeSingle()
+
+  if (error) {
+    if (error.code !== 'PGRST116') {
+      console.error('Error fetching plan semanal detallado:', error)
+    }
+    return null
+  }
+  if (!data) return null
+  return mapPlanSemanalDetalle(data, includeMeals)
+}
+
+export async function getLatestPlanSemanalDetailed(
+  userId: string,
+  includeMeals = true
+): Promise<PlanSemanalWithDetalles | null> {
+  const selectClause = getPlanSemanalSelectClause(includeMeals)
+  const { data, error } = await supabase
+    .from('planes_semanales')
+    .select(selectClause)
+    .eq('user_id', userId)
+    .order('week_start_date', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    if (error.code !== 'PGRST116') {
+      console.error('Error fetching latest plan semanal:', error)
+    }
+    return null
+  }
+  if (!data) return null
+  return mapPlanSemanalDetalle(data, includeMeals)
+}
+
+export async function getPlanSemanalComidas(planId: string): Promise<DatabasePlanSemanalComida[]> {
+  const { data, error } = await supabase
+    .from('planes_semanales_comidas')
+    .select('*')
+    .eq('plan_semanal_id', planId)
+    .order('day_number', { ascending: true })
+
+  if (error || !data) {
+    console.error('Error fetching plan semanal comidas:', error)
+    return []
+  }
+
+  return data as DatabasePlanSemanalComida[]
+}
+
+export async function insertPlanSemanalComidas(
+  comidas: PlanSemanalComidaInput[]
+): Promise<DatabasePlanSemanalComida[]> {
+  if (!comidas.length) return []
+
+  const { data, error } = await supabase.from('planes_semanales_comidas').insert(comidas).select('*')
+
+  if (error || !data) {
+    console.error('Error inserting plan semanal comidas:', error)
+    throw new Error('No se pudieron guardar las comidas del plan semanal')
+  }
+
+  return data as DatabasePlanSemanalComida[]
+}
+
+export async function insertPlanSemanalIngredientes(
+  ingredientes: PlanSemanalIngredienteInput[]
+): Promise<DatabasePlanSemanalIngrediente[]> {
+  if (!ingredientes.length) return []
+
+  const { data, error } = await supabase
+    .from('planes_semanales_ingredientes')
+    .insert(ingredientes)
+    .select('*')
+
+  if (error || !data) {
+    console.error('Error inserting plan semanal ingredientes:', error)
+    throw new Error('No se pudieron guardar los ingredientes adaptados del plan semanal')
+  }
+
+  return data as DatabasePlanSemanalIngrediente[]
+}
+
+export async function deletePlanSemanal(planId: string): Promise<boolean> {
+  const { error } = await supabase.from('planes_semanales').delete().eq('id', planId)
+
+  if (error) {
+    console.error('Error deleting plan semanal:', error)
+    return false
+  }
+
+  return true
+}
+
+// ===============================
+// Inventario y pedidos
+// ===============================
+
+export interface StockSnapshot extends DatabaseStock {
+  ingrediente?: DatabaseIngrediente
+}
+
+export async function getStockSnapshot(): Promise<StockSnapshot[]> {
+  const { data, error } = await supabase
+    .from('stock')
+    .select('*, ingredientes:ingrediente_id(*)')
+    .order('actualizado_en', { ascending: false })
+
+  if (error || !data) {
+    console.error('Error fetching stock snapshot:', error)
+    return []
+  }
+
+  return data.map((row: any) => ({
+    id: row.id,
+    ingrediente_id: row.ingrediente_id,
+    cantidad_disponible: row.cantidad_disponible,
+    unidad: row.unidad,
+    actualizado_en: row.actualizado_en,
+    ingrediente: row.ingredientes,
+  }))
+}
+
+export async function updateStockEntry(ingredienteId: string, cantidad: number, unidad: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('stock')
+    .upsert(
+      {
+        ingrediente_id: ingredienteId,
+        cantidad_disponible: cantidad,
+        unidad,
+      },
+      { onConflict: 'ingrediente_id' }
+    )
+
+  if (error) {
+    console.error('Error updating stock:', error)
+    return false
+  }
+
+  return true
+}
+
+export type PedidoProveedorDetalleInput = {
+  ingrediente_id: string
+  cantidad: number
+  unidad: string
+  costo_unitario?: number
+}
+
+export async function createPedidoProveedor(
+  pedido: Omit<DatabasePedidoProveedor, 'id'>,
+  detalles: PedidoProveedorDetalleInput[]
+): Promise<DatabasePedidoProveedor | null> {
+  const { data, error } = await supabase.from('pedidos_proveedores').insert(pedido).select().single()
+
+  if (error || !data) {
+    console.error('Error creating supplier order:', error)
+    return null
+  }
+
+  if (detalles.length > 0) {
+    const payload = detalles.map((detalle) => ({
+      pedido_id: data.id,
+      ingrediente_id: detalle.ingrediente_id,
+      cantidad: detalle.cantidad,
+      unidad: detalle.unidad,
+      costo_unitario: detalle.costo_unitario ?? null,
+    }))
+
+    const { error: detailError } = await supabase.from('pedidos_proveedores_detalles').insert(payload)
+
+    if (detailError) {
+      console.error('Error inserting supplier order details:', detailError)
+    }
+  }
+
+  return data as DatabasePedidoProveedor
+}
+
+export async function getPedidosProveedor(limit = 20): Promise<
+  Array<DatabasePedidoProveedor & { detalles: DatabasePedidoProveedorDetalle[] }>
+> {
+  const { data, error } = await supabase
+    .from('pedidos_proveedores')
+    .select('*, detalles:pedidos_proveedores_detalles(*)')
+    .order('fecha_solicitud', { ascending: false })
+    .limit(limit)
+
+  if (error || !data) {
+    console.error('Error fetching supplier orders:', error)
+    return []
+  }
+
+  return data as Array<DatabasePedidoProveedor & { detalles: DatabasePedidoProveedorDetalle[] }>
+}
+
+// ===============================
+// Producción y logística
+// ===============================
+
+export async function programarProduccionDiaria(
+  produccion: Omit<DatabaseProduccionDiaria, 'id' | 'creado_en' | 'actualizado_en'>
+): Promise<DatabaseProduccionDiaria | null> {
+  const { data, error } = await supabase.from('produccion_diaria').insert(produccion).select().single()
+
+  if (error || !data) {
+    console.error('Error scheduling production:', error)
+    return null
+  }
+  return data as DatabaseProduccionDiaria
+}
+
+export async function actualizarEstadoProduccion(
+  produccionId: string,
+  estado: DatabaseProduccionDiaria['estado']
+): Promise<boolean> {
+  const { error } = await supabase
+    .from('produccion_diaria')
+    .update({ estado, actualizado_en: new Date().toISOString() })
+    .eq('id', produccionId)
+
+  if (error) {
+    console.error('Error updating production status:', error)
+    return false
+  }
+  return true
+}
+
+export type RutaParadaInput = {
+  order_id?: string
+  cliente_id?: string
+  posicion?: number
+  hora_estimada?: string
+  notas?: string
+}
+
+export async function crearRutaLogistica(
+  ruta: Omit<DatabaseRutaLogistica, 'id' | 'created_at' | 'updated_at'>,
+  paradas: RutaParadaInput[] = []
+): Promise<DatabaseRutaLogistica | null> {
+  const { data, error } = await supabase.from('logistica_rutas').insert(ruta).select().single()
+
+  if (error || !data) {
+    console.error('Error creating logistics route:', error)
+    return null
+  }
+
+  if (paradas.length > 0) {
+    const payload = paradas.map((parada, index) => ({
+      ruta_id: data.id,
+      order_id: parada.order_id ?? null,
+      cliente_id: parada.cliente_id ?? null,
+      posicion: parada.posicion ?? index + 1,
+      hora_estimada: parada.hora_estimada ?? null,
+      notas: parada.notas ?? null,
+    }))
+
+    const { error: stopsError } = await supabase.from('logistica_rutas_paradas').insert(payload)
+    if (stopsError) {
+      console.error('Error inserting route stops:', stopsError)
+    }
+  }
+
+  return data as DatabaseRutaLogistica
+}
+
+export async function actualizarEstadoRutaLogistica(
+  rutaId: string,
+  estado: DatabaseRutaLogistica['estado']
+): Promise<boolean> {
+  const { error } = await supabase
+    .from('logistica_rutas')
+    .update({ estado, updated_at: new Date().toISOString() })
+    .eq('id', rutaId)
+
+  if (error) {
+    console.error('Error updating logistics route status:', error)
+    return false
+  }
+
+  return true
+}
+
 // Funciones adicionales para usuarios
 export async function updateUser(
   userId: string,
@@ -474,10 +1427,38 @@ export async function getOrderById(id: string): Promise<DatabaseOrder | null> {
 export interface DatabaseOrderItem {
   id: string
   order_id: string
-  meal_id?: string
+  meal_id?: string | null
   quantity: number
   price: number
   created_at: string
+}
+
+export interface DatabaseOrderMealSetting {
+  id: string
+  order_item_id: string
+  meal_type: 'lunch' | 'dinner'
+  delivery_mode: 'delivery' | 'pickup'
+  delivery_address_id?: string | null
+  pickup_location?: string | null
+  delivery_time: string
+  estimated_delivery_time?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface OrderMealSettingWithMeal extends DatabaseOrderMealSetting {
+  order_id: string
+  meal_id?: string | null
+}
+
+export interface OrderMealSettingInput {
+  meal_id: string
+  meal_type: 'lunch' | 'dinner'
+  delivery_mode: 'delivery' | 'pickup'
+  delivery_address_id?: string | null
+  pickup_location?: string | null
+  delivery_time: string
+  scheduled_date?: string
 }
 
 export async function getOrderItemsByOrderId(orderId: string): Promise<DatabaseOrderItem[]> {
@@ -506,6 +1487,167 @@ export async function getOrderItemsByOrderIds(orderIds: string[]): Promise<Datab
     return []
   }
   return data as DatabaseOrderItem[]
+}
+
+function mapMealSettingRow(row: any): OrderMealSettingWithMeal {
+  const relatedItem = row.order_items || row.order_items_id || {}
+  return {
+    id: row.id,
+    order_item_id: row.order_item_id,
+    meal_type: row.meal_type,
+    delivery_mode: row.delivery_mode,
+    delivery_address_id: row.delivery_address_id ?? null,
+    pickup_location: row.pickup_location ?? null,
+    delivery_time: row.delivery_time,
+    estimated_delivery_time: row.estimated_delivery_time ?? null,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    order_id: relatedItem.order_id ?? row.order_id ?? '',
+    meal_id: relatedItem.meal_id ?? row.meal_id ?? null,
+  }
+}
+
+export async function getOrderMealSettingsByOrderId(orderId: string): Promise<OrderMealSettingWithMeal[]> {
+  const { data, error } = await supabase
+    .from('order_meal_settings')
+    .select('*, order_items!inner(order_id, meal_id)')
+    .eq('order_items.order_id', orderId)
+
+  if (error || !data) {
+    if (error?.code !== 'PGRST116') {
+      console.error('Error fetching meal settings by order:', error)
+    }
+    return []
+  }
+
+  return (data as any[]).map(mapMealSettingRow)
+}
+
+export async function getOrderMealSettingsByOrderIds(orderIds: string[]): Promise<OrderMealSettingWithMeal[]> {
+  if (!orderIds.length) return []
+
+  const { data, error } = await supabase
+    .from('order_meal_settings')
+    .select('*, order_items!inner(order_id, meal_id)')
+    .in('order_items.order_id', orderIds)
+
+  if (error || !data) {
+    console.error('Error fetching meal settings by orders:', error)
+    return []
+  }
+
+  return (data as any[]).map(mapMealSettingRow)
+}
+
+export async function upsertOrderMealSettings(
+  orderId: string,
+  meals: OrderMealSettingInput[]
+): Promise<OrderMealSettingWithMeal[]> {
+  if (!meals.length) return []
+
+  const existingItems = await getOrderItemsByOrderId(orderId)
+  const availableItemsByMealId = new Map<string, DatabaseOrderItem[]>()
+  existingItems.forEach((item) => {
+    if (!item.meal_id) return
+    const list = availableItemsByMealId.get(item.meal_id) ?? []
+    list.push(item)
+    availableItemsByMealId.set(item.meal_id, list)
+  })
+
+  const { data: existingSettingsRows, error: existingSettingsError } = await supabase
+    .from('order_meal_settings')
+    .select('*, order_items(order_id, meal_id)')
+    .eq('order_items.order_id', orderId)
+
+  if (existingSettingsError) {
+    console.error('Error fetching existing meal settings:', existingSettingsError)
+    throw new Error('No se pudieron leer las configuraciones actuales')
+  }
+
+  const existingSettings = (existingSettingsRows as any[] | null)?.map(mapMealSettingRow) ?? []
+  const settingsByKey = new Map<string, OrderMealSettingWithMeal>()
+  const usedOrderItemIds = new Set<string>()
+
+  existingSettings.forEach((setting) => {
+    const key = `${setting.meal_id ?? ''}_${setting.meal_type}`
+    settingsByKey.set(key, setting)
+    usedOrderItemIds.add(setting.order_item_id)
+  })
+
+  const mealsWithOrderItems: Array<{ input: OrderMealSettingInput; orderItemId: string }> = []
+  const pendingInsertions: Array<{ mealId: string; mapIndex: number }> = []
+
+  meals.forEach((meal, index) => {
+    const key = `${meal.meal_id}_${meal.meal_type}`
+    const existingSetting = settingsByKey.get(key)
+    if (existingSetting) {
+      mealsWithOrderItems.push({ input: meal, orderItemId: existingSetting.order_item_id })
+      usedOrderItemIds.add(existingSetting.order_item_id)
+      return
+    }
+
+    const availableItems = availableItemsByMealId.get(meal.meal_id) ?? []
+    const unusedItem = availableItems.find((item) => !usedOrderItemIds.has(item.id))
+    if (unusedItem) {
+      usedOrderItemIds.add(unusedItem.id)
+      mealsWithOrderItems.push({ input: meal, orderItemId: unusedItem.id })
+      return
+    }
+
+    pendingInsertions.push({ mealId: meal.meal_id, mapIndex: mealsWithOrderItems.length })
+    mealsWithOrderItems.push({ input: meal, orderItemId: '' })
+  })
+
+  if (pendingInsertions.length > 0) {
+    const insertPayload = pendingInsertions.map((pending) => ({
+      order_id: orderId,
+      meal_id: pending.mealId,
+      quantity: 1,
+      price: 0,
+    }))
+
+    const { data: insertedItems, error: insertError } = await supabase
+      .from('order_items')
+      .insert(insertPayload)
+      .select('*')
+
+    if (insertError || !insertedItems) {
+      console.error('Error inserting order items for meal settings:', insertError)
+      throw new Error('No se pudieron preparar las comidas del pedido')
+    }
+
+    pendingInsertions.forEach((pending, idx) => {
+      const createdItem = (insertedItems as DatabaseOrderItem[])[idx]
+      mealsWithOrderItems[pending.mapIndex].orderItemId = createdItem.id
+    })
+  }
+
+  const settingsPayload = mealsWithOrderItems.map(({ input, orderItemId }) => {
+    if (!orderItemId) {
+      throw new Error('No se pudo asociar la comida con el pedido')
+    }
+    const shouldUseDelivery = input.delivery_mode === 'delivery'
+    return {
+      order_item_id: orderItemId,
+      meal_type: input.meal_type,
+      delivery_mode: input.delivery_mode,
+      delivery_address_id: shouldUseDelivery ? input.delivery_address_id ?? null : null,
+      pickup_location: shouldUseDelivery ? null : input.pickup_location ?? null,
+      delivery_time: input.delivery_time,
+    }
+  })
+
+  const { data, error } = await supabase
+    .from('order_meal_settings')
+    .upsert(settingsPayload, { onConflict: 'order_item_id' })
+    .select('*, order_items(order_id, meal_id)')
+
+  if (error || !data) {
+    console.error('Error upserting meal settings:', error)
+    throw new Error('No se pudieron guardar las configuraciones de entrega')
+  }
+
+  return (data as any[]).map(mapMealSettingRow)
 }
 
 export async function updateOrder(
@@ -1214,182 +2356,6 @@ export async function getMealPlansByNutricionistaId(
     return []
   }
   return data as DatabaseMealPlan[]
-}
-
-// Función para copiar un plan completo (con días y comidas) a un cliente
-export async function copyMealPlanToUser(
-  sourcePlanId: string,
-  userId: string,
-  startDate: string,
-  endDate: string
-): Promise<DatabaseMealPlan | null> {
-  try {
-    // Verificar que el usuario tenga suscripción activa
-    const { data: subscriptions, error: subError } = await supabase
-      .from('subscriptions')
-      .select('id, status')
-      .eq('user_id', userId)
-      .eq('status', 'active')
-      .limit(1)
-
-    if (subError || !subscriptions || subscriptions.length === 0) {
-      console.error('User does not have an active subscription:', userId)
-      throw new Error('El usuario no tiene una suscripción activa. No se pueden asignar planes nutricionales sin suscripción.')
-    }
-
-    // Obtener el plan fuente con días y comidas
-    const sourcePlanData = await getMealPlanWithDays(sourcePlanId)
-    if (!sourcePlanData || !sourcePlanData.plan) {
-      console.error('Source plan not found for ID:', sourcePlanId)
-      return null
-    }
-
-    const { plan: sourcePlan, days: sourceDays } = sourcePlanData
-
-    // Crear el nuevo plan para el usuario
-    const newPlan = await createMealPlan({
-      name: sourcePlan.name,
-      description: sourcePlan.description || null,
-      nutricionista_id: sourcePlan.nutricionista_id,
-      user_id: userId,
-      start_date: startDate,
-      end_date: endDate,
-      total_calories: sourcePlan.total_calories || null,
-      status: 'active',
-    })
-
-    if (!newPlan || !newPlan.id) {
-      console.error('Error creating new plan. Source plan:', sourcePlan)
-      return null
-    }
-
-    // Copiar días y comidas
-    for (const sourceDay of sourceDays || []) {
-      // Crear el día
-      const newDay = await createMealPlanDay({
-        meal_plan_id: newPlan.id,
-        day_name: sourceDay.day_name,
-        day_number: sourceDay.day_number,
-        total_calories: sourceDay.total_calories || null,
-      })
-
-      if (!newDay || !newDay.id) {
-        console.error('Error creating day:', sourceDay)
-        continue
-      }
-
-      // Copiar comidas del día
-      const dayMeals = sourceDay.meal_plan_day_meals || []
-      if (Array.isArray(dayMeals)) {
-        for (const meal of dayMeals) {
-          const mealResult = await createMealPlanDayMeal({
-            meal_plan_day_id: newDay.id,
-            meal_id: meal.meal_id,
-            meal_name: meal.meal_name,
-            meal_description: meal.meal_description || null,
-            calories: meal.calories || null,
-            order_index: meal.order_index || 0,
-          })
-          
-          if (!mealResult) {
-            console.error('Error creating meal for day:', meal, 'Day:', newDay.id)
-          }
-        }
-      } else if (dayMeals && typeof dayMeals === 'object') {
-        // Si meal_plan_day_meals es un objeto en lugar de array, convertirlo
-        const mealsArray = Object.values(dayMeals)
-        for (const meal of mealsArray) {
-          const mealData = meal as any
-          const mealResult = await createMealPlanDayMeal({
-            meal_plan_day_id: newDay.id,
-            meal_id: mealData.meal_id,
-            meal_name: mealData.meal_name,
-            meal_description: mealData.meal_description || null,
-            calories: mealData.calories || null,
-            order_index: mealData.order_index || 0,
-          })
-          
-          if (!mealResult) {
-            console.error('Error creating meal for day:', mealData, 'Day:', newDay.id)
-          }
-        }
-      }
-    }
-
-    return newPlan
-  } catch (error: any) {
-    console.error('Error copying meal plan:', error)
-    console.error('Error details:', {
-      message: error?.message,
-      stack: error?.stack,
-      name: error?.name,
-    })
-    throw error // Propagar el error para que el endpoint pueda manejarlo
-  }
-}
-
-// Funciones para plantillas de planes
-export interface DatabasePlanTemplate {
-  id: string
-  name: string
-  description?: string
-  nutricionista_id?: string
-  focus?: string
-  duration?: string
-  audience?: string
-  total_calories?: number
-  is_public: boolean
-  created_at: string
-  updated_at: string
-}
-
-export async function getAllPlanTemplates(
-  nutricionistaId?: string
-): Promise<DatabasePlanTemplate[]> {
-  let query = supabase.from('plan_templates').select('*')
-
-  if (nutricionistaId) {
-    query = query.or(`nutricionista_id.eq.${nutricionistaId},is_public.eq.true`)
-  } else {
-    query = query.eq('is_public', true)
-  }
-
-  const { data, error } = await query.order('created_at', { ascending: false })
-
-  if (error || !data) {
-    console.error('Error fetching plan templates:', error)
-    return []
-  }
-  return data as DatabasePlanTemplate[]
-}
-
-export async function createPlanTemplate(
-  templateData: Omit<DatabasePlanTemplate, 'id' | 'created_at' | 'updated_at'>
-): Promise<DatabasePlanTemplate | null> {
-  console.log('Creating plan template with data:', JSON.stringify(templateData, null, 2))
-  
-  const { data, error } = await supabase
-    .from('plan_templates')
-    .insert(templateData)
-    .select()
-    .single()
-
-  if (error) {
-    console.error('Error creating plan template:', error)
-    console.error('Error code:', error.code)
-    console.error('Error message:', error.message)
-    console.error('Error details:', error.details)
-    console.error('Error hint:', error.hint)
-    // Propagar el error para que el endpoint pueda manejarlo
-    throw error
-  }
-  
-  if (!data) {
-    console.error('No data returned from insert')
-    return null
-  }
-  
-  return data as DatabasePlanTemplate
 }
 
 // Función helper para verificar conexión a Supabase

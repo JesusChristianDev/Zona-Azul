@@ -201,7 +201,7 @@ export interface WeeklyMenu {
         id: string
         name: string
         description?: string
-        type: 'breakfast' | 'lunch' | 'dinner' | 'snack'
+        type: 'lunch' | 'dinner'
         calories: number
         protein?: number
         carbs?: number
@@ -216,7 +216,7 @@ export interface WeeklyMenu {
         id: string
         name: string
         description?: string
-        type: 'breakfast' | 'lunch' | 'dinner' | 'snack'
+        type: 'lunch' | 'dinner'
         calories: number
         protein?: number
         carbs?: number
@@ -240,7 +240,7 @@ export interface WeeklyMenuDayMeal {
   id: string
   weekly_menu_day_id: string
   meal_id: string
-  meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack'
+  meal_type: 'lunch' | 'dinner'
   order_index: number
   is_original: boolean
   original_meal_id?: string
@@ -252,7 +252,7 @@ export interface MenuModification {
   weekly_menu_id: string
   user_id: string
   day_number: number
-  meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack'
+  meal_type: 'lunch' | 'dinner'
   original_meal_id: string
   requested_meal_id: string
   nutritionist_recommendation?: string
@@ -267,7 +267,7 @@ export interface MenuModification {
     id: string
     name: string
     description?: string
-    type: 'breakfast' | 'lunch' | 'dinner' | 'snack'
+    type: 'lunch' | 'dinner'
     calories: number
     image_url?: string
   }
@@ -275,7 +275,7 @@ export interface MenuModification {
     id: string
     name: string
     description?: string
-    type: 'breakfast' | 'lunch' | 'dinner' | 'snack'
+    type: 'lunch' | 'dinner'
     calories: number
     image_url?: string
   }
@@ -328,19 +328,6 @@ export interface OrderTracking {
   estimated_delivery_time?: string
   updated_by?: string
   created_at: string
-}
-
-// ============================================
-// TIPOS PARA NOTIFICACIONES
-// ============================================
-
-export interface NotificationPreferences {
-  notifications_weekly_menu: boolean
-  notifications_menu_changes_approved: boolean
-  notifications_order_status: boolean
-  notifications_renewal_reminder: boolean
-  notifications_plan_approval: boolean
-  notifications_consultation_required: boolean
 }
 
 // ============================================

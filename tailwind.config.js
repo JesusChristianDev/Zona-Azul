@@ -3,6 +3,7 @@ module.exports = {
     './src/**/*.{js,ts,jsx,tsx}',
     './public/index.html'
   ],
+  darkMode: 'class', // Habilitar modo oscuro con clase
   theme: {
     extend: {
       screens: {
@@ -26,3 +27,4 @@ module.exports = {
   },
   plugins: []
 }
+

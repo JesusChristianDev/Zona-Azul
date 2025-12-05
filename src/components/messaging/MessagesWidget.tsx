@@ -825,7 +825,7 @@ export default function MessagesWidget() {
           />
 
           <div
-            className="fixed inset-0 sm:inset-auto sm:top-16 sm:left-auto sm:right-4 sm:bottom-4 sm:w-[calc(100vw-2rem)] sm:max-w-[720px] md:max-w-[800px] sm:h-[calc(100vh-6rem)] sm:rounded-xl bg-white shadow-2xl z-[50] flex flex-col border-0 sm:border border-gray-200 overflow-hidden"
+            className="fixed inset-0 sm:inset-auto sm:top-16 sm:left-auto sm:right-4 sm:bottom-4 sm:w-[calc(100vw-2rem)] sm:max-w-[720px] md:max-w-[800px] sm:h-[calc(100vh-6rem)] sm:rounded-2xl bg-white/95 dark:bg-slate-900/70 backdrop-blur-2xl shadow-2xl z-[50] flex flex-col border-0 sm:border border-gray-200/70 dark:border-slate-800/70 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
             data-nextjs-scroll-focus-boundary
           >
@@ -867,11 +867,11 @@ export default function MessagesWidget() {
             </div>
 
             {/* Contenido principal - responsive: móvil fullscreen, desktop dos columnas */}
-            <div className="flex flex-1 overflow-hidden bg-white">
+            <div className="flex flex-1 overflow-hidden bg-gradient-to-br from-white to-gray-50 dark:from-slate-900/60 dark:to-slate-900/30">
               {/* Lista de conversaciones - oculta en móvil cuando hay conversación seleccionada o se está componiendo */}
-              <div className={`${selectedConversation || isComposing ? 'hidden sm:flex' : 'flex'} w-full sm:w-[320px] md:w-[360px] border-r border-gray-200 bg-gray-50/50 overflow-hidden flex-col transition-all duration-300`}>
+              <div className={`${selectedConversation || isComposing ? 'hidden sm:flex' : 'flex'} w-full sm:w-[320px] md:w-[360px] border-r border-gray-100/80 dark:border-slate-800/70 bg-white/95 dark:bg-slate-900/45 backdrop-blur-xl overflow-hidden flex-col transition-all duration-300`}>
                 {/* Barra de acciones profesional */}
-                <div className="px-2 sm:px-3 py-2.5 sm:py-3 border-b border-gray-200 bg-white">
+                <div className="px-2 sm:px-3 py-2.5 sm:py-3 border-b border-gray-100/80 dark:border-slate-800/60 bg-white/95 dark:bg-slate-900/50 backdrop-blur-xl">
                   <div className="flex gap-1.5 sm:gap-2">
                     <button
                       onClick={(e) => {
@@ -897,8 +897,8 @@ export default function MessagesWidget() {
                         setSelectedRecipient(null)
                       }}
                       className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-all duration-200 text-xs sm:text-sm font-medium flex items-center justify-center gap-1 sm:gap-1.5 ${showArchived
-                        ? 'bg-primary text-white shadow-sm'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
+                        ? 'btn btn-primary text-white shadow-sm'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200 dark:bg-slate-800 dark:text-gray-200 dark:hover:bg-slate-700 dark:border-slate-700'
                         }`}
                       title={showArchived ? 'Ver activos' : 'Ver archivados'}
                     >
@@ -912,25 +912,25 @@ export default function MessagesWidget() {
 
 
                 {/* Lista de conversaciones */}
-                <div className="flex-1 overflow-y-auto">
+                <div className="flex-1 overflow-y-auto bg-white/90 dark:bg-slate-900/40 rounded-2xl border border-gray-100/80 dark:border-slate-800/60 backdrop-blur-xl">
                   {conversations.length === 0 ? (
                     <div className="p-12 text-center">
-                      <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                        <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center">
+                        <svg className="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                         </svg>
                       </div>
-                      <p className="text-gray-500 font-medium text-sm">{showArchived ? 'No hay conversaciones archivadas' : 'No hay conversaciones aún'}</p>
-                      <p className="text-gray-400 text-xs mt-1">{showArchived ? 'Las conversaciones archivadas aparecerán aquí' : 'Comienza una nueva conversación'}</p>
+                      <p className="text-gray-500 dark:text-gray-400 font-medium text-sm">{showArchived ? 'No hay conversaciones archivadas' : 'No hay conversaciones aún'}</p>
+                      <p className="text-gray-400 dark:text-gray-500 text-xs mt-1">{showArchived ? 'Las conversaciones archivadas aparecerán aquí' : 'Comienza una nueva conversación'}</p>
                     </div>
                   ) : (
-                    <div className="divide-y divide-gray-100">
+                    <div className="divide-y divide-gray-100 dark:divide-slate-800/60">
                       {filteredConversations.map((conv) => (
                         <div
                           key={conv.contactId}
                           className={`relative group transition-all duration-200 ${selectedConversation?.contactId === conv.contactId
-                            ? 'bg-primary/5 border-l-4 border-primary'
-                            : 'hover:bg-white border-l-4 border-transparent'
+                            ? 'bg-primary/5 dark:bg-primary/15 border-l-4 border-primary/80 dark:border-primary/60'
+                            : 'border-l-4 border-transparent hover:bg-white dark:hover:bg-slate-800/60'
                             }`}
                           onMouseEnter={() => setHoveredConversation(conv.contactId)}
                           onMouseLeave={() => setHoveredConversation(null)}
@@ -942,7 +942,7 @@ export default function MessagesWidget() {
                               setIsComposing(false)
                               setSelectedRecipient(null)
                             }}
-                            className="w-full p-4 transition-colors text-left"
+                            className="w-full p-4 transition-colors text-left bg-transparent"
                             type="button"
                           >
                             <div className="flex items-start gap-2 sm:gap-3">
@@ -971,16 +971,16 @@ export default function MessagesWidget() {
                                     </span>
                                   )}
                                 </div>
-                                <p className="text-xs sm:text-sm text-gray-600 truncate mb-0.5 sm:mb-1">{conv.lastMessage || 'Sin mensajes'}</p>
-                                <p className="text-[10px] sm:text-xs text-gray-400 font-medium">{formatTime(conv.lastMessageTime)}</p>
+                                <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 truncate mb-0.5 sm:mb-1">{conv.lastMessage || 'Sin mensajes'}</p>
+                                <p className="text-[10px] sm:text-xs text-gray-400 dark:text-gray-500 font-medium">{formatTime(conv.lastMessageTime)}</p>
                               </div>
                             </div>
                           </button>
 
                           {/* Botones de acción al hacer hover - diseño profesional */}
-                          {hoveredConversation === conv.contactId && !conv.deleted && (
-                            <div
-                              className="absolute top-3 right-3 flex gap-1 bg-white rounded-lg shadow-lg border border-gray-200 p-1.5 z-10"
+                              {hoveredConversation === conv.contactId && !conv.deleted && (
+                                <div
+                                  className="absolute top-3 right-3 flex gap-1 bg-white dark:bg-slate-900/90 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 p-1.5 z-10"
                               onClick={(e) => e.stopPropagation()}
                               onMouseDown={(e) => e.stopPropagation()}
                             >
@@ -1042,11 +1042,11 @@ export default function MessagesWidget() {
               </div>
 
               {/* Vista de mensajes - visible en móvil cuando hay conversación seleccionada o se está componiendo */}
-              <div className={`${selectedConversation || isComposing ? 'flex' : 'hidden sm:flex'} flex-1 flex-col bg-white`}>
+              <div className={`${selectedConversation || isComposing ? 'flex' : 'hidden sm:flex'} flex-1 flex-col bg-white/95 dark:bg-slate-900/35 backdrop-blur-lg`}>
                 {selectedConversation || isComposing ? (
                   <>
                     {/* Header de conversación profesional */}
-                    <div className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white flex items-center gap-2 sm:gap-3">
+                    <div className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-slate-800 bg-gradient-to-r from-gray-50 to-white dark:from-slate-900 dark:to-slate-800 flex items-center gap-2 sm:gap-3">
                       {/* Botón volver - solo visible en móvil */}
                       <button
                         onClick={(e) => {
@@ -1055,7 +1055,7 @@ export default function MessagesWidget() {
                           setIsComposing(false)
                           setSelectedRecipient(null)
                         }}
-                        className="sm:hidden p-2 hover:bg-gray-200 rounded-lg transition-all duration-200 flex-shrink-0 active:scale-95 touch-manipulation"
+                        className="sm:hidden p-2 hover:bg-gray-200 dark:hover:bg-slate-800 rounded-lg transition-all duration-200 flex-shrink-0 active:scale-95 touch-manipulation"
                         aria-label="Volver"
                       >
                         <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1112,7 +1112,7 @@ export default function MessagesWidget() {
                     </div>
 
                     {/* Mensajes o Lista de contactos */}
-                    <div className="flex-1 overflow-y-auto px-3 sm:px-4 md:px-6 py-3 sm:py-4 space-y-3 sm:space-y-4 bg-gray-50/30">
+                    <div className="flex-1 overflow-y-auto px-3 sm:px-4 md:px-6 py-3 sm:py-4 space-y-3 sm:space-y-4 bg-gray-50/50 dark:bg-slate-900/30">
                       {/* Lista de contactos cuando se está componiendo sin destinatario */}
                       {isComposing && !selectedRecipient && !selectedConversation && (
                         <div className="space-y-2 sm:space-y-3">
@@ -1139,7 +1139,7 @@ export default function MessagesWidget() {
                                     e.stopPropagation()
                                     handleStartNewConversation(contact)
                                   }}
-                                  className="w-full p-3 sm:p-4 hover:bg-white rounded-lg sm:rounded-xl text-left transition-all duration-200 border border-gray-200 hover:border-primary/30 hover:shadow-md active:scale-[0.98] bg-white touch-manipulation"
+                                  className="w-full p-3 sm:p-4 hover:bg-white dark:hover:bg-slate-800 rounded-lg sm:rounded-xl text-left transition-all duration-200 border border-gray-200 dark:border-slate-700 hover:border-primary/30 dark:hover:border-primary/40 hover:shadow-md active:scale-[0.98] bg-white dark:bg-slate-900/60 touch-manipulation"
                                   type="button"
                                 >
                                   <div className="flex items-center gap-2 sm:gap-3">
@@ -1163,8 +1163,8 @@ export default function MessagesWidget() {
                       )}
                       {selectedConversation && selectedConversation.messages.length === 0 && !isComposing && (
                         <div className="text-center py-12">
-                          <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center">
+                            <svg className="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                             </svg>
                           </div>
@@ -1191,11 +1191,11 @@ export default function MessagesWidget() {
                           <div
                             className={`max-w-[90%] xs:max-w-[85%] sm:max-w-[75%] rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 shadow-sm ${msg.fromId === userId
                               ? 'bg-gradient-to-br from-primary to-primary/90 text-white'
-                              : 'bg-white text-gray-900 border border-gray-200'
+                              : 'bg-slate-50 dark:bg-slate-800/80 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-slate-700'
                               }`}
                           >
                             {msg.subject && msg.subject !== 'Mensaje' && (
-                              <p className={`text-[10px] sm:text-xs font-bold mb-1.5 sm:mb-2 pb-1.5 sm:pb-2 border-b ${msg.fromId === userId ? 'text-white/90 border-white/20' : 'text-gray-500 border-gray-200'}`}>
+                              <p className={`text-[10px] sm:text-xs font-bold mb-1.5 sm:mb-2 pb-1.5 sm:pb-2 border-b ${msg.fromId === userId ? 'text-white/90 border-white/20' : 'text-gray-500 dark:text-gray-400 border-gray-200 dark:border-slate-700'}`}>
                                 {msg.subject}
                               </p>
                             )}
@@ -1204,9 +1204,9 @@ export default function MessagesWidget() {
                               {formatTime(msg.createdAt)}
                             </p>
                             {msg.reply && (
-                              <div className={`mt-2 sm:mt-3 p-2 sm:p-3 rounded-lg border ${msg.fromId === userId ? 'bg-white/20 border-white/30' : 'bg-gray-50 border-gray-200'}`}>
-                                <p className={`text-[10px] sm:text-xs font-bold mb-1 sm:mb-1.5 ${msg.fromId === userId ? 'text-white/90' : 'text-gray-600'}`}>Respuesta:</p>
-                                <p className={`text-[10px] sm:text-xs leading-relaxed break-words ${msg.fromId === userId ? 'text-white/90' : 'text-gray-700'}`}>{msg.reply}</p>
+                              <div className={`mt-2 sm:mt-3 p-2 sm:p-3 rounded-lg border ${msg.fromId === userId ? 'bg-white/20 border-white/30' : 'bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700'}`}>
+                                <p className={`text-[10px] sm:text-xs font-bold mb-1 sm:mb-1.5 ${msg.fromId === userId ? 'text-white/90' : 'text-gray-600 dark:text-gray-300'}`}>Respuesta:</p>
+                                <p className={`text-[10px] sm:text-xs leading-relaxed break-words ${msg.fromId === userId ? 'text-white/90' : 'text-gray-700 dark:text-gray-200'}`}>{msg.reply}</p>
                               </div>
                             )}
                           </div>
@@ -1216,7 +1216,7 @@ export default function MessagesWidget() {
                     </div>
 
                     {/* Input de mensaje profesional */}
-                    <form onSubmit={handleSendMessage} className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-t border-gray-200 bg-white safe-area-inset-bottom">
+                    <form onSubmit={handleSendMessage} className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-t border-gray-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/45 backdrop-blur-xl safe-area-inset-bottom">
                       {isComposing && !selectedConversation && (
                         <div className="mb-2 sm:mb-3">
                           <label className="block text-[10px] sm:text-xs font-semibold text-gray-600 mb-1 sm:mb-1.5">Asunto (opcional)</label>
@@ -1225,7 +1225,7 @@ export default function MessagesWidget() {
                             value={newMessageSubject}
                             onChange={(e) => setNewMessageSubject(e.target.value)}
                             placeholder="Ej: Consulta sobre plan nutricional"
-                            className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                            className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 dark:border-slate-700 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500"
                           />
                         </div>
                       )}
@@ -1237,7 +1237,7 @@ export default function MessagesWidget() {
                             placeholder={selectedRecipient ? "Escribe tu mensaje aquí..." : "Selecciona un destinatario primero"}
                             disabled={!selectedRecipient && isComposing}
                             rows={1}
-                            className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed resize-none transition-all min-h-[44px] sm:min-h-[48px] max-h-[120px] touch-manipulation"
+                            className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 dark:border-slate-700 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-gray-100 dark:disabled:bg-slate-800/40 disabled:cursor-not-allowed resize-none transition-all min-h-[44px] sm:min-h-[48px] max-h-[120px] touch-manipulation bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500"
                             onKeyDown={(e) => {
                               if (e.key === 'Enter' && !e.shiftKey) {
                                 e.preventDefault()
@@ -1251,7 +1251,7 @@ export default function MessagesWidget() {
                         <button
                           type="submit"
                           disabled={!newMessageText.trim() || (!selectedRecipient && isComposing)}
-                          className="px-4 sm:px-5 py-2.5 sm:py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 shadow-sm hover:shadow-md active:scale-95 flex items-center justify-center touch-manipulation min-w-[44px] min-h-[44px]"
+                          className="btn btn-primary flex-shrink-0 touch-manipulation min-w-[44px] min-h-[44px]"
                           aria-label="Enviar mensaje"
                         >
                           <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

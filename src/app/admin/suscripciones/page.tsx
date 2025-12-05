@@ -240,17 +240,14 @@ export default function AdminSuscripcionesPage() {
             <label className="block text-sm font-medium text-gray-700 mb-2">Filtrar por estado:</label>
             <div className="flex gap-2 flex-wrap">
               {['all', 'pending_approval', 'active', 'expired', 'cancelled'].map((status) => (
-                <button
+                <ActionButton
                   key={status}
                   onClick={() => setFilterStatus(status)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    filterStatus === status
-                      ? 'bg-primary text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
+                  variant={filterStatus === status ? 'primary' : 'muted'}
+                  size="sm"
                 >
                   {status === 'all' ? 'Todas' : getStatusText(status)}
-                </button>
+                </ActionButton>
               ))}
             </div>
           </div>
@@ -305,26 +302,28 @@ export default function AdminSuscripcionesPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     {subscription.status === 'pending_approval' && !subscription.admin_approved && (
-                      <button
+                      <ActionButton
                         onClick={(e) => {
                           e.stopPropagation()
                           handleApprove(subscription.id, false)
                         }}
-                        className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition text-sm font-medium"
+                        variant="primary"
+                        size="sm"
                       >
                         Aprobar
-                      </button>
+                      </ActionButton>
                     )}
-                    <button
+                    <ActionButton
                       onClick={(e) => {
                         e.stopPropagation()
                         setSelectedSubscription(subscription)
                         setIsDetailModalOpen(true)
                       }}
-                      className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition text-sm font-medium"
+                      variant="muted-outline"
+                      size="sm"
                     >
                       Ver Detalles
-                    </button>
+                    </ActionButton>
                   </div>
                 </div>
               </div>
@@ -436,18 +435,19 @@ export default function AdminSuscripcionesPage() {
 
             {selectedSubscription.status === 'pending_approval' && !selectedSubscription.admin_approved && (
               <div className="pt-4 border-t space-y-2">
-                <button
+                <ActionButton
                   onClick={() => handleApprove(selectedSubscription.id, false)}
-                  className="w-full px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition font-medium"
+                  fullWidth
                 >
                   Aprobar Suscripción
-                </button>
-                <button
+                </ActionButton>
+                <ActionButton
                   onClick={() => handleApprove(selectedSubscription.id, true)}
-                  className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium"
+                  variant="success"
+                  fullWidth
                 >
                   Aprobar y Marcar Consulta Completada
-                </button>
+                </ActionButton>
               </div>
             )}
           </div>
@@ -543,20 +543,21 @@ export default function AdminSuscripcionesPage() {
             </select>
           </div>
 
-          <div className="pt-4 border-t flex gap-3">
-            <button
+          <div className="pt-4 border-t flex flex-col sm:flex-row gap-3">
+            <ActionButton
               type="button"
               onClick={() => setIsCreateModalOpen(false)}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition font-medium"
+              variant="muted-outline"
+              fullWidth
             >
               Cancelar
-            </button>
-            <button
+            </ActionButton>
+            <ActionButton
               type="submit"
-              className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition font-medium"
+              fullWidth
             >
               Crear Suscripción
-            </button>
+            </ActionButton>
           </div>
         </form>
       </Modal>

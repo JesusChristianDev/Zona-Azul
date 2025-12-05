@@ -101,6 +101,12 @@ async function isNotificationEnabled(
 async function sendPushNotification(data: NotificationData, userId: string | null): Promise<boolean> {
   if (!userId) return false
 
+  // Asegurar que el título siempre incluya "Zona Azul" de forma prominente
+  let finalTitle = data.title
+  if (!finalTitle.includes('Zona Azul') && !finalTitle.startsWith('Zona Azul')) {
+    finalTitle = `Zona Azul: ${data.title}`
+  }
+
   try {
     const response = await fetch('/api/push/send', {
       method: 'POST',
@@ -109,7 +115,7 @@ async function sendPushNotification(data: NotificationData, userId: string | nul
       },
       body: JSON.stringify({
         user_ids: [userId],
-        title: data.title,
+        title: finalTitle,
         message: data.body,
         url: data.url || '/',
         icon: data.icon || '/icon-192x192.png',

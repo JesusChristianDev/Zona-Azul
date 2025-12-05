@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import Modal from '@/components/ui/Modal'
 import type { Meal } from '@/lib/types'
+import type { DatabaseFichaTecnica } from '@/lib/db'
 
 export default function FichaTecnicaPage() {
   const params = useParams()
@@ -13,6 +15,7 @@ export default function FichaTecnicaPage() {
   const [client, setClient] = useState<any>(null)
   const [favorites, setFavorites] = useState<any[]>([])
   const [notes, setNotes] = useState<any[]>([])
+  const [ficha, setFicha] = useState<DatabaseFichaTecnica | null>(null)
   const [loading, setLoading] = useState(true)
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false)
   const [isEditNoteModalOpen, setIsEditNoteModalOpen] = useState(false)
@@ -29,6 +32,7 @@ export default function FichaTecnicaPage() {
       loadClientData()
       loadFavorites()
       loadNotes()
+      loadFichaTecnica()
     }
   }, [clientId])
 
@@ -37,7 +41,7 @@ export default function FichaTecnicaPage() {
       const response = await fetch(`/api/users/${clientId}`)
       if (response.ok) {
         const data = await response.json()
-        setClient(data)
+        setClient(data?.user || null)
       }
     } catch (error) {
       console.error('Error loading client:', error)
@@ -67,6 +71,18 @@ export default function FichaTecnicaPage() {
       }
     } catch (error) {
       console.error('Error loading notes:', error)
+    }
+  }
+
+  const loadFichaTecnica = async () => {
+    try {
+      const response = await fetch(`/api/fichas-tecnicas?user_id=${clientId}`, { cache: 'no-store' })
+      if (response.ok) {
+        const data = await response.json()
+        setFicha(data.ficha)
+      }
+    } catch (error) {
+      console.error('Error loading ficha tecnica:', error)
     }
   }
 
@@ -170,13 +186,11 @@ export default function FichaTecnicaPage() {
   }
 
   const getMealTypeText = (type: string) => {
-    const types = {
-      breakfast: 'Desayuno',
+    const types: Record<string, string> = {
       lunch: 'Almuerzo',
       dinner: 'Cena',
-      snack: 'Snack',
     }
-    return types[type as keyof typeof types] || type
+    return types[type] || type
   }
 
   if (loading) {
@@ -213,13 +227,96 @@ export default function FichaTecnicaPage() {
             Favoritos y notas del cliente (solo visible para nutricionista y administrador)
           </p>
         </div>
-        <button
-          onClick={() => setIsNoteModalOpen(true)}
-          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition font-medium"
-        >
-          + Agregar Nota
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/nutricionista/clientes"
+            className="px-4 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+          >
+            ← Volver
+          </Link>
+          <button
+            onClick={() => setIsNoteModalOpen(true)}
+            className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition font-medium"
+          >
+            + Agregar Nota
+          </button>
+        </div>
       </header>
+
+      {/* Ficha técnica */}
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Resumen biométrico</h2>
+        {!ficha ? (
+          <p className="text-gray-500 text-center py-8">
+            Aún no se ha completado la ficha técnica de este cliente.
+          </p>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <FichaDato label="Cliente" value={client?.name || '—'} />
+              <FichaDato label="Sexo" value={ficha.sexo === 'hombre' ? 'Hombre' : 'Mujer'} />
+              <FichaDato label="Edad" value={ficha.edad ? `${ficha.edad} años` : '—'} />
+              <FichaDato label="Peso" value={ficha.peso_kg ? `${ficha.peso_kg} kg` : '—'} />
+              <FichaDato label="Altura" value={ficha.altura_cm ? `${ficha.altura_cm} cm` : '—'} />
+              <FichaDato label="IMC" value={ficha.imc ? ficha.imc.toFixed(2) : '—'} />
+              <FichaDato label="TMB" value={ficha.tmb ? `${Math.round(ficha.tmb)} kcal` : '—'} />
+              <FichaDato label="Factor actividad" value={ficha.factor_actividad ? ficha.factor_actividad.toFixed(2) : '—'} />
+              <FichaDato label="Calorías objetivo" value={ficha.calorias_objetivo ? `${ficha.calorias_objetivo} kcal` : '—'} />
+              <FichaDato label="Objetivo" value={mapObjetivo(ficha.objetivo)} />
+              <FichaDato label="Nivel de actividad" value={mapActividad(ficha.nivel_actividad || ficha.trabajo)} />
+              <FichaDato label="Puesto laboral" value={ficha.puesto_trabajo || '—'} />
+              <FichaDato label="Intensidad trabajo" value={mapIntensidad(ficha.intensidad_trabajo)} />
+              <FichaDato label="Comidas por día" value={ficha.comidas_por_dia || '—'} />
+              <FichaDato label="GET estimado" value={ficha.get_total ? `${Math.round(ficha.get_total)} kcal` : '—'} />
+              <FichaDato label="Fibra objetivo" value={ficha.fibra_objetivo ? `${ficha.fibra_objetivo} g` : '—'} />
+              <FichaDato label="Entrenamientos/semana" value={ficha.entrenamientos_semanales ?? '—'} />
+              <FichaDato label="Nivel entrenamiento" value={mapNivel(ficha.nivel_entrenamiento)} />
+              <FichaDato label="Densidad ósea" value={ficha.densidad_osea ? `${ficha.densidad_osea} g/cm²` : '—'} />
+              <FichaDato label="Masa magra" value={ficha.masa_magra ? `${ficha.masa_magra} kg` : '—'} />
+              <FichaDato label="Masa grasa" value={ficha.masa_grasa ? `${ficha.masa_grasa} kg` : '—'} />
+              <FichaDato
+                label="Próxima revisión"
+                value={
+                  ficha.fecha_revision
+                    ? new Date(ficha.fecha_revision).toLocaleDateString('es-ES')
+                    : '—'
+                }
+              />
+            </div>
+            {(ficha.preferencias || ficha.patologias || ficha.observaciones) && (
+              <div className="mt-6 grid grid-cols-1 gap-4">
+                {ficha.preferencias && (
+                  <FichaTexto label="Preferencias / restricciones" value={ficha.preferencias} />
+                )}
+                {ficha.patologias && (
+                  <FichaTexto label="Patologías / notas médicas" value={ficha.patologias} />
+                )}
+                {ficha.observaciones && (
+                  <FichaTexto label="Observaciones internas" value={ficha.observaciones} />
+                )}
+              </div>
+            )}
+            {(ficha.proteinas_objetivo || ficha.carbohidratos_objetivo || ficha.grasas_objetivo) && (
+              <div className="mt-6 rounded-lg border border-gray-100 bg-gray-50 p-4">
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">Objetivos nutricionales diarios</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm text-gray-700">
+                  <FichaDato label="Proteínas" value={ficha.proteinas_objetivo ? `${ficha.proteinas_objetivo} g` : '—'} />
+                  <FichaDato label="Carbohidratos" value={ficha.carbohidratos_objetivo ? `${ficha.carbohidratos_objetivo} g` : '—'} />
+                  <FichaDato label="Grasas" value={ficha.grasas_objetivo ? `${ficha.grasas_objetivo} g` : '—'} />
+                  <FichaDato label="Fibra" value={ficha.fibra_objetivo ? `${ficha.fibra_objetivo} g` : '—'} />
+                </div>
+                <div className="mt-4 text-xs text-gray-600">
+                  <p className="uppercase tracking-wide text-[10px] text-gray-500">Distribución calórica</p>
+                  <p>
+                    Almuerzo: {(getDistributionValue(ficha, 'lunch') * 100).toFixed(0)}% • Cena:{' '}
+                    {(getDistributionValue(ficha, 'dinner') * 100).toFixed(0)}%
+                  </p>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
 
       {/* Favoritos */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -431,6 +528,98 @@ export default function FichaTecnicaPage() {
       </Modal>
     </div>
   )
+}
+
+function FichaDato({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="flex flex-col rounded-lg border border-gray-100 bg-gray-50 p-4">
+      <span className="text-xs uppercase tracking-wide text-gray-400">{label}</span>
+      <span className="mt-1 text-lg font-semibold text-gray-900">{value ?? '—'}</span>
+    </div>
+  )
+}
+
+function FichaTexto({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-gray-100 bg-slate-50 p-4">
+      <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">{label}</p>
+      <p className="text-sm text-gray-800 whitespace-pre-wrap">{value}</p>
+    </div>
+  )
+}
+
+function mapObjetivo(valor?: DatabaseFichaTecnica['objetivo']) {
+  switch (valor) {
+    case 'perder_grasa':
+      return 'Perder grasa'
+    case 'mantener':
+      return 'Mantener'
+    case 'ganar_masa':
+      return 'Ganar masa'
+    default:
+      return '—'
+  }
+}
+
+function mapActividad(valor?: DatabaseFichaTecnica['nivel_actividad'] | string | null) {
+  switch (valor) {
+    case 'sedentario':
+      return 'Sedentario'
+    case 'ligero':
+      return 'Ligero'
+    case 'moderado':
+      return 'Moderado'
+    case 'intenso':
+      return 'Intenso'
+    case 'atleta':
+      return 'Atleta / Alto rendimiento'
+    default:
+      return '—'
+  }
+}
+
+function mapIntensidad(valor?: DatabaseFichaTecnica['intensidad_trabajo'] | null) {
+  switch (valor) {
+    case 'baja':
+      return 'Baja'
+    case 'moderada':
+      return 'Moderada'
+    case 'alta':
+      return 'Alta'
+    default:
+      return '—'
+  }
+}
+
+function getDistributionValue(ficha: DatabaseFichaTecnica, meal: 'lunch' | 'dinner') {
+  const fallback = meal === 'lunch' ? 0.55 : 0.45
+  if (!ficha?.distribucion_calorias) return fallback
+  try {
+    const raw =
+      typeof ficha.distribucion_calorias === 'string'
+        ? JSON.parse(ficha.distribucion_calorias)
+        : ficha.distribucion_calorias
+    const key = meal === 'lunch' ? 'lunch' : 'dinner'
+    const legacyKey = meal === 'lunch' ? 'comida' : 'cena'
+    const value = raw?.[key] ?? raw?.[legacyKey]
+    return typeof value === 'number' ? value : fallback
+  } catch (error) {
+    console.warn('No se pudo interpretar la distribución calórica', error)
+    return fallback
+  }
+}
+
+function mapNivel(valor?: DatabaseFichaTecnica['nivel_entrenamiento'] | null) {
+  switch (valor) {
+    case 'principiante':
+      return 'Principiante'
+    case 'intermedio':
+      return 'Intermedio'
+    case 'avanzado':
+      return 'Avanzado'
+    default:
+      return '—'
+  }
 }
 
 

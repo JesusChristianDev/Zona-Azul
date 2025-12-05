@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import PageHeader from '@/components/ui/PageHeader'
 import ToastMessage from '@/components/ui/ToastMessage'
 import EmptyState from '@/components/ui/EmptyState'
+import ActionButton from '@/components/ui/ActionButton'
 import { getOrders } from '@/lib/api'
 import { convertApiOrdersToFrontend, mapFrontendStatusToApi } from '@/lib/orderHelpers'
 import { updateOrder } from '@/lib/api'
@@ -148,9 +149,9 @@ export default function AdminPedidosPage() {
           message="No se han registrado pedidos aún."
         />
       ) : (
-        <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm space-y-4">
+        <section className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 sm:p-6 shadow-sm space-y-4">
           {orders.map((order) => (
-          <article key={order.id} className="rounded-2xl border border-gray-100 p-4 transition hover:border-primary/40">
+          <article key={order.id} className="rounded-2xl border border-gray-100 dark:border-slate-700 p-4 transition hover:border-primary/40 dark:hover:border-primary/60 bg-white dark:bg-slate-900/60">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">
@@ -172,16 +173,17 @@ export default function AdminPedidosPage() {
                 ETA: <strong className="text-gray-700">{order.eta}</strong>
               </span>
               <div className="flex gap-2">
-                <button
+                <ActionButton
                   onClick={() => handleViewDetail(order)}
-                  className="rounded-full border border-gray-200 px-3 py-1 font-medium text-gray-600 hover:border-primary hover:text-primary transition"
+                  variant="muted-outline"
+                  size="sm"
                 >
                   Ver detalle
-                </button>
+                </ActionButton>
                 <select
                   value={order.status}
                   onChange={(e) => handleChangeStatus(order.id, e.target.value)}
-                  className="rounded-full border border-gray-200 px-3 py-1 font-medium text-gray-600 hover:border-highlight hover:text-highlight transition bg-white text-xs"
+                  className="rounded-full border border-gray-200 dark:border-slate-700 px-3 py-1 font-medium text-gray-600 dark:text-gray-200 hover:border-highlight hover:text-highlight transition bg-white dark:bg-slate-800 text-xs"
                 >
                   <option value="Preparando">Preparando</option>
                   <option value="En camino">En camino</option>
@@ -202,19 +204,21 @@ export default function AdminPedidosPage() {
           onClick={() => setIsDetailModalOpen(false)}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6"
+            className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md p-6 border border-gray-100 dark:border-slate-700"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-900">Detalle del pedido</h2>
-              <button
+              <ActionButton
                 onClick={() => setIsDetailModalOpen(false)}
-                className="p-2 text-gray-400 hover:text-gray-600 rounded-lg"
+                variant="ghost"
+                size="sm"
+                className="p-2 rounded-lg text-gray-400 hover:text-gray-600"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
-              </button>
+              </ActionButton>
             </div>
             <div className="space-y-4">
               <div>
