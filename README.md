@@ -10,6 +10,9 @@ npm install
 
 # Ejecutar en desarrollo
 npm run dev
+
+# Revisar que no haya conflictos de merge
+npm run check:conflicts
 ```
 
 Visita [http://localhost:3000](http://localhost:3000)
