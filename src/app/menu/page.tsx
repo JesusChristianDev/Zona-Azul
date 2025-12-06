@@ -1,7 +1,5 @@
-import dynamic from 'next/dynamic'
 import Link from 'next/link'
-
-const RestaurantMenuGrid = dynamic(() => import('../../components/public/RestaurantMenuGrid'), { ssr: false })
+import RestaurantMenuGrid from '../../components/public/RestaurantMenuGrid'
 
 export default function MenuPage() {
   return (

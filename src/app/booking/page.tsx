@@ -1,20 +1,5 @@
-import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import { Suspense } from 'react'
-
-// Preload del formulario para mejorar LCP
-const BookingForm = dynamic(() => import('../../components/public/BookingForm'), { 
-  ssr: false,
-  loading: () => (
-    <div className="space-y-6 animate-pulse">
-      <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-      <div className="h-10 bg-gray-200 rounded"></div>
-      <div className="h-10 bg-gray-200 rounded"></div>
-      <div className="h-10 bg-gray-200 rounded"></div>
-      <div className="h-32 bg-gray-200 rounded"></div>
-    </div>
-  )
-})
+import BookingForm from '../../components/public/BookingForm'
 
 // Skeleton para el sidebar para evitar CLS
 function SidebarSkeleton() {
@@ -106,17 +91,7 @@ export default function BookingPage() {
                   </p>
                 </div>
                 <div>
-                  <Suspense fallback={
-                    <div className="space-y-6 animate-pulse">
-                      <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                      <div className="h-10 bg-gray-200 rounded"></div>
-                      <div className="h-10 bg-gray-200 rounded"></div>
-                      <div className="h-10 bg-gray-200 rounded"></div>
-                      <div className="h-32 bg-gray-200 rounded"></div>
-                    </div>
-                  }>
-                    <BookingForm />
-                  </Suspense>
+                  <BookingForm />
                 </div>
               </div>
             </div>

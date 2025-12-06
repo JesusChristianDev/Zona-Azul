@@ -1,14 +1,11 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { usePanel } from '@/contexts/PanelContext'
-
-// Lazy load de componentes pesados
-const MobileMenu = dynamic(() => import('../MobileMenu'), { ssr: true })
+import MobileMenu from '../MobileMenu'
 
 // Componente de botón de notificaciones
 function NotificationButton() {

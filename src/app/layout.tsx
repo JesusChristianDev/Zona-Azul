@@ -1,26 +1,9 @@
 import './globals.css'
 import { Metadata, Viewport } from 'next'
-import { Suspense } from 'react'
-import nextDynamic from 'next/dynamic'
 import RegisterServiceWorker from './register-sw'
 import { PanelProvider } from '../contexts/PanelContext'
 import UserPreferencesLoader from '../components/settings/UserPreferencesLoader'
-
-// Lazy load de componentes pesados para mejorar FCP y TTI
-// Deshabilitar SSR para evitar problemas de hidratación con hooks del cliente
-const DashboardHeader = nextDynamic(() => import('../components/ui/DashboardHeader'), {
-  ssr: false, // Deshabilitar SSR porque usa hooks del cliente (useAuth, usePathname)
-  loading: () => (
-    <header className="bg-white dark:bg-slate-800 shadow-sm sticky top-0 z-40 border-b border-gray-200 dark:border-slate-700 w-full">
-      <div className="max-w-7xl mx-auto w-full px-3 sm:px-4 py-2.5 sm:py-3 md:py-4">
-        <div className="flex items-center justify-between">
-          <div className="h-8 w-32 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>
-          <div className="h-8 w-24 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>
-        </div>
-      </div>
-    </header>
-  ),
-})
+import DashboardHeader from '../components/ui/DashboardHeader'
 
 // Importar PanelsContainer directamente - el componente maneja su propia renderización condicional
 import PanelsContainer from '../components/ui/PanelsContainer'
