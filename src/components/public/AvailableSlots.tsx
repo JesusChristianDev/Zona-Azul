@@ -399,11 +399,6 @@ export default function AvailableSlots({ onSelect, selectedSlot, nutricionistaId
 
   // TODOS LOS HOOKS DEBEN IR ANTES DE CUALQUIER RETURN CONDICIONAL
   const availableDays = useMemo(() => organizeAvailableDays(slots), [slots])
-  const today = useMemo(() => {
-    const t = new Date()
-    t.setHours(0, 0, 0, 0)
-    return t
-  }, [])
 
   // Obtener slots del día seleccionado
   const selectedDaySlots = useMemo(() => {
