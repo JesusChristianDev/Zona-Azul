@@ -4,6 +4,7 @@
   "description": "Experiencia PWA para Zona Azul: bienestar integral, dashboards por rol y contenido estratégico.",
   "private": true,
   "scripts": {
+    "preinstall": "npm cache clean --force",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
